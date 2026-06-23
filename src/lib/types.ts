@@ -126,6 +126,15 @@ export interface ExpertiseProfile {
 /** Comment tone preset (design-spec §4.1). */
 export type CommentTone = 'expert' | 'friendly' | 'question'
 
+/**
+ * A content idea: a topic the feed shows is resonating, crossed with the user's
+ * own angle (design-spec §4.3.1). NOT a copy of any post — that would be AI-slop.
+ */
+export interface Idea {
+  topic: string
+  angle: string
+}
+
 /** Targeting criteria: who/what to engage with (design-spec §4.1, §9 TargetProfile). */
 export interface TargetProfile {
   /** Tech stack keywords, e.g. ['Vue','TypeScript']. */
