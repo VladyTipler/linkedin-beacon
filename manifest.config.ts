@@ -31,7 +31,7 @@ export default defineManifest({
       run_at: 'document_idle'
     }
   ],
-  permissions: ['sidePanel', 'storage', 'scripting', 'alarms', 'tabs'],
+  permissions: ['sidePanel', 'storage', 'scripting', 'alarms', 'tabs', 'cookies'],
   host_permissions: ['https://www.linkedin.com/*'],
   minimum_chrome_version: '116'
 })

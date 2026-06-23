@@ -1,38 +1,33 @@
-import type { Clock, KeyValueStore, TabController } from '../ports'
+import type { Clock, KeyValueStore } from '../ports'
+import type { SsiApiClient } from '../ssi-api/contracts'
 import type { SsiSnapshot } from '../types'
 import { RefreshPolicy } from './RefreshPolicy'
-import { SnapshotRegistry } from './SnapshotRegistry'
 
 export const LAST_REFRESH_KEY = 'ssi:lastRefreshAt'
 
 export type RefreshResult =
   | { status: 'skipped' }
   | { status: 'refreshed'; snapshot: SsiSnapshot }
-  | { status: 'timeout' }
+  | { status: 'error'; error: string }
   | { status: 'busy' }
 
 export interface BackgroundRefreshDeps {
   policy: RefreshPolicy
-  tabs: TabController
-  registry: SnapshotRegistry
+  apiClient: SsiApiClient
   store: KeyValueStore
   clock: Clock
-  /** Injected so the timeout is deterministic in tests. */
-  delay: (ms: number) => Promise<void>
-  /** How long to wait for the worker tab to produce a snapshot. */
-  timeoutMs: number
 }
 
 /**
- * Orchestrates background SSI refreshes via a disposable worker tab.
+ * Orchestrates background SSI refreshes via the internal LinkedIn API.
  *
- * SRP: lifecycle + timing only. It does NOT parse (content script does) and does
- * NOT persist snapshots (the SW's message handler saves every SSI_SNAPSHOT
- * regardless of origin). It only gates on the policy, drives the tab, and
- * records the last-success timestamp.
+ * SRP: policy gating + single-flight + timestamp bookkeeping. It does NOT
+ * fetch (the API client does), does NOT interpret JSON (the mapper does), and
+ * does NOT persist the snapshot (the SW saves the returned snapshot via the
+ * repository). It only decides *whether/when* to refresh and stamps capture time.
  *
- * Single-flight: a refresh in progress short-circuits concurrent calls so we
- * never spawn two worker windows at once.
+ * The API path runs entirely in the service worker — no tab, no window, no
+ * visible flash, works from any page (or with no LinkedIn tab open at all).
  */
 export class BackgroundRefreshService {
   private inFlight = false
@@ -53,25 +48,16 @@ export class BackgroundRefreshService {
     if (this.inFlight) return { status: 'busy' }
     this.inFlight = true
 
-    const { tabs, registry, store, clock, delay, timeoutMs } = this.deps
-    let tabId: number | null = null
+    const { apiClient, store, clock } = this.deps
     try {
-      tabId = await tabs.openSsiTab()
-      const snapshot = await Promise.race([
-        registry.waitFor(tabId),
-        delay(timeoutMs).then<null>(() => null)
-      ])
-
-      if (snapshot) {
-        await store.set(LAST_REFRESH_KEY, clock.now().toISOString())
-        return { status: 'refreshed', snapshot }
-      }
-      return { status: 'timeout' }
+      const raw = await apiClient.fetchSnapshot()
+      const capturedAt = clock.now().toISOString()
+      const snapshot: SsiSnapshot = { ...raw, capturedAt }
+      await store.set(LAST_REFRESH_KEY, capturedAt)
+      return { status: 'refreshed', snapshot }
+    } catch (e) {
+      return { status: 'error', error: e instanceof Error ? e.message : String(e) }
     } finally {
-      if (tabId !== null) {
-        registry.cancel(tabId)
-        await tabs.close(tabId).catch(() => {})
-      }
       this.inFlight = false
     }
   }

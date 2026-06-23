@@ -4,9 +4,9 @@ import {
   LAST_REFRESH_KEY
 } from './BackgroundRefreshService'
 import { RefreshPolicy } from './RefreshPolicy'
-import { SnapshotRegistry } from './SnapshotRegistry'
-import type { Clock, KeyValueStore, TabController } from '../ports'
-import type { SsiSnapshot } from '../types'
+import type { Clock, KeyValueStore } from '../ports'
+import type { SsiApiClient, RawSnapshot } from '../ssi-api/contracts'
+import { SsiApiError } from '../ssi-api/contracts'
 
 class FakeStore implements KeyValueStore {
   private data = new Map<string, unknown>()
@@ -18,87 +18,75 @@ class FakeStore implements KeyValueStore {
   }
 }
 
-class FakeTabController implements TabController {
-  opened = 0
-  closed: number[] = []
-  async openSsiTab(): Promise<number> {
-    this.opened += 1
-    return 1
-  }
-  async close(tabId: number): Promise<void> {
-    this.closed.push(tabId)
+class FakeApiClient implements SsiApiClient {
+  calls = 0
+  constructor(private readonly impl: () => RawSnapshot) {}
+  async fetchSnapshot(): Promise<RawSnapshot> {
+    this.calls += 1
+    return this.impl()
   }
 }
 
 const fixedClock = (iso: string): Clock => ({ now: () => new Date(iso) })
-const snap = (total: number): SsiSnapshot => ({
-  total,
-  pillars: [],
-  capturedAt: '2026-06-23T12:00:00.000Z'
-})
+const raw = (total: number): RawSnapshot => ({ total, pillars: [] })
 
 const NOW = '2026-06-23T12:00:00.000Z'
 
 describe('BackgroundRefreshService', () => {
   let store: FakeStore
-  let tabs: FakeTabController
-  let registry: SnapshotRegistry
 
   beforeEach(() => {
     store = new FakeStore()
-    tabs = new FakeTabController()
-    registry = new SnapshotRegistry()
   })
 
-  const build = (delay: (ms: number) => Promise<void>) =>
+  const build = (api: SsiApiClient) =>
     new BackgroundRefreshService({
       policy: new RefreshPolicy(24 * 60 * 60 * 1000),
-      tabs,
-      registry,
+      apiClient: api,
       store,
-      clock: fixedClock(NOW),
-      delay,
-      timeoutMs: 1000
+      clock: fixedClock(NOW)
     })
 
-  it('skips (no tab opened) when a refresh is not due', async () => {
+  it('skips (no API call) when a refresh is not due', async () => {
     await store.set(LAST_REFRESH_KEY, NOW) // just refreshed
-    const svc = build(() => Promise.resolve())
-    const result = await svc.refreshIfDue()
+    const api = new FakeApiClient(() => raw(50))
+    const result = await build(api).refreshIfDue()
     expect(result.status).toBe('skipped')
-    expect(tabs.opened).toBe(0)
+    expect(api.calls).toBe(0)
   })
 
-  it('opens a worker tab when due, persists timestamp, and closes the tab', async () => {
-    const svc = build(() => new Promise<void>(() => {})) // never times out
-    const run = svc.refreshNow()
-    // Content script "parses" and the SW would deliver into the registry:
-    await Promise.resolve()
-    registry.deliver(1, snap(73))
+  it('fetches when due, stamps capturedAt, and records the timestamp', async () => {
+    const api = new FakeApiClient(() => raw(73))
+    const result = await build(api).refreshNow()
 
-    const result = await run
-    expect(result).toEqual({ status: 'refreshed', snapshot: snap(73) })
-    expect(tabs.opened).toBe(1)
-    expect(tabs.closed).toEqual([1])
+    expect(result.status).toBe('refreshed')
+    if (result.status === 'refreshed') {
+      expect(result.snapshot.total).toBe(73)
+      expect(result.snapshot.capturedAt).toBe(NOW)
+    }
     expect(await store.get<string>(LAST_REFRESH_KEY)).toBe(NOW)
   })
 
-  it('times out without recording success, but still closes the tab', async () => {
-    const svc = build(() => Promise.resolve()) // timeout fires immediately
-    const result = await svc.refreshNow()
-    expect(result.status).toBe('timeout')
-    expect(tabs.closed).toEqual([1])
+  it('returns an error (without recording success) when the API fails', async () => {
+    const api = new FakeApiClient(() => {
+      throw new SsiApiError('403')
+    })
+    const result = await build(api).refreshNow()
+    expect(result.status).toBe('error')
     expect(await store.get<string>(LAST_REFRESH_KEY)).toBeNull()
   })
 
   it('is single-flight: a concurrent refresh returns busy', async () => {
-    const svc = build(() => new Promise<void>(() => {}))
+    let release!: (s: RawSnapshot) => void
+    const gate = new Promise<RawSnapshot>((r) => (release = r))
+    const api: SsiApiClient = { fetchSnapshot: () => gate }
+    const svc = build(api)
+
     const first = svc.refreshNow()
     const second = await svc.refreshNow()
     expect(second.status).toBe('busy')
-    expect(tabs.opened).toBe(1)
 
-    registry.deliver(1, snap(50))
-    await first
+    release(raw(50))
+    expect((await first).status).toBe('refreshed')
   })
 })
