@@ -48,6 +48,39 @@ export interface ModuleState {
   available: boolean
 }
 
+// ── Action model (design-spec §9) — what the gate routes and the queue persists. ──
+
+export type ActionType = 'like' | 'comment' | 'connect' | 'post'
+
+export interface ActionTarget {
+  /** Canonical URL of the post/profile the action targets. */
+  url: string
+  /** Free-form context (urn, author, …). */
+  meta?: Record<string, unknown>
+}
+
+export interface ActionRequest {
+  type: ActionType
+  target: ActionTarget
+  payload?: { note?: string; comment?: string }
+}
+
+export type ActionStatus =
+  | 'pending' // awaiting manual approval
+  | 'quarantined' // approved, sends after the cancel window unless cancelled
+  | 'approved' // ready to execute now
+  | 'done'
+  | 'skipped'
+  | 'blocked'
+
+export interface ActionQueueItem extends ActionRequest {
+  id: string
+  status: ActionStatus
+  /** ISO time the action should send (quarantine window end), if scheduled. */
+  scheduledFor?: string
+  createdAt: string
+}
+
 export interface InboundLead {
   id: string
   name: string
