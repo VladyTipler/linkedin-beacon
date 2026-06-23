@@ -8,6 +8,16 @@ export interface Clock {
   now(): Date
 }
 
+/**
+ * Randomness source — injected so jitter, human delays and budget noise are
+ * deterministic in tests (the anti-ban analogue of Clock). Real impl wraps
+ * Math.random in a thin adapter; tests pass a fixed value.
+ */
+export interface Rng {
+  /** Uniform float in [0, 1]. */
+  next(): number
+}
+
 /** A place that can yield the current SSI page DOM for parsing. */
 export interface SsiSource {
   /** The DOM root to parse (e.g. document on the /sales/ssi tab). */

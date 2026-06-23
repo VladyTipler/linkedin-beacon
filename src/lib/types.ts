@@ -54,6 +54,32 @@ export interface FeedItem {
   excerpt: string
 }
 
+/**
+ * A richer feed post used for engagement scoring/actions (design-spec §4.1).
+ * Carries the signals relevance scoring needs that a bare FeedItem omits.
+ */
+export interface FeedPost {
+  /** Stable LinkedIn activity urn — dedup key across feed virtualisation scroll. */
+  urn: string
+  authorName: string
+  /** Author headline, e.g. "Technical Recruiter at Acme" — the role signal. */
+  authorHeadline?: string
+  /** Post body text. */
+  text: string
+}
+
+/** Targeting criteria: who/what to engage with (design-spec §4.1, §9 TargetProfile). */
+export interface TargetProfile {
+  /** Tech stack keywords, e.g. ['Vue','TypeScript']. */
+  stack: string[]
+  /** Target author roles, e.g. ['recruiter','talent']. */
+  targetRoles: string[]
+  /** Geos of interest, e.g. ['remote','Berlin']. */
+  geos: string[]
+  /** Companies on the watchlist. */
+  watchlistCompanies: string[]
+}
+
 // ── Typed messaging between content script ↔ service worker ↔ sidepanel ──
 // Discriminated union — every handler switches on `type` exhaustively.
 
