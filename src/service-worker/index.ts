@@ -13,9 +13,11 @@ import { randomId } from '@/adapters/randomId'
 import { LinkedInSsiApiClient } from '@lib/ssi-api/LinkedInSsiApiClient'
 import { RefreshPolicy } from '@lib/refresh/RefreshPolicy'
 import { BackgroundRefreshService, type RefreshResult } from '@lib/refresh/BackgroundRefreshService'
+import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { ActionGate } from '@lib/gate/ActionGate'
 import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
 import { CommentJudge } from '@lib/engagement/CommentJudge'
+import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { RelevanceScorer } from '@lib/engagement/RelevanceScorer'
 import {
   EngagementOrchestrator,
@@ -69,10 +71,13 @@ const orchestrator = new EngagementOrchestrator({
   newId: randomId
 })
 
+// 8–45s random pause between real actions — the anti-ban heartbeat (§5.1).
+const humanDelay = new HumanDelay(new MathRandomRng())
 const runner = new EngagementRunner({
   harvest: (limit) => harvestPosts(limit),
   scorer: new RelevanceScorer(),
-  orchestrator
+  orchestrator,
+  pace: () => sleep(humanDelay.nextMs(8000, 45000))
 })
 
 async function handleRefresh(result: RefreshResult): Promise<void> {
@@ -176,4 +181,8 @@ async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefin
 async function activeLinkedInTab(): Promise<chrome.tabs.Tab | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   return tab?.url?.includes('linkedin.com') ? tab : undefined
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

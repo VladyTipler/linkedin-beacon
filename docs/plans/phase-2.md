@@ -78,6 +78,18 @@
 из content script всегда `isTrusted:false`). Реальный like-toggle и submit коммента —
 только живая проверка под твоей авторизацией.
 
+0. **Обязательно: задать таргет** (иначе скоринг = 0 у всех → ноль лайков; UI настроек
+   пока нет, `target.stack` пуст по умолчанию, `FeedReader` не извлекает headline).
+   В консоли service worker расширения (`chrome://extensions` → Beacon → service worker):
+   ```js
+   chrome.storage.local.set({ 'engagement:settings': {
+     config: { level: 'manual', guardrails: { minConfidence: 0.6, bannedPhrases: [], quarantineMinutes: 10, lenRange: [12,280] }, dailyLimits: { like: 60, comment: 10, connect: 0, post: 0 } },
+     target: { stack: ['Vue','TypeScript','Frontend'], targetRoles: ['recruiter','talent'], geos: [], watchlistCompanies: [] },
+     expertise: { headline: 'Frontend TechLead', stack: ['Vue','TypeScript'] },
+     relevanceThreshold: 0.3
+   }})
+   ```
+   (level всё равно берётся из селектора в Модулях — `modules:state` это SSOT.)
 1. `npm run build` → `chrome://extensions` → Developer mode → Load unpacked → `dist/`.
 2. Залогинься в LinkedIn, открой `/feed/`. Открой сайдбар Beacon.
 3. **Модули** → «Вовлечённость в ленте» включён. Выбери уровень:
@@ -95,7 +107,12 @@
 ### Что готово vs что на тебе
 
 - ✅ **Runnable сейчас:** чтение ленты (живые селекторы), скоринг релевантности,
-  бюджет/задержки, гейт (manual/guardrails/full), карантин, банк идей, like-проход.
+  дневной бюджет + **рандомные 8–45с между реальными действиями (anti-ban)**, гейт
+  (manual/guardrails/full), карантин, банк идей, like-проход.
+- ⚠️ **Известные ограничения (caveats):** (1) без шага 0 «Run» ничего не лайкает
+  (пустой target + нет headline). (2) `findByUrn` теперь берёт видимый из тройного
+  рендера поста — проверить, что клик попадает. (3) submit-кнопка коммента
+  (`/^(comment|post|reply)$/i`) вживую не подтверждена — уточнить в field-тесте.
 - 🧪 **Твой field-тест:** реальный like-toggle и submit коммента на живом аккаунте
   (техника вставки в ProseMirror подтверждена read-only, но не сабмитилась).
 - ⏭ **Следующий инкремент (не в Todoist Фазе 2):** авто-генерация коммента в RUN-петле

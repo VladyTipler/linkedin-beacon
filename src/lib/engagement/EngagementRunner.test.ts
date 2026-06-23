@@ -85,4 +85,36 @@ describe('EngagementRunner', () => {
     expect(summary.executed).toBe(0)
     expect(executed).toHaveLength(0)
   })
+
+  it('paces between real actions (anti-ban delay), not between skipped ones', async () => {
+    const { orchestrator } = build()
+    let paced = 0
+    const runner = new EngagementRunner({
+      harvest: async () => posts,
+      scorer: new RelevanceScorer(),
+      orchestrator,
+      pace: async () => {
+        paced++
+      }
+    })
+
+    await runner.run(settings) // full_auto → A and D execute
+    expect(paced).toBe(2) // one human delay after each executed like, none for B/C
+  })
+
+  it('does not pace when nothing acts (manual queues)', async () => {
+    const { orchestrator } = build()
+    let paced = 0
+    const runner = new EngagementRunner({
+      harvest: async () => posts,
+      scorer: new RelevanceScorer(),
+      orchestrator,
+      pace: async () => {
+        paced++
+      }
+    })
+
+    await runner.run({ ...settings, config: { ...settings.config, level: 'manual' } })
+    expect(paced).toBe(0)
+  })
 })

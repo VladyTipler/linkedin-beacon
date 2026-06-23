@@ -8,6 +8,12 @@ export interface EngagementRunnerDeps {
   harvest: (limit: number) => Promise<FeedPost[]>
   scorer: RelevanceScorer
   orchestrator: EngagementOrchestrator
+  /**
+   * Anti-ban pause AFTER each action that touched (or will touch) the page —
+   * the "8–45s random between actions" guard (design-spec §5.1). No-op in tests
+   * so the runner stays pure; the SW injects a real HumanDelay-backed sleep.
+   */
+  pace?: () => Promise<void>
 }
 
 const HARVEST_LIMIT = 20
@@ -46,6 +52,10 @@ export class EngagementRunner {
       }
       const outcome = await this.deps.orchestrator.submit(action, settings.config)
       tally(summary, outcome)
+      // Space out only actions that hit the page; skipped/blocked/queued don't.
+      if (outcome.status === 'executed' || outcome.status === 'quarantined') {
+        await this.deps.pace?.()
+      }
     }
 
     return summary

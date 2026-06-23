@@ -31,10 +31,13 @@ export class FeedReader {
 
   /** Locate the (visible) post element for a urn, to act on it (like/comment). */
   findByUrn(root: ParentNode, urn: string): Element | null {
+    const matches: Element[] = []
     for (const el of root.querySelectorAll('[componentkey]')) {
-      if (isPostRoot(el) && normaliseUrn(el.getAttribute('componentkey')) === urn) return el
+      if (isPostRoot(el) && normaliseUrn(el.getAttribute('componentkey')) === urn) matches.push(el)
     }
-    return null
+    // A post renders multiple times (base + hidden "expanded" copies); act on the
+    // visible one so the click doesn't land on an offscreen measurement node.
+    return matches.find((el) => (el as HTMLElement).offsetParent !== null) ?? matches[0] ?? null
   }
 
   private toPost(el: Element): FeedPost | null {
