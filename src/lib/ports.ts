@@ -29,3 +29,15 @@ export interface SsiParseStrategy {
   /** Returns a snapshot, or null if this strategy cannot read the given root. */
   parse(root: ParentNode): Omit<SsiSnapshot, 'capturedAt'> | null
 }
+
+/**
+ * Opens and disposes a short-lived background tab on /sales/ssi so SSI can be
+ * refreshed from any page (or with no LinkedIn tab open). Edge abstraction over
+ * chrome.windows/tabs — injected so the refresh orchestrator stays testable.
+ */
+export interface TabController {
+  /** Open the SSI page in a background worker tab; resolves with its tab id. */
+  openSsiTab(): Promise<number>
+  /** Tear down the worker tab/window previously opened. */
+  close(tabId: number): Promise<void>
+}

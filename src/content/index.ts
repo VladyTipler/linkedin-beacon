@@ -21,6 +21,28 @@ function parseAndReport(): void {
   }
 }
 
+// LinkedIn (Sales Navigator / Ember) renders the SSI numbers client-side after
+// hydration, so the DOM is empty for a beat on first paint. Poll until the
+// parser succeeds rather than guessing a fixed delay. The parser itself is the
+// readiness probe (DRY — no duplicated selectors). 1s interval survives the
+// background-tab timer throttling that applies to the minimized worker window.
+const POLL_INTERVAL_MS = 1000
+const MAX_POLLS = 25 // ~25s ceiling, under the SW refresh timeout
+
+function parseWhenReady(attempt = 0): void {
+  const root = source.getRoot()
+  const snapshot = root ? parser.parse(root) : null
+  if (snapshot) {
+    send({ type: 'SSI_SNAPSHOT', payload: snapshot })
+    return
+  }
+  if (attempt >= MAX_POLLS) {
+    send({ type: 'SSI_PARSE_FAILED', reason: 'SSI numbers did not render in time' })
+    return
+  }
+  setTimeout(() => parseWhenReady(attempt + 1), POLL_INTERVAL_MS)
+}
+
 chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendResponse) => {
   switch (message.type) {
     case 'REQUEST_SSI':
@@ -37,10 +59,12 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'PING':
       sendResponse({ type: 'PONG' })
       return false
-    // Outbound-only variants — content script never receives these.
+    // Outbound-only / SW-only variants — content script never receives these.
     case 'SSI_SNAPSHOT':
     case 'SSI_PARSE_FAILED':
     case 'FEED_ITEMS':
+    case 'REQUEST_REFRESH':
+    case 'FORCE_REFRESH':
     case 'PONG':
       return false
     default:
@@ -52,8 +76,8 @@ function send(message: BeaconMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {})
 }
 
-// Auto-parse on landing directly on the SSI dashboard.
+// Auto-parse on landing directly on the SSI dashboard — covers both a real user
+// visit and the background worker window opened by the service worker.
 if (location.pathname.startsWith('/sales/ssi')) {
-  // Defer to let LinkedIn hydrate its client-rendered numbers.
-  setTimeout(parseAndReport, 1500)
+  parseWhenReady()
 }

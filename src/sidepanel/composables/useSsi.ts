@@ -28,6 +28,9 @@ export function useSsi() {
     if (panelBus.available()) {
       const latest = await repo.latest().catch(() => null)
       if (latest) apply(latest)
+      // Opening the panel triggers a background refresh if the daily cadence is
+      // due — so data stays fresh regardless of which page the user is on.
+      panelBus.send({ type: 'REQUEST_REFRESH' })
     }
     unsub = panelBus.onMessage((msg) => {
       if (msg.type === 'SSI_SNAPSHOT') apply(msg.payload)
@@ -37,9 +40,11 @@ export function useSsi() {
 
   onUnmounted(() => unsub())
 
+  // Manual refresh forces a background worker-window parse, so the button works
+  // from any page (not only when a LinkedIn tab is focused).
   const refresh = () => {
     refreshing.value = true
-    panelBus.send({ type: 'REQUEST_SSI' })
+    panelBus.send({ type: 'FORCE_REFRESH' })
   }
 
   const pillars = computed(() => pillarsToView(snapshot.value))

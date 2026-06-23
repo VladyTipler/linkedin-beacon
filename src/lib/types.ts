@@ -68,6 +68,10 @@ export type BeaconMessage =
   | { type: 'REQUEST_FEED_HARVEST'; limit: number }
   /** content → sidepanel: harvested feed items. */
   | { type: 'FEED_ITEMS'; payload: FeedItem[] }
+  /** sidepanel → SW: refresh SSI in the background if the policy says it's due. */
+  | { type: 'REQUEST_REFRESH' }
+  /** sidepanel → SW: force a background SSI refresh now (manual refresh button). */
+  | { type: 'FORCE_REFRESH' }
   | { type: 'PING' }
   | { type: 'PONG' }
 
