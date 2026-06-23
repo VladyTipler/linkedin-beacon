@@ -92,4 +92,14 @@ describe('FeedReader', () => {
     const empty = document.createElement('div')
     expect(reader.parse(empty)).toEqual([])
   })
+
+  it('findByUrn locates a post element by its normalised urn', () => {
+    const el = reader.findByUrn(root, 'POST_BBB')
+    expect(el).not.toBeNull()
+    expect(el!.querySelector('button[aria-label^="Open control menu for post by"]')?.getAttribute('aria-label')).toContain('Acme Corp')
+  })
+
+  it('findByUrn returns null for an unknown urn', () => {
+    expect(reader.findByUrn(root, 'POST_ZZZ')).toBeNull()
+  })
 })

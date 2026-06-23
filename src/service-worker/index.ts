@@ -1,53 +1,89 @@
-// MV3 service worker: message router + SSI persistence + background refresh.
-// SRP: wiring only — JSON interpretation lives in the SSI mapper, transport in
-// the API client, storage in SsiRepository, refresh timing in
-// BackgroundRefreshService. DOM parsing (active-tab fast path) lives in the
-// content script.
+// MV3 service worker: message router + SSI persistence/refresh + engagement
+// orchestration. SRP: wiring only — decisions live in ActionGate, routing in
+// EngagementOrchestrator, scoring in RelevanceScorer, DOM mutation in the content
+// script. The SW never touches the DOM.
 
 import { SsiRepository } from '@lib/storage/SsiRepository'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { SystemClock } from '@/adapters/SystemClock'
 import { FetchHttpClient } from '@/adapters/FetchHttpClient'
 import { ChromeCookieCsrfProvider } from '@/adapters/ChromeCookieCsrfProvider'
+import { ChromeAlarmScheduler } from '@/adapters/ChromeAlarmScheduler'
+import { randomId } from '@/adapters/randomId'
 import { LinkedInSsiApiClient } from '@lib/ssi-api/LinkedInSsiApiClient'
 import { RefreshPolicy } from '@lib/refresh/RefreshPolicy'
+import { BackgroundRefreshService, type RefreshResult } from '@lib/refresh/BackgroundRefreshService'
+import { ActionGate } from '@lib/gate/ActionGate'
+import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
+import { CommentJudge } from '@lib/engagement/CommentJudge'
+import { RelevanceScorer } from '@lib/engagement/RelevanceScorer'
 import {
-  BackgroundRefreshService,
-  type RefreshResult
-} from '@lib/refresh/BackgroundRefreshService'
-import type { BeaconMessage } from '@lib/types'
+  EngagementOrchestrator,
+  type ActionExecutor
+} from '@lib/engagement/EngagementOrchestrator'
+import { EngagementRunner } from '@lib/engagement/EngagementRunner'
+import { loadSettings } from '@lib/engagement/settings'
+import type { BeaconMessage, FeedPost } from '@lib/types'
 
 const HOUR_MS = 60 * 60 * 1000
-const REFRESH_INTERVAL_MS = 24 * HOUR_MS // refresh SSI at most once a day
+const REFRESH_INTERVAL_MS = 24 * HOUR_MS
 const REFRESH_ALARM = 'beacon:ssi-refresh'
+const QUARANTINE_ALARM_PREFIX = 'beacon:quarantine:'
 
 const store = new ChromeStorageStore()
+const clock = new SystemClock()
 const repo = new SsiRepository(store)
 
 const refresher = new BackgroundRefreshService({
   policy: new RefreshPolicy(REFRESH_INTERVAL_MS),
-  apiClient: new LinkedInSsiApiClient(
-    new FetchHttpClient(),
-    new ChromeCookieCsrfProvider()
-  ),
+  apiClient: new LinkedInSsiApiClient(new FetchHttpClient(), new ChromeCookieCsrfProvider()),
   store,
-  clock: new SystemClock()
+  clock
 })
 
-/** Persist + relay a snapshot produced by a background API refresh. */
+// ── Engagement pipeline. Actions execute in the content script via messaging. ──
+const tabExecutor: ActionExecutor = {
+  async execute(action) {
+    const result = await sendToLinkedInTab<{ ok: boolean; reason?: string }>({
+      type: 'EXECUTE_ACTION',
+      action
+    })
+    if (!result?.ok) throw new Error(result?.reason ?? 'action_failed')
+  }
+}
+
+const quarantine = new QuarantineQueue({
+  store,
+  clock,
+  scheduler: new ChromeAlarmScheduler(),
+  newId: randomId
+})
+
+const orchestrator = new EngagementOrchestrator({
+  gate: new ActionGate(),
+  judge: new CommentJudge(),
+  quarantine,
+  store,
+  clock,
+  executor: tabExecutor,
+  newId: randomId
+})
+
+const runner = new EngagementRunner({
+  harvest: (limit) => harvestPosts(limit),
+  scorer: new RelevanceScorer(),
+  orchestrator
+})
+
 async function handleRefresh(result: RefreshResult): Promise<void> {
   if (result.status !== 'refreshed') return
   await repo.save(result.snapshot)
   broadcast({ type: 'SSI_SNAPSHOT', payload: result.snapshot })
 }
 
-// ── Lifecycle: open panel on icon click, schedule the periodic refresh. ──
+// ── Lifecycle. ──
 chrome.runtime.onInstalled.addListener(() => {
-  void chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch(() => {})
-  // Poll a few times a day; RefreshPolicy gates the actual once-a-day cadence,
-  // so an early alarm is cheap (it just no-ops as "skipped").
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
   chrome.alarms.create(REFRESH_ALARM, { periodInMinutes: 6 * 60 })
   void refresher.refreshIfDue().then(handleRefresh)
 })
@@ -57,36 +93,47 @@ chrome.runtime.onStartup.addListener(() => {
 })
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === REFRESH_ALARM) void refresher.refreshIfDue().then(handleRefresh)
+  if (alarm.name === REFRESH_ALARM) {
+    void refresher.refreshIfDue().then(handleRefresh)
+  } else if (alarm.name.startsWith(QUARANTINE_ALARM_PREFIX)) {
+    // A quarantined action's cancel window elapsed — send what's due.
+    void orchestrator.releaseDue()
+  }
 })
 
 // ── Message routing. ──
 chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendResponse) => {
   switch (message.type) {
     case 'SSI_SNAPSHOT':
-      // A snapshot parsed by the content script (user is on /sales/ssi).
-      // Persist + relay to any open panel.
       void repo.save(message.payload).then(() => {
         broadcast(message)
         sendResponse({ ok: true })
       })
-      return true // async response
+      return true
 
     case 'REQUEST_SSI':
-      // Panel asked the active LinkedIn tab to re-parse (instant, flicker-free
-      // when the user is already on a LinkedIn page).
       void forwardToLinkedInTab(message)
       return false
 
     case 'REQUEST_REFRESH':
-      // Panel opened — refresh in the background via the API only if due.
       void refresher.refreshIfDue().then(handleRefresh)
       return false
 
     case 'FORCE_REFRESH':
-      // Manual refresh button — API call, works from any page, no tab needed.
       void refresher.refreshNow().then(handleRefresh)
       return false
+
+    case 'RUN_ENGAGEMENT':
+      void runEngagement()
+      return false
+
+    case 'LIST_QUARANTINE':
+      void quarantine.list().then(sendResponse)
+      return true
+
+    case 'CANCEL_QUARANTINE':
+      void quarantine.cancel(message.id).then((ok) => sendResponse({ ok }))
+      return true
 
     case 'PING':
       sendResponse({ type: 'PONG' })
@@ -97,15 +144,36 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
   }
 })
 
-/** Relay a message to extension views (sidepanel). Ignores "no receiver" noise. */
+async function runEngagement(): Promise<void> {
+  const settings = await loadSettings(store)
+  const summary = await runner.run(settings)
+  broadcast({ type: 'ENGAGEMENT_RESULT', summary })
+}
+
+async function harvestPosts(limit: number): Promise<FeedPost[]> {
+  return (await sendToLinkedInTab<FeedPost[]>({ type: 'REQUEST_FEED_POSTS', limit })) ?? []
+}
+
 function broadcast(message: BeaconMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {})
 }
 
-/** Send a message to the content script of the current LinkedIn tab. */
 async function forwardToLinkedInTab(message: BeaconMessage): Promise<void> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (tab?.id && tab.url?.includes('linkedin.com')) {
-    chrome.tabs.sendMessage(tab.id, message).catch(() => {})
+  const tab = await activeLinkedInTab()
+  if (tab?.id) chrome.tabs.sendMessage(tab.id, message).catch(() => {})
+}
+
+async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefined> {
+  const tab = await activeLinkedInTab()
+  if (!tab?.id) return undefined
+  try {
+    return (await chrome.tabs.sendMessage(tab.id, message)) as T
+  } catch {
+    return undefined
   }
+}
+
+async function activeLinkedInTab(): Promise<chrome.tabs.Tab | undefined> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  return tab?.url?.includes('linkedin.com') ? tab : undefined
 }

@@ -81,6 +81,17 @@ export interface ActionQueueItem extends ActionRequest {
   createdAt: string
 }
 
+/** Tally of one engagement pass (design-spec §4.1 metrics). */
+export interface EngagementRunSummary {
+  scanned: number
+  relevant: number
+  executed: number
+  queued: number
+  quarantined: number
+  skipped: number
+  blocked: number
+}
+
 export interface InboundLead {
   id: string
   name: string
@@ -163,6 +174,18 @@ export type BeaconMessage =
   | { type: 'REQUEST_FEED_HARVEST'; limit: number }
   /** content → sidepanel: harvested feed items. */
   | { type: 'FEED_ITEMS'; payload: FeedItem[] }
+  /** SW → content: harvest rich feed posts; content replies FeedPost[] via sendResponse. */
+  | { type: 'REQUEST_FEED_POSTS'; limit: number }
+  /** SW → content: perform a gated action in the DOM; content replies ActionResult. */
+  | { type: 'EXECUTE_ACTION'; action: ActionRequest }
+  /** sidepanel → SW: run one engagement pass (harvest → score → gate likes). */
+  | { type: 'RUN_ENGAGEMENT' }
+  /** SW → sidepanel: outcome of an engagement run (broadcast). */
+  | { type: 'ENGAGEMENT_RESULT'; summary: EngagementRunSummary }
+  /** sidepanel → SW: list quarantined actions; SW replies ActionQueueItem[] via sendResponse. */
+  | { type: 'LIST_QUARANTINE' }
+  /** sidepanel → SW: cancel a quarantined action within its window. */
+  | { type: 'CANCEL_QUARANTINE'; id: string }
   /** sidepanel → SW: refresh SSI in the background if the policy says it's due. */
   | { type: 'REQUEST_REFRESH' }
   /** sidepanel → SW: force a background SSI refresh now (manual refresh button). */

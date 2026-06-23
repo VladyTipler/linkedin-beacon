@@ -29,14 +29,16 @@ export class FeedReader {
     return posts
   }
 
+  /** Locate the (visible) post element for a urn, to act on it (like/comment). */
+  findByUrn(root: ParentNode, urn: string): Element | null {
+    for (const el of root.querySelectorAll('[componentkey]')) {
+      if (isPostRoot(el) && normaliseUrn(el.getAttribute('componentkey')) === urn) return el
+    }
+    return null
+  }
+
   private toPost(el: Element): FeedPost | null {
-    // LinkedIn renders each post under several componentkeys — a base key and
-    // "expanded<base>FeedType_MAIN_FEED_RELEVANCE" variants. Strip the prefix and
-    // the FeedType suffix so every render collapses onto one base urn.
-    const urn = el
-      .getAttribute('componentkey')
-      ?.replace(/^expanded/, '')
-      .replace(/FeedType_.*$/, '')
+    const urn = normaliseUrn(el.getAttribute('componentkey'))
     const control = el.querySelector(`button[aria-label^="${CONTROL_MENU_PREFIX}"]`)
     const authorName = control?.getAttribute('aria-label')?.slice(CONTROL_MENU_PREFIX.length).trim()
     if (!urn || !authorName) return null
@@ -51,6 +53,15 @@ export class FeedReader {
       alreadyLiked: reactionLabel !== '' && reactionLabel !== NOT_LIKED
     }
   }
+}
+
+/**
+ * Each post renders under several componentkeys — a base key and
+ * "expanded<base>FeedType_MAIN_FEED_RELEVANCE" variants. Strip the prefix and the
+ * FeedType suffix so every render collapses onto one base urn.
+ */
+function normaliseUrn(raw: string | null): string {
+  return (raw ?? '').replace(/^expanded/, '').replace(/FeedType_.*$/, '')
 }
 
 /** A post root holds exactly one action bar (one reaction button) and an author. */
