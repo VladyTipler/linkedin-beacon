@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Beacon — LinkedIn SSI Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0a0e17; --panel:#121a2c; --panel2:#18223a; --line:#243150;
+    --txt:#eaf0ff; --mut:#8294b8; --dim:#5d6f93;
+    --lime:#c4ff4d; --lime-dim:#8fbb2e; --blue:#4d9fff; --warm:#ff8a5c; --pink:#ff6b9d;
+    --ok:#3ddc8a; --warn:#ffcc4d;
+    --r:18px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{background:#05070d;color:var(--txt);font-family:'Space Grotesk',sans-serif}
+  body{min-height:100vh;display:flex;justify-content:center;padding:0;background:radial-gradient(140% 80% at 50% -10%,#16203a 0%,#05070d 60%)}
+  .mono{font-family:'Spline Sans Mono',monospace}
+  .app{width:100%;max-width:430px;min-height:100vh;background:var(--ink);position:relative;display:flex;flex-direction:column;box-shadow:0 0 80px rgba(0,0,0,.6);overflow:hidden}
+
+  /* ===== extension chrome header ===== */
+  .topbar{position:sticky;top:0;z-index:30;background:rgba(10,14,23,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 14px) 18px 13px}
+  .brandrow{display:flex;align-items:center;gap:11px}
+  .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--lime),var(--lime-dim));display:grid;place-items:center;flex-shrink:0;box-shadow:0 0 18px rgba(196,255,77,.35)}
+  .logo svg{width:19px;height:19px}
+  .brand h1{font-size:16px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .brand .sub{font-size:10.5px;color:var(--dim);letter-spacing:.04em;margin-top:3px;text-transform:uppercase}
+  .status{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ok);font-weight:600;background:rgba(61,220,138,.1);border:1px solid rgba(61,220,138,.25);padding:5px 9px;border-radius:20px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(61,220,138,.5);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,220,138,.5)}70%{box-shadow:0 0 0 7px rgba(61,220,138,0)}100%{box-shadow:0 0 0 0 rgba(61,220,138,0)}}
+
+  .body{flex:1;padding:18px 16px 110px;overflow-y:auto}
+  .view{display:none;animation:fade .35s ease}
+  .view.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .sect-lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600;margin:22px 4px 11px;display:flex;align-items:center;gap:8px}
+  .sect-lbl:first-child{margin-top:4px}
+  .sect-lbl::after{content:'';flex:1;height:1px;background:var(--line)}
+
+  /* ===== SSI hero ===== */
+  .ssi{background:linear-gradient(160deg,#1a2540,#10182b);border:1px solid var(--line);border-radius:22px;padding:22px 20px;position:relative;overflow:hidden}
+  .ssi::before{content:'';position:absolute;width:200px;height:200px;right:-60px;top:-70px;background:radial-gradient(circle,rgba(196,255,77,.16),transparent 70%)}
+  .ssi-top{display:flex;align-items:flex-start;gap:18px;position:relative}
+  .gauge{position:relative;width:120px;height:120px;flex-shrink:0}
+  .gauge svg{transform:rotate(-90deg)}
+  .gauge .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .gauge .num{font-size:34px;font-weight:700;line-height:1;font-family:'Spline Sans Mono',monospace}
+  .gauge .of{font-size:10px;color:var(--dim);margin-top:3px;letter-spacing:.1em}
+  .ssi-meta{flex:1;padding-top:6px}
+  .ssi-meta .t{font-size:13px;color:var(--mut);font-weight:500}
+  .ssi-meta .delta{font-size:15px;font-weight:700;color:var(--lime);margin-top:7px;display:flex;align-items:center;gap:6px}
+  .chip{display:inline-block;font-size:10.5px;color:var(--blue);background:rgba(77,159,255,.12);border:1px solid rgba(77,159,255,.25);padding:4px 8px;border-radius:7px;margin-top:11px;line-height:1.3}
+  .pillars{margin-top:20px;display:flex;flex-direction:column;gap:13px;position:relative}
+  .pillar .ph{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}
+  .pillar .ph span:first-child{color:var(--txt);font-weight:500}
+  .pillar .ph span:last-child{color:var(--mut);font-family:'Spline Sans Mono',monospace}
+  .track{height:7px;background:#0c1322;border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px;width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
+
+  /* ===== module cards ===== */
+  .mod{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:13px;position:relative;transition:.25s}
+  .mod.active{border-color:rgba(196,255,77,.35);box-shadow:0 0 0 1px rgba(196,255,77,.1),0 8px 24px -12px rgba(196,255,77,.2)}
+  .mod-head{display:flex;align-items:center;gap:12px}
+  .mic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;background:var(--panel2);border:1px solid var(--line)}
+  .mic svg{width:20px;height:20px}
+  .mod-ttl{flex:1}
+  .mod-ttl h3{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+  .mod-ttl p{font-size:11.5px;color:var(--mut);margin-top:3px;line-height:1.4}
+  .soon{font-size:9.5px;font-weight:700;letter-spacing:.08em;color:var(--warm);background:rgba(255,138,92,.12);border:1px solid rgba(255,138,92,.3);padding:3px 7px;border-radius:6px;text-transform:uppercase}
+
+  /* toggle */
+  .sw{width:46px;height:27px;border-radius:20px;background:#1d2640;border:1px solid var(--line);position:relative;cursor:pointer;flex-shrink:0;transition:.25s}
+  .sw::after{content:'';position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;background:#5d6f93;transition:.25s}
+  .sw.on{background:rgba(196,255,77,.22);border-color:var(--lime)}
+  .sw.on::after{left:21px;background:var(--lime);box-shadow:0 0 10px rgba(196,255,77,.6)}
+
+  .mod-stats{display:flex;gap:10px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--line)}
+  .stat{flex:1}
+  .stat .n{font-size:18px;font-weight:700;font-family:'Spline Sans Mono',monospace;line-height:1}
+  .stat .l{font-size:10px;color:var(--dim);margin-top:4px;letter-spacing:.03em}
+  .stat .n.lime{color:var(--lime)}.stat .n.blue{color:var(--blue)}.stat .n.warm{color:var(--warm)}
+
+  .limitbar{margin-top:12px}
+  .limitbar .lh{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut);margin-bottom:5px}
+  .limitbar .track{height:5px}
+
+  /* note preview */
+  .note{margin-top:13px;background:#0c1322;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:11.5px;color:var(--mut);line-height:1.5;position:relative}
+  .note .lbl{font-size:9.5px;letter-spacing:.1em;color:var(--lime-dim);text-transform:uppercase;margin-bottom:6px;font-weight:600}
+  .note b{color:var(--txt);font-weight:600}
+
+  /* safety panel */
+  .safety{background:linear-gradient(160deg,#1a1322,#140e1c);border:1px solid #3a2740;border-radius:var(--r);padding:16px}
+  .safety .sh{display:flex;align-items:center;gap:9px;margin-bottom:13px}
+  .safety .sh svg{width:18px;height:18px}
+  .safety .sh h3{font-size:14px;font-weight:600}
+  .srow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+  .srow:last-child{border:0;padding-bottom:0}
+  .srow .k{color:var(--mut)}
+  .srow .v{font-family:'Spline Sans Mono',monospace;font-weight:600;color:var(--warn)}
+  .srow .v.ok{color:var(--ok)}
+
+  /* inbox / inbound */
+  .lead{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:10px}
+  .av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;font-weight:700;font-size:15px;color:#0a0e17}
+  .lead .info{flex:1;min-width:0}
+  .lead .info .nm{font-size:13.5px;font-weight:600}
+  .lead .info .rl{font-size:11px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tag{font-size:9.5px;font-weight:600;padding:4px 8px;border-radius:7px;flex-shrink:0}
+  .tag.msg{color:var(--ok);background:rgba(61,220,138,.12);border:1px solid rgba(61,220,138,.25)}
+  .tag.view{color:var(--blue);background:rgba(77,159,255,.12);border:1px solid rgba(77,159,255,.25)}
+
+  .banner{background:linear-gradient(135deg,rgba(196,255,77,.12),rgba(77,159,255,.08));border:1px solid rgba(196,255,77,.25);border-radius:14px;padding:14px 15px;margin-bottom:18px;font-size:12.5px;line-height:1.5;color:var(--mut)}
+  .banner b{color:var(--lime);font-weight:600}
+
+  /* content scheduler */
+  .post{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:11px}
+  .post .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+  .post .when{font-size:11px;color:var(--lime);font-family:'Spline Sans Mono',monospace;font-weight:600}
+  .post .st{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .post p{font-size:12.5px;color:var(--mut);line-height:1.5}
+  .post .meta{margin-top:10px;display:flex;gap:14px;font-size:10.5px;color:var(--dim)}
+
+  /* ecosystem */
+  .eco{display:flex;align-items:center;gap:13px;background:linear-gradient(135deg,#10233a,#0e1626);border:1px solid rgba(77,159,255,.25);border-radius:var(--r);padding:16px}
+  .eco .ei{width:40px;height:40px;border-radius:11px;background:rgba(77,159,255,.15);display:grid;place-items:center;flex-shrink:0}
+  .eco .et{flex:1}.eco .et h3{font-size:13.5px;font-weight:600}.eco .et p{font-size:11px;color:var(--mut);margin-top:3px;line-height:1.4}
+
+  /* bottom nav */
+  .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(10,14,23,.92);backdrop-filter:blur(16px);border-top:1px solid var(--line);display:flex;padding:9px 8px calc(env(safe-area-inset-bottom) + 9px);z-index:40}
+  .nav button{flex:1;background:none;border:0;color:var(--dim);display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:5px 0;font-family:inherit;transition:.2s}
+  .nav button svg{width:21px;height:21px}
+  .nav button span{font-size:9.5px;letter-spacing:.02em;font-weight:500}
+  .nav button.on{color:var(--lime)}
+
+  .cta{display:block;width:100%;margin-top:18px;background:linear-gradient(135deg,var(--lime),var(--lime-dim));color:#0a0e17;border:0;border-radius:14px;padding:15px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:-.01em}
+  .ghost{display:block;width:100%;margin-top:10px;background:none;border:1px solid var(--line);color:var(--mut);border-radius:14px;padding:13px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer}
+  .foot{text-align:center;font-size:10px;color:var(--dim);margin-top:20px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brandrow">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2v6M12 2l4 3M12 2L8 5" stroke="#0a0e17" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="15" r="6" stroke="#0a0e17" stroke-width="2.2"/><circle cx="12" cy="15" r="2" fill="#0a0e17"/></svg></div>
+      <div class="brand">
+        <h1>Beacon</h1>
+        <div class="sub">SSI&nbsp;Growth&nbsp;Engine</div>
+      </div>
+      <div class="status"><span class="dot"></span>Active</div>
+    </div>
+  </header>
+
+  <main class="body">
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="view on" id="v-dash">
+      <div class="sect-lbl">Social Selling Index</div>
+      <div class="ssi">
+        <div class="ssi-top">
+          <div class="gauge">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#0c1322" stroke-width="10"/>
+              <circle id="gring" cx="60" cy="60" r="52" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+              <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4ff4d"/><stop offset="1" stop-color="#4d9fff"/></linearGradient></defs>
+            </svg>
+            <div class="val"><div class="num" id="gnum">0</div><div class="of mono">/ 100</div></div>
+          </div>
+          <div class="ssi-meta">
+            <div class="t">Твой индекс на этой неделе</div>
+            <div class="delta">▲ +14 <span style="color:var(--mut);font-weight:500;font-size:12px">за 14 дней</span></div>
+            <div class="chip">Топ 4% в индустрии · Топ 1% в твоей сети</div>
+          </div>
+        </div>
+        <div class="pillars">
+          <div class="pillar"><div class="ph"><span>Профессиональный бренд</span><span>19/25</span></div><div class="track"><div class="fill" data-w="76" style="background:linear-gradient(90deg,#c4ff4d,#8fbb2e)"></div></div></div>
+          <div class="pillar"><div class="ph"><span>Поиск нужных людей</span><span>17/25</span></div><div class="track"><div class="fill" data-w="68" style="background:linear-gradient(90deg,#4d9fff,#3a7fd0)"></div></div></div>
+          <div class="pillar"><div class="ph"><span>Обмен инсайтами</span><span>21/25</span></div><div class="track"><div class="fill" data-w="84" style="background:linear-gradient(90deg,#3ddc8a,#2bb06f)"></div></div></div>
+          <div class="pillar"><div class="ph"><span>Построение связей</span><span>15/25</span></div><div class="track"><div class="fill" data-w="60" style="background:linear-gradient(90deg,#ff8a5c,#e0683c)"></div></div></div>
+        </div>
+      </div>
+
+      <div class="sect-lbl">Эффект на этой неделе</div>
+      <div class="mod" style="margin-bottom:0">
+        <div class="mod-stats" style="margin-top:0;padding-top:0;border:0">
+          <div class="stat"><div class="n lime">7</div><div class="l">входящих от рекрутёров</div></div>
+          <div class="stat"><div class="n blue">×3.2</div><div class="l">просмотров профиля</div></div>
+          <div class="stat"><div class="n warm">41%</div><div class="l">accept rate коннектов</div></div>
+        </div>
+      </div>
+
+      <div class="sect-lbl">Цель недели</div>
+      <div class="banner">🎯 Поднять <b>«Построение связей»</b> до 18/25 — это самый слабый столб. Beacon добавит +30 целевых коннектов с рекрутёрами в безопасном темпе и усилит вовлечённость в их постах.</div>
+    </section>
+
+    <!-- ============ AUTOMATIONS ============ -->
+    <section class="view" id="v-auto">
+      <div class="sect-lbl">Модули автоматизации</div>
+
+      <!-- Feed engagement -->
+      <div class="mod active" id="m1">
+        <div class="mod-head">
+          <div class="mic"><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v10M2 12.5C2 11 3 10 4.5 10H7l1.5-6c.3-1.2 1.5-1.8 2.6-1.3.8.4 1.2 1.3 1 2.2L11 9h6.5c1.6 0 2.8 1.5 2.4 3l-1.6 7c-.3 1.2-1.3 2-2.5 2H7" stroke="#c4ff4d" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+          <div class="mod-ttl"><h3>Вовлечённость в ленте</h3><p>Умные лайки + AI-комментарии к постам твоей ЦА и рекрутёров</p></div>
+          <div class="sw on" data-mod="m1"></div>
+        </div>
+        <div class="mod-stats">
+          <div class="stat"><div class="n lime">23</div><div class="l">лайков сегодня</div></div>
+          <div class="stat"><div class="n lime">6</div><div class="l">комментов</div></div>
+          <div class="stat"><div class="n">8</div><div class="l">в очереди</div></div>
+        </div>
+        <div class="limitbar"><div class="lh"><span>Дневной лимит вовлечённости</span><span class="mono">29/60</span></div><div class="track"><div class="fill" data-w="48" style="background:linear-gradient(90deg,#c4ff4d,#8fbb2e)"></div></div></div>
+      </div>
+
+      <!-- Smart connect -->
+      <div class="mod active" id="m2">
+        <div class="mod-head">
+          <div class="mic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="#c4ff4d" stroke-width="1.8"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round"/><path d="M18 7v6M21 10h-6" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div class="mod-ttl"><h3>Smart Connect — рекрутёры</h3><p>Таргет по роли/гео/стеку + персональный Note к каждому</p></div>
+          <div class="sw on" data-mod="m2"></div>
+        </div>
+        <div class="mod-stats">
+          <div class="stat"><div class="n blue">12</div><div class="l">запросов сегодня</div></div>
+          <div class="stat"><div class="n lime">41%</div><div class="l">принято</div></div>
+          <div class="stat"><div class="n">186</div><div class="l">в воронке</div></div>
+        </div>
+        <div class="note">
+          <div class="lbl">AI-сгенерированный Note · {{recruiter}}</div>
+          Привет, <b>Anna</b>! Вижу, ты нанимаешь Senior Frontend в <b>finance-tech</b>. 11 лет на Vue/TS, последний год строю AI-native инструменты. Буду рад быть на связи 🙌
+        </div>
+        <div class="limitbar"><div class="lh"><span>Connect-запросы · неделя</span><span class="mono">38/80</span></div><div class="track"><div class="fill" data-w="47" style="background:linear-gradient(90deg,#4d9fff,#3a7fd0)"></div></div></div>
+      </div>
+
+      <!-- Content autopilot -->
+      <div class="mod active" id="m3">
+        <div class="mod-head">
+          <div class="mic"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3h10l4 4v14H5z" stroke="#c4ff4d" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div class="mod-ttl"><h3>Контент-автопилот</h3><p>2–3 поста в неделю из твоих идей · AI-черновик + ручной аппрув</p></div>
+          <div class="sw on" data-mod="m3"></div>
+        </div>
+        <div class="mod-stats">
+          <div class="stat"><div class="n lime">2</div><div class="l">в очереди</div></div>
+          <div class="stat"><div class="n">пн / чт</div><div class="l">расписание</div></div>
+          <div class="stat"><div class="n blue">+0.8</div><div class="l">к SSI / пост</div></div>
+        </div>
+      </div>
+
+      <!-- Auto apply -->
+      <div class="mod" id="m4">
+        <div class="mod-head">
+          <div class="mic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4z" stroke="#ff8a5c" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7v6l8 4 8-4V7M9 14v4" stroke="#ff8a5c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="mod-ttl"><h3>Авто-отклики</h3><p>Easy Apply + cover letter через движок Job Radar</p></div>
+          <span class="soon">Скоро</span>
+        </div>
+        <div class="note" style="border-style:dashed">
+          <div class="lbl">Интеграция</div>
+          Переиспользуем парсер резюме и генератор cover-letter из <b>Job Radar</b> — отдельный движок не нужен.
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ INBOX ============ -->
+    <section class="view" id="v-inbox">
+      <div class="sect-lbl">Входящий интерес · цель продукта</div>
+      <div class="banner">📈 Главная метрика Beacon — <b>не сколько ты написал, а сколько написали тебе</b>. Чем выше SSI, тем больше рекрутёров приходят сами.</div>
+      <div class="lead"><div class="av" style="background:linear-gradient(135deg,#c4ff4d,#8fbb2e)">AK</div><div class="info"><div class="nm">Anna K.</div><div class="rl">Tech Recruiter · Revolut</div></div><span class="tag msg">Написала</span></div>
+      <div class="lead"><div class="av" style="background:linear-gradient(135deg,#4d9fff,#3a7fd0)">MР</div><div class="info"><div class="nm">Maksim R.</div><div class="rl">Talent Lead · Wise</div></div><span class="tag msg">Написал</span></div>
+      <div class="lead"><div class="av" style="background:linear-gradient(135deg,#ff6b9d,#d04f7c)">SD</div><div class="info"><div class="nm">Sofia D.</div><div class="rl">Head of Eng · seed startup</div></div><span class="tag view">3× смотрела</span></div>
+      <div class="lead"><div class="av" style="background:linear-gradient(135deg,#3ddc8a,#2bb06f)">JL</div><div class="info"><div class="nm">James L.</div><div class="rl">IT Recruiter · freelance</div></div><span class="tag view">Смотрел</span></div>
+      <div class="lead"><div class="av" style="background:linear-gradient(135deg,#ffcc4d,#d0a02e)">EV</div><div class="info"><div class="nm">Elena V.</div><div class="rl">Sourcing · Booking.com</div></div><span class="tag msg">Написала</span></div>
+    </section>
+
+    <!-- ============ SETTINGS / SAFETY ============ -->
+    <section class="view" id="v-set">
+      <div class="sect-lbl">Anti-ban · режим невидимки</div>
+      <div class="safety">
+        <div class="sh"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" stroke="#ff6b9d" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#ff6b9d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><h3>Защита аккаунта</h3></div>
+        <div class="srow"><span class="k">Человеческие задержки</span><span class="v ok">8–45 сек</span></div>
+        <div class="srow"><span class="k">Рабочие часы (твой ТЗ)</span><span class="v ok">09:00–19:00</span></div>
+        <div class="srow"><span class="k">Warmup новых аккаунтов</span><span class="v ok">Вкл</span></div>
+        <div class="srow"><span class="k">Лимит коннектов / неделя</span><span class="v">80 / 100</span></div>
+        <div class="srow"><span class="k">Паузы и «выходные»</span><span class="v ok">Авто</span></div>
+        <div class="srow"><span class="k">Риск-скоринг сессии</span><span class="v ok">Низкий</span></div>
+      </div>
+      <div class="banner" style="margin-top:14px">⚠️ LinkedIn агрессивно банит автоматизацию. Beacon работает в твоём реальном браузере, имитирует поведение и держит объёмы ниже порогов — но <b>скорость всегда жертвуется ради безопасности аккаунта</b>.</div>
+
+      <div class="sect-lbl">Экосистема</div>
+      <div class="eco">
+        <div class="ei"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#4d9fff" stroke-width="1.8"/><circle cx="12" cy="12" r="8" stroke="#4d9fff" stroke-width="1.8" stroke-dasharray="2 3"/></svg></div>
+        <div class="et"><h3>Синхронизация с Job Radar</h3><p>Резюме, профиль ЦА и cover-letter — общие. Один источник истины.</p></div>
+        <div class="sw on" data-mod="eco"></div>
+      </div>
+
+      <button class="cta">Запустить сегодняшнюю кампанию</button>
+      <button class="ghost">Пауза всех модулей</button>
+      <div class="foot">Beacon · функциональная демка<br>рабочее название — финал за тобой</div>
+    </section>
+
+  </main>
+
+  <nav class="nav">
+    <button class="on" data-v="v-dash"><svg viewBox="0 0 24 24" fill="none"><path d="M3 13l9-9 9 9M5 11v8h5v-5h4v5h5v-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>SSI</span></button>
+    <button data-v="v-auto"><svg viewBox="0 0 24 24" fill="none"><path d="M12 4v2m0 12v2m8-8h-2M6 12H4m12.5-5.5l-1.4 1.4M8.9 15.1l-1.4 1.4m9.6 0l-1.4-1.4M8.9 8.9L7.5 7.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.9"/></svg><span>Модули</span></button>
+    <button data-v="v-inbox"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Входящие</span></button>
+    <button data-v="v-set"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span>Защита</span></button>
+  </nav>
+</div>
+
+<script>
+  // nav
+  const navs=document.querySelectorAll('.nav button'), views=document.querySelectorAll('.view');
+  navs.forEach(b=>b.onclick=()=>{
+    navs.forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    views.forEach(v=>v.classList.remove('on'));
+    document.getElementById(b.dataset.v).classList.add('on');
+    document.querySelector('.body').scrollTop=0;
+    if(b.dataset.v==='v-auto')fillBars();
+  });
+  // toggles
+  document.querySelectorAll('.sw').forEach(s=>s.onclick=()=>{
+    s.classList.toggle('on');
+    const mod=document.getElementById(s.dataset.mod);
+    if(mod&&mod.classList.contains('mod'))mod.classList.toggle('active',s.classList.contains('on'));
+  });
+  // gauge
+  const ring=document.getElementById('gring'),gnum=document.getElementById('gnum'),C=326.7,score=82;
+  setTimeout(()=>{
+    ring.style.transition='stroke-dashoffset 1.6s cubic-bezier(.2,.8,.2,1)';
+    ring.style.strokeDashoffset=C-(C*score/100);
+    let n=0;const iv=setInterval(()=>{n+=2;if(n>=score){n=score;clearInterval(iv)}gnum.textContent=n},28);
+  },250);
+  // bars
+  let filled=false;
+  function fillBars(){document.querySelectorAll('.view.on .fill').forEach(f=>{f.style.width=f.dataset.w+'%'})}
+  setTimeout(fillBars,500);
+  // refill dash bars already; ensure auto bars fill when opened handled above
+</script>
+</body>
+</html>
