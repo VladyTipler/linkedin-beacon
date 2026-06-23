@@ -111,6 +111,8 @@ export interface FeedPost {
   authorHeadline?: string
   /** Post body text. */
   text: string
+  /** Whether the current user already reacted (read from the DOM) — like dedup. */
+  alreadyLiked?: boolean
 }
 
 /** The user's own expertise, used to author comments/posts in their voice (§4.3.1, §10). */

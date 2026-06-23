@@ -1,0 +1,95 @@
+import { describe, it, expect, beforeEach } from 'vitest'
+import { FeedReader } from './FeedReader'
+
+// Structure mirrors the LIVE LinkedIn feed (new hashed-class build), validated
+// against 8 real posts on 2026-06-24: post root carries `componentkey` (the only
+// stable per-post id — no urn in the DOM), author from the control-menu button's
+// aria-label, body in [data-testid="expandable-text-box"], like state from the
+// reaction button's aria-label. Author/text are neutral placeholders; the
+// anchors are real.
+const FIXTURE = `
+<div componentkey="container-update-list_mainFeed">
+  <div componentkey="POST_AAA" class="_52e8c184 efc4bb19">
+    <div class="_hdr">
+      <button aria-label="Open control menu for post by Jane Recruiter">⋯</button>
+      <a href="https://www.linkedin.com/in/jane/?mini=1" aria-label="View Jane Recruiter’s profile">
+        <span aria-hidden="true">Jane Recruiter</span>
+      </a>
+    </div>
+    <div data-testid="expandable-text-box">Hiring a senior Vue engineer, remote.<button data-testid="expandable-text-button">…more</button></div>
+    <div class="_bar">
+      <button aria-label="Reaction button state: no reaction">React</button>
+      <button aria-label="Open reactions menu">React menu</button>
+      <button aria-label="Comment">Comment</button>
+    </div>
+  </div>
+
+  <div componentkey="POST_BBB" class="_52e8c184 efc4bb19">
+    <div class="_hdr">
+      <button aria-label="Open control menu for post by Acme Corp">⋯</button>
+      <a href="https://www.linkedin.com/company/acme/" aria-label="View Acme Corp’s page"></a>
+    </div>
+    <div data-testid="expandable-text-box">We shipped a new TypeScript SDK.</div>
+    <div class="_bar">
+      <button aria-label="Reaction button state: Like">React</button>
+      <button aria-label="Comment">Comment</button>
+    </div>
+  </div>
+
+  <!-- LinkedIn renders each post twice: a base key and an
+       "expanded<base>FeedType_MAIN_FEED_RELEVANCE" variant. -->
+  <div componentkey="expandedPOST_AAAFeedType_MAIN_FEED_RELEVANCE" class="_52e8c184 efc4bb19">
+    <div class="_hdr"><button aria-label="Open control menu for post by Jane Recruiter">⋯</button></div>
+    <div data-testid="expandable-text-box">Hiring a senior Vue engineer, remote.</div>
+    <div class="_bar">
+      <button aria-label="Reaction button state: no reaction">React</button>
+      <button aria-label="Comment">Comment</button>
+    </div>
+  </div>
+</div>`
+
+describe('FeedReader', () => {
+  let root: HTMLElement
+  beforeEach(() => {
+    root = document.createElement('div')
+    root.innerHTML = FIXTURE
+  })
+
+  const reader = new FeedReader()
+
+  it('extracts one FeedPost per real post container', () => {
+    const posts = reader.parse(root)
+    expect(posts).toHaveLength(2) // AAA + BBB, the duplicate AAA collapsed
+  })
+
+  it('reads urn (componentkey), author and text', () => {
+    const [a] = reader.parse(root)
+    expect(a.urn).toBe('POST_AAA')
+    expect(a.authorName).toBe('Jane Recruiter')
+    expect(a.text).toBe('Hiring a senior Vue engineer, remote.') // no "…more" button text
+  })
+
+  it('reads the like state from the reaction button (already-liked detection)', () => {
+    const [a, b] = reader.parse(root)
+    expect(a.alreadyLiked).toBe(false) // "no reaction"
+    expect(b.alreadyLiked).toBe(true) // "Like"
+  })
+
+  it('deduplicates the base + "expanded" render of a post into one normalised urn', () => {
+    const urns = reader.parse(root).map((p) => p.urn)
+    expect(urns).toEqual(['POST_AAA', 'POST_BBB']) // expandedPOST_AAA collapsed onto POST_AAA
+  })
+
+  it('ignores the outer feed container (many reaction buttons, no author)', () => {
+    expect(reader.parse(root).every((p) => p.urn !== 'container-update-list_mainFeed')).toBe(true)
+  })
+
+  it('honours the limit', () => {
+    expect(reader.parse(root, 1)).toHaveLength(1)
+  })
+
+  it('returns [] for a root with no posts', () => {
+    const empty = document.createElement('div')
+    expect(reader.parse(empty)).toEqual([])
+  })
+})
