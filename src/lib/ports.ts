@@ -31,6 +31,17 @@ export interface KeyValueStore {
 }
 
 /**
+ * One-shot timer scheduling (subset of chrome.alarms). Injected so the
+ * quarantine queue is testable without chrome and survives SW eviction (the
+ * alarm, not an in-memory timer, is what wakes the worker).
+ */
+export interface AlarmScheduler {
+  /** Schedule a one-shot alarm to fire at the given epoch ms. */
+  schedule(name: string, whenMs: number): void
+  clear(name: string): void
+}
+
+/**
  * A single way to extract an SSI snapshot from a DOM root.
  * Strategies are tried in order; the first non-null wins (OCP — add, don't edit).
  */
