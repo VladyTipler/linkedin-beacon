@@ -26,6 +26,18 @@ export interface SsiSnapshot {
 /** Per-module automation trust level (design-spec §5.5). */
 export type AutomationLevel = 'manual' | 'auto_guardrails' | 'full_auto'
 
+/** Quality guardrails for auto_guardrails mode (design-spec §5.5). */
+export interface Guardrails {
+  /** Judge confidence threshold 0..1 below which an action is blocked. */
+  minConfidence: number
+  /** Phrases that must not appear (case-insensitive). */
+  bannedPhrases: string[]
+  /** Cancel-window length before a quarantined action sends; 0 = full-auto. */
+  quarantineMinutes: number
+  /** Allowed [min, max] character length for generated text. */
+  lenRange: [number, number]
+}
+
 export type ModuleId = 'engagement' | 'smart_connect' | 'content' | 'auto_apply'
 
 export interface ModuleState {
@@ -67,6 +79,19 @@ export interface FeedPost {
   /** Post body text. */
   text: string
 }
+
+/** The user's own expertise, used to author comments/posts in their voice (§4.3.1, §10). */
+export interface ExpertiseProfile {
+  /** Short professional headline, e.g. "Frontend TechLead, 11y Vue/TS". */
+  headline: string
+  /** Tech stack the user can speak to with authority. */
+  stack: string[]
+  /** Optional longer bio / context for few-shot voice. */
+  bio?: string
+}
+
+/** Comment tone preset (design-spec §4.1). */
+export type CommentTone = 'expert' | 'friendly' | 'question'
 
 /** Targeting criteria: who/what to engage with (design-spec §4.1, §9 TargetProfile). */
 export interface TargetProfile {
