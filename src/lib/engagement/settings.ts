@@ -1,8 +1,11 @@
 import type { KeyValueStore } from '../ports'
-import type { ExpertiseProfile, TargetProfile } from '../types'
+import type { ExpertiseProfile, ModuleState, TargetProfile } from '../types'
 import type { EngagementConfig } from './EngagementOrchestrator'
 
 export const SETTINGS_KEY = 'engagement:settings'
+// Owned by the side panel's useModules — the single source of truth for
+// per-module automationLevel. Keep this key in sync with that composable.
+const MODULES_STATE_KEY = 'modules:state'
 
 export interface EngagementSettings {
   config: EngagementConfig
@@ -30,7 +33,13 @@ export const DEFAULT_SETTINGS: EngagementSettings = {
 }
 
 export async function loadSettings(store: KeyValueStore): Promise<EngagementSettings> {
-  return (await store.get<EngagementSettings>(SETTINGS_KEY)) ?? DEFAULT_SETTINGS
+  const base = (await store.get<EngagementSettings>(SETTINGS_KEY)) ?? DEFAULT_SETTINGS
+  // automationLevel is owned by the module roster (SSOT) — the UI selector there
+  // must actually drive the gate, so derive config.level from it.
+  const modules = await store.get<ModuleState[]>(MODULES_STATE_KEY)
+  const engagement = modules?.find((m) => m.id === 'engagement')
+  if (!engagement) return base
+  return { ...base, config: { ...base.config, level: engagement.automationLevel } }
 }
 
 export async function saveSettings(store: KeyValueStore, settings: EngagementSettings): Promise<void> {

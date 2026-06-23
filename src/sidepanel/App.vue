@@ -9,11 +9,13 @@ import SafetyScreen from './screens/SafetyScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
+import { useEngagement } from './composables/useEngagement'
 import { DEMO_LEADS } from './lib/demo'
 
 const { active, go } = useNavigation()
 const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
 const { modules, toggle, setLevel } = useModules()
+const { summary, quarantined, runCampaign, cancel } = useEngagement()
 
 const anyActive = computed(() => modules.value.some((m) => m.available && m.enabled))
 
@@ -44,7 +46,14 @@ function pauseAll() {
         @set-level="setLevel"
       />
       <InboxScreen v-else-if="active === 'v-inbox'" :leads="DEMO_LEADS" />
-      <SafetyScreen v-else @run-campaign="go('v-auto')" @pause-all="pauseAll" />
+      <SafetyScreen
+        v-else
+        :quarantined="quarantined"
+        :summary="summary"
+        @run-campaign="runCampaign"
+        @pause-all="pauseAll"
+        @cancel="cancel"
+      />
     </main>
     <BottomNav :active="active" @go="go" />
   </div>

@@ -14,6 +14,16 @@ export const panelBus = {
     chrome.runtime.sendMessage(message).catch(() => {})
   },
 
+  /** Send and await the SW's sendResponse payload (null outside the extension). */
+  async request<T>(message: BeaconMessage): Promise<T | null> {
+    if (!this.available()) return null
+    try {
+      return (await chrome.runtime.sendMessage(message)) as T
+    } catch {
+      return null
+    }
+  },
+
   onMessage(handler: (message: BeaconMessage) => void): () => void {
     if (!this.available()) return () => {}
     const listener = (message: BeaconMessage) => handler(message)
