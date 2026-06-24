@@ -48,3 +48,30 @@ export async function loadSettings(store: KeyValueStore): Promise<EngagementSett
 export async function saveSettings(store: KeyValueStore, settings: EngagementSettings): Promise<void> {
   await store.set(SETTINGS_KEY, settings)
 }
+
+/** Split a comma-separated input into trimmed, non-empty tokens. */
+export function parseCsv(input: string): string[] {
+  return input
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+}
+
+export interface TargetForm {
+  stack: string
+  roles: string
+  threshold: number
+}
+
+/** Apply the target form to settings (stack/roles/threshold), preserving the rest. */
+export function applyTargetForm(current: EngagementSettings, form: TargetForm): EngagementSettings {
+  return {
+    ...current,
+    target: {
+      ...current.target,
+      stack: parseCsv(form.stack),
+      targetRoles: parseCsv(form.roles)
+    },
+    relevanceThreshold: Math.min(1, Math.max(0, form.threshold))
+  }
+}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AutomationLevel, ModuleId, ModuleState } from '@lib/types'
 import ModuleCard from '../components/ModuleCard.vue'
+import EngagementSettingsForm from '../components/EngagementSettingsForm.vue'
 
 defineProps<{ modules: ModuleState[] }>()
 defineEmits<{ toggle: [id: ModuleId]; setLevel: [id: ModuleId, level: AutomationLevel] }>()
@@ -29,6 +30,7 @@ const byId = (modules: ModuleState[], id: ModuleId) =>
         <div class="stat"><div class="n">8</div><div class="l">в очереди</div></div>
       </div>
       <div class="limitbar"><div class="lh"><span>Дневной лимит вовлечённости</span><span class="mono">29/60</span></div><div class="track"><div class="fill" style="width:48%;background:linear-gradient(90deg,#c4ff4d,#8fbb2e)"></div></div></div>
+      <EngagementSettingsForm />
     </ModuleCard>
 
     <ModuleCard

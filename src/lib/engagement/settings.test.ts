@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { loadSettings, DEFAULT_SETTINGS } from './settings'
+import { loadSettings, DEFAULT_SETTINGS, parseCsv, applyTargetForm } from './settings'
 import type { KeyValueStore } from '../ports'
 import type { ModuleState } from '../types'
 
@@ -23,6 +23,31 @@ describe('loadSettings', () => {
   it('defaults to manual when nothing is stored', async () => {
     const s = await loadSettings(memStore())
     expect(s.config.level).toBe('manual')
+  })
+
+  it('parses comma-separated input, trimming and dropping blanks', () => {
+    expect(parseCsv('Vue, TypeScript ,http,, ')).toEqual(['Vue', 'TypeScript', 'http'])
+    expect(parseCsv('   ')).toEqual([])
+    expect(parseCsv('')).toEqual([])
+  })
+
+  it('applyTargetForm updates stack/roles/threshold, preserving the rest', () => {
+    const next = applyTargetForm(DEFAULT_SETTINGS, {
+      stack: 'Vue, http',
+      roles: 'recruiter',
+      threshold: 0.5
+    })
+    expect(next.target.stack).toEqual(['Vue', 'http'])
+    expect(next.target.targetRoles).toEqual(['recruiter'])
+    expect(next.relevanceThreshold).toBe(0.5)
+    // untouched fields preserved
+    expect(next.config).toEqual(DEFAULT_SETTINGS.config)
+    expect(next.target.geos).toEqual(DEFAULT_SETTINGS.target.geos)
+  })
+
+  it('applyTargetForm clamps the threshold into [0,1]', () => {
+    expect(applyTargetForm(DEFAULT_SETTINGS, { stack: '', roles: '', threshold: 5 }).relevanceThreshold).toBe(1)
+    expect(applyTargetForm(DEFAULT_SETTINGS, { stack: '', roles: '', threshold: -2 }).relevanceThreshold).toBe(0)
   })
 
   it("drives config.level from the engagement module's automationLevel (SSOT)", async () => {
