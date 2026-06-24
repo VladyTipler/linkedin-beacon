@@ -26,6 +26,20 @@ describe('useLlmSettings', () => {
     expect(s2.config.value).toEqual({ provider: 'gemini', apiKey: 'AIza', model: 'gemini-2.5-flash' })
   })
 
+  it('sets keyValid true when models are returned', async () => {
+    const s = useLlmSettings()
+    await s.fetchModels()
+    expect(s.keyValid.value).toBe(true)
+    expect(s.models.value.length).toBe(1)
+  })
+
+  it('sets keyValid false when the request fails (null)', async () => {
+    ;(globalThis as any).chrome.runtime.sendMessage = vi.fn().mockRejectedValue(new Error('no sw'))
+    const s = useLlmSettings()
+    await s.fetchModels()
+    expect(s.keyValid.value).toBe(false)
+  })
+
   it('filters models by the search query', async () => {
     const s = useLlmSettings()
     s.models.value = [

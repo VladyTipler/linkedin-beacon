@@ -37,9 +37,9 @@ export function useLlmSettings() {
       apiKey: config.value.apiKey
     })
     loading.value = false
-    if (list && list.length) {
+    if (list !== null) {
       models.value = list
-      keyValid.value = true
+      keyValid.value = list.length > 0
     } else {
       keyValid.value = false
     }

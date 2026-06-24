@@ -14,5 +14,6 @@ describe('SettingsScreen', () => {
     const wrapper = mount(SettingsScreen)
     expect(wrapper.find('[data-testid="llm-provider"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="llm-key"]').attributes('type')).toBe('password')
+    expect(wrapper.find('[data-testid="llm-save"]').exists()).toBe(true)
   })
 })

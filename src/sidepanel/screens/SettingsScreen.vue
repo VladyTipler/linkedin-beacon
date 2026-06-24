@@ -30,8 +30,8 @@ async function onSave() {
     <button class="btn" :disabled="loading" data-testid="llm-fetch" @click="fetchModels">
       {{ loading ? 'Загрузка…' : 'Загрузить модели' }}
     </button>
-    <span v-if="keyValid === true" class="v ok" data-testid="llm-valid">ключ валиден</span>
-    <span v-else-if="keyValid === false" class="v" data-testid="llm-invalid">не удалось — фолбэк-список</span>
+    <span v-if="keyValid === true" class="v ok" data-testid="llm-valid">Модели загружены</span>
+    <span v-else-if="keyValid === false" class="v" data-testid="llm-invalid">Не удалось загрузить модели — проверь ключ или сеть</span>
 
     <label class="fld" v-if="filteredModels.length">
       <span class="k">Модель</span>
