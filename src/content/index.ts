@@ -4,6 +4,8 @@
 
 import { createSsiParser } from '@lib/ssi/createSsiParser'
 import { FeedReader } from '@lib/feed/FeedReader'
+import { FeedAccumulator } from '@lib/feed/FeedAccumulator'
+import { ScrollHarvestPolicy } from '@lib/feed/ScrollHarvestPolicy'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
@@ -45,15 +47,21 @@ function parseWhenReady(attempt = 0): void {
   setTimeout(() => parseWhenReady(attempt + 1), POLL_INTERVAL_MS)
 }
 
-// The feed lazy-renders. Poll FeedReader until posts appear (it is its own
-// readiness probe — no duplicated selectors), bounded, then harvest.
-async function harvestWhenReady(limit: number): Promise<ReturnType<FeedReader['parse']>> {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const posts = feed.parse(document, limit)
-    if (posts.length > 0) return posts
-    await sleep(500)
+// Scroll the feed human-like, harvesting unique posts until the target is met or
+// the feed stops yielding new posts. Variable pauses (Rng) = anti-ban. The pure
+// FeedAccumulator/ScrollHarvestPolicy decide dedup + when to stop.
+async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader['parse']>> {
+  const acc = new FeedAccumulator()
+  const policy = new ScrollHarvestPolicy({ maxStaleRounds: 2, maxRounds: 15 })
+  let staleRounds = 0
+  for (let round = 0; ; round++) {
+    const added = acc.add(feed.parse(document))
+    staleRounds = added > 0 ? 0 : staleRounds + 1
+    if (policy.shouldStop({ collected: acc.size(), target, staleRounds, round })) break
+    window.scrollBy(0, Math.round(window.innerHeight * 0.85))
+    await sleep(delay.nextMs(700, 1800))
   }
-  return feed.parse(document, limit)
+  return acc.items().slice(0, target)
 }
 
 chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendResponse) => {
@@ -74,7 +82,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     }
 
     case 'REQUEST_FEED_POSTS':
-      void harvestWhenReady(message.limit).then(sendResponse)
+      void harvestByScrolling(message.limit).then(sendResponse)
       return true // async sendResponse
 
     case 'EXECUTE_ACTION':

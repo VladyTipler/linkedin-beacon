@@ -18,7 +18,7 @@ import { ActionGate } from '@lib/gate/ActionGate'
 import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
 import { CommentJudge } from '@lib/engagement/CommentJudge'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
-import { RelevanceScorer } from '@lib/engagement/RelevanceScorer'
+import { LikeFilter } from '@lib/engagement/LikeFilter'
 import {
   EngagementOrchestrator,
   type ActionExecutor
@@ -75,7 +75,7 @@ const orchestrator = new EngagementOrchestrator({
 const humanDelay = new HumanDelay(new MathRandomRng())
 const runner = new EngagementRunner({
   harvest: (limit) => harvestPosts(limit),
-  scorer: new RelevanceScorer(),
+  likeFilter: new LikeFilter(),
   orchestrator,
   pace: () => sleep(humanDelay.nextMs(8000, 45000))
 })
