@@ -246,6 +246,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       void content.listModels(llmHttp, message.provider, message.apiKey).then(sendResponse)
       return true
 
+    case 'GENERATE_DRAFT':
+      void content.generateDraft({ store, http: llmHttp, clock, newId: randomId }, message.idea).then(sendResponse)
+      return true
+
     case 'LIST_QUARANTINE':
       void quarantine.list().then(sendResponse)
       return true

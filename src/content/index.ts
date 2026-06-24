@@ -245,6 +245,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'AUTOPILOT_REPORT':
     case 'LIST_REPORTS':
     case 'LIST_MODELS':
+    case 'GENERATE_DRAFT':
     case 'PONG':
       return false
     default:

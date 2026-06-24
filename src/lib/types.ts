@@ -263,6 +263,8 @@ export type BeaconMessage =
   | { type: 'LIST_REPORTS' }
   /** sidepanel → SW: list models for a provider+key; SW replies LlmModel[]. */
   | { type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }
+  /** sidepanel → SW: idea + prompt → post draft; replies { draft, error? }. */
+  | { type: 'GENERATE_DRAFT'; idea: Idea }
   | { type: 'PING' }
   | { type: 'PONG' }
 
