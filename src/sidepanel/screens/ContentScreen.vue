@@ -43,7 +43,7 @@ async function copy(text: string) {
         <div class="lbl">{{ idea.topic }}</div>
         {{ idea.angle }}
         <div class="row">
-          <button class="btn" data-testid="to-draft" @click="toDraft(idea)">В черновик</button>
+          <button class="btn" :data-testid="`to-draft-${i}`" @click="toDraft(idea)">В черновик</button>
           <button class="btn" @click="removeIdea(idea)">Удалить</button>
         </div>
       </div>

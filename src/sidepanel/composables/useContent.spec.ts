@@ -24,6 +24,9 @@ describe('useContent', () => {
     const c = useContent()
     await c.generateIdeas()
     expect(c.ideas.value).toEqual([{ topic: 'T', angle: 'A' }])
+    expect((globalThis as any).chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'GENERATE_IDEAS' })
+    )
   })
 
   it('removes an idea from the bank', async () => {
