@@ -29,6 +29,12 @@ export class IdeaBank {
     return (await this.store.get<Idea[]>(IDEA_BANK_KEY)) ?? []
   }
 
+  async remove(idea: Idea): Promise<void> {
+    const target = key(idea)
+    const next = (await this.all()).filter((i) => key(i) !== target)
+    await this.store.set(IDEA_BANK_KEY, next)
+  }
+
   async clear(): Promise<void> {
     await this.store.set(IDEA_BANK_KEY, [])
   }

@@ -51,4 +51,11 @@ describe('IdeaBank', () => {
     await bank.clear()
     expect(await bank.all()).toEqual([])
   })
+
+  it('removes an idea by topic+angle (normalised)', async () => {
+    const bank = new IdeaBank(memStore())
+    await bank.add([a, b])
+    await bank.remove({ topic: '  TRPC vs REST ', angle: 'Type-safety from a Vue codebase' })
+    expect(await bank.all()).toEqual([b])
+  })
 })
