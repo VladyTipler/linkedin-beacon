@@ -188,6 +188,17 @@ export interface Idea {
   angle: string
 }
 
+/** A generated post draft (design-spec §4.3). Not published until Layer 2. */
+export interface Draft {
+  id: string
+  ideaTopic: string
+  ideaAngle: string
+  /** The full generated post body. */
+  text: string
+  /** ISO timestamp. */
+  createdAt: string
+}
+
 /** Targeting criteria: who/what to engage with (design-spec §4.1, §9 TargetProfile). */
 export interface TargetProfile {
   /** Tech stack keywords, e.g. ['Vue','TypeScript']. */
