@@ -10,7 +10,8 @@ function fakeProvider(reply: string) {
     async complete(req) {
       calls.push(req)
       return { text: reply, model: 'fake', provider: 'openrouter' }
-    }
+    },
+    async listModels() { return [] }
   }
   return { provider, calls }
 }

@@ -10,7 +10,8 @@ function fakeProvider(reply: string) {
     async complete(req) {
       calls.push(req)
       return { text: reply, model: 'fake', provider: 'gemini' }
-    }
+    },
+    async listModels() { return [] }
   }
   return { provider, calls }
 }
