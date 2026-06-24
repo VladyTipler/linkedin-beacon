@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useLlmSettings } from '../composables/useLlmSettings'
+import { useExpertiseSettings } from '../composables/useExpertiseSettings'
 
 const { config, modelQuery, filteredModels, keyValid, loading, load, save, fetchModels } = useLlmSettings()
 onMounted(load)
 
+const exp = useExpertiseSettings()
+onMounted(exp.load)
+
 async function onSave() {
   await save()
+  await exp.save()
 }
 </script>
 
@@ -39,6 +44,20 @@ async function onSave() {
       <select v-model="config.model" data-testid="model-select" size="6">
         <option v-for="m in filteredModels" :key="m.id" :value="m.id">{{ m.label ?? m.id }}</option>
       </select>
+    </label>
+
+    <div class="sect-lbl">Экспертиза</div>
+    <label class="fld">
+      <span class="k">Заголовок</span>
+      <input v-model="exp.form.value.headline" data-testid="exp-headline" placeholder="Frontend TechLead, 11y Vue/TS" />
+    </label>
+    <label class="fld">
+      <span class="k">Стек (через запятую)</span>
+      <input v-model="exp.form.value.stack" data-testid="exp-stack" placeholder="Vue, TypeScript, Nuxt" />
+    </label>
+    <label class="fld">
+      <span class="k">О себе</span>
+      <textarea v-model="exp.form.value.bio" rows="3" data-testid="exp-bio" />
     </label>
 
     <button class="btn primary" data-testid="llm-save" @click="onSave">Сохранить</button>
