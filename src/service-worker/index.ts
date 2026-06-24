@@ -7,6 +7,7 @@ import { SsiRepository } from '@lib/storage/SsiRepository'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { SystemClock } from '@/adapters/SystemClock'
 import { FetchHttpClient } from '@/adapters/FetchHttpClient'
+import * as content from './contentHandlers'
 import { ChromeCookieCsrfProvider } from '@/adapters/ChromeCookieCsrfProvider'
 import { ChromeAlarmScheduler } from '@/adapters/ChromeAlarmScheduler'
 import { randomId } from '@/adapters/randomId'
@@ -99,6 +100,7 @@ const runner = new EngagementRunner({
 const AUTOPILOT_KEY = 'autopilot:state'
 const autopilotRng = new MathRandomRng()
 const reportsStore = new RunReportStore(store)
+const llmHttp = new FetchHttpClient()
 const gatekeeper = new AutopilotGatekeeper({ burst: new BurstGuard(), risk: new RiskAssessor() })
 const dailyCeiling = new DailyCeiling()
 const windows = new ChromeWindows()
@@ -239,6 +241,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'RUN_ENGAGEMENT':
       void runEngagement().then(sendResponse)
       return true // async sendResponse — reliable result delivery to the panel
+
+    case 'LIST_MODELS':
+      void content.listModels(llmHttp, message.provider, message.apiKey).then(sendResponse)
+      return true
 
     case 'LIST_QUARANTINE':
       void quarantine.list().then(sendResponse)

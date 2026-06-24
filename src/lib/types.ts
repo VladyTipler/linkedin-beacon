@@ -1,6 +1,7 @@
 // ── Domain model. Mirrors design-spec §3 (SSI), §4 (modules), §6 (inbox). ──
 
 import type { RiskMarker } from './autopilot/RiskAssessor'
+import type { LlmProviderId } from './llm/contracts'
 
 /** The four SSI pillars LinkedIn reports on /sales/ssi (each scored 0..25). */
 export type SsiPillarKey = 'brand' | 'people' | 'insights' | 'relationships'
@@ -249,6 +250,8 @@ export type BeaconMessage =
   | { type: 'AUTOPILOT_REPORT'; report: RunReport }
   /** sidepanel → SW: list run reports; SW replies RunReport[] via sendResponse. */
   | { type: 'LIST_REPORTS' }
+  /** sidepanel → SW: list models for a provider+key; SW replies LlmModel[]. */
+  | { type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }
   | { type: 'PING' }
   | { type: 'PONG' }
 

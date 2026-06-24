@@ -32,6 +32,10 @@ export default defineManifest({
     }
   ],
   permissions: ['sidePanel', 'storage', 'scripting', 'alarms', 'tabs', 'cookies'],
-  host_permissions: ['https://www.linkedin.com/*'],
+  host_permissions: [
+    'https://www.linkedin.com/*',
+    'https://openrouter.ai/*',
+    'https://generativelanguage.googleapis.com/*'
+  ],
   minimum_chrome_version: '116'
 })
