@@ -7,6 +7,7 @@ import ModulesScreen from './screens/ModulesScreen.vue'
 import InboxScreen from './screens/InboxScreen.vue'
 import SafetyScreen from './screens/SafetyScreen.vue'
 import ReportsScreen from './screens/ReportsScreen.vue'
+import SettingsScreen from './screens/SettingsScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
@@ -31,7 +32,7 @@ function pauseAll() {
 
 <template>
   <div class="app">
-    <TopBar :active="anyActive" />
+    <TopBar :active="anyActive" @open-settings="go('v-settings')" />
     <main class="body">
       <DashScreen
         v-if="active === 'v-dash'"
@@ -50,6 +51,7 @@ function pauseAll() {
       />
       <InboxScreen v-else-if="active === 'v-inbox'" :leads="DEMO_LEADS" />
       <ReportsScreen v-else-if="active === 'v-reports'" :reports="reports" />
+      <SettingsScreen v-else-if="active === 'v-settings'" />
       <SafetyScreen
         v-else
         :quarantined="quarantined"
