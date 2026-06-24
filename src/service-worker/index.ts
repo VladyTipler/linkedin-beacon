@@ -178,9 +178,12 @@ async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefin
   }
 }
 
+// Find a LinkedIn tab by URL (preferring the feed). More robust than querying
+// the active tab of the current window, which is flaky when invoked from the SW
+// in response to a side-panel click.
 async function activeLinkedInTab(): Promise<chrome.tabs.Tab | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  return tab?.url?.includes('linkedin.com') ? tab : undefined
+  const tabs = await chrome.tabs.query({ url: '*://*.linkedin.com/*' })
+  return tabs.find((t) => (t.url ?? '').includes('/feed')) ?? tabs[0]
 }
 
 function sleep(ms: number): Promise<void> {
