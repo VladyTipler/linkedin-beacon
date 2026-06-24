@@ -23,6 +23,7 @@ export type SubmitOutcome =
   | { status: 'quarantined'; id: string }
   | { status: 'blocked'; reasons: string[] }
   | { status: 'skipped'; reasons: string[] }
+  | { status: 'failed'; reasons: string[] }
 
 export const PENDING_KEY = 'engagement:pending'
 const budgetKey = (type: ActionType): string => `engagement:budget:${type}`
@@ -72,10 +73,17 @@ export class EngagementOrchestrator {
         const item = await this.deps.quarantine.enqueue(action, minutes)
         return { status: 'quarantined', id: item.id }
       }
-      case 'execute':
-        await this.deps.executor.execute(action)
+      case 'execute': {
+        try {
+          await this.deps.executor.execute(action)
+        } catch (e) {
+          // A failed action (e.g. the tab went away) must not abort the run or
+          // spend budget — report it and let the runner move on.
+          return { status: 'failed', reasons: [e instanceof Error ? e.message : String(e)] }
+        }
         await this.spend(action.type, budgetState, now)
         return { status: 'executed' }
+      }
       default:
         return assertNever(decision.outcome)
     }

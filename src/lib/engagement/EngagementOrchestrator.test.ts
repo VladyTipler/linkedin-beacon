@@ -103,6 +103,27 @@ describe('EngagementOrchestrator', () => {
     expect(await orch.reject('nope')).toBe(false)
   })
 
+  it('contains an executor failure: returns failed, does not spend budget, does not throw', async () => {
+    const store = memStore()
+    const { clock } = mutableClock('2026-06-24T12:00:00.000Z')
+    const orch = new EngagementOrchestrator({
+      gate: new ActionGate(),
+      judge: new CommentJudge(),
+      quarantine: new QuarantineQueue({ store, clock, scheduler: noopScheduler, newId: counterIds() }),
+      store,
+      clock,
+      executor: {
+        async execute() {
+          throw new Error('tab gone')
+        }
+      },
+      newId: counterIds()
+    })
+    const out = await orch.submit(like, cfg('full_auto'))
+    expect(out).toEqual({ status: 'failed', reasons: ['tab gone'] })
+    expect(await store.get('engagement:budget:like')).toBeNull()
+  })
+
   it('executes immediately in full_auto and spends the budget', async () => {
     const { orch, executed } = build()
     expect((await orch.submit(like, cfg('full_auto'))).status).toBe('executed')
