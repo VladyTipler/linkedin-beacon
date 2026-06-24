@@ -27,5 +27,9 @@ defineEmits<{ go: [id: ViewId] }>()
       <svg viewBox="0 0 24 24" fill="none"><path d="M5 3h14v18l-7-4-7 4z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" /></svg>
       <span>Отчёты</span>
     </button>
+    <button :class="{ on: active === 'v-content' }" data-testid="nav-v-content" @click="$emit('go', 'v-content')">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M5 3h10l4 4v14H5z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" /><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+      <span>Контент</span>
+    </button>
   </nav>
 </template>

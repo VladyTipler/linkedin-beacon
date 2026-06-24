@@ -12,7 +12,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'v-auto', label: 'Модули' },
   { id: 'v-inbox', label: 'Входящие' },
   { id: 'v-set', label: 'Защита' },
-  { id: 'v-reports', label: 'Отчёты' }
+  { id: 'v-reports', label: 'Отчёты' },
+  { id: 'v-content', label: 'Контент' }
 ]
 
 /** Active-view state for the bottom nav. SRP: navigation only. */

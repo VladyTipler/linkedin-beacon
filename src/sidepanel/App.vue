@@ -8,6 +8,7 @@ import InboxScreen from './screens/InboxScreen.vue'
 import SafetyScreen from './screens/SafetyScreen.vue'
 import ReportsScreen from './screens/ReportsScreen.vue'
 import SettingsScreen from './screens/SettingsScreen.vue'
+import ContentScreen from './screens/ContentScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
@@ -52,6 +53,7 @@ function pauseAll() {
       <InboxScreen v-else-if="active === 'v-inbox'" :leads="DEMO_LEADS" />
       <ReportsScreen v-else-if="active === 'v-reports'" :reports="reports" />
       <SettingsScreen v-else-if="active === 'v-settings'" />
+      <ContentScreen v-else-if="active === 'v-content'" />
       <SafetyScreen
         v-else
         :quarantined="quarantined"
