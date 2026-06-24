@@ -6,16 +6,19 @@ import DashScreen from './screens/DashScreen.vue'
 import ModulesScreen from './screens/ModulesScreen.vue'
 import InboxScreen from './screens/InboxScreen.vue'
 import SafetyScreen from './screens/SafetyScreen.vue'
+import ReportsScreen from './screens/ReportsScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
 import { useEngagement } from './composables/useEngagement'
+import { useAutopilot } from './composables/useAutopilot'
 import { DEMO_LEADS } from './lib/demo'
 
 const { active, go } = useNavigation()
 const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
 const { modules, toggle, setLevel } = useModules()
 const { summary, quarantined, runCampaign, cancel } = useEngagement()
+const { status: autopilotStatus, reports, start: startAutopilot, stop: stopAutopilot } = useAutopilot()
 
 const anyActive = computed(() => modules.value.some((m) => m.available && m.enabled))
 
@@ -46,13 +49,17 @@ function pauseAll() {
         @set-level="setLevel"
       />
       <InboxScreen v-else-if="active === 'v-inbox'" :leads="DEMO_LEADS" />
+      <ReportsScreen v-else-if="active === 'v-reports'" :reports="reports" />
       <SafetyScreen
         v-else
         :quarantined="quarantined"
         :summary="summary"
+        :autopilot-running="autopilotStatus?.running ?? false"
         @run-campaign="runCampaign"
         @pause-all="pauseAll"
         @cancel="cancel"
+        @start-autopilot="startAutopilot"
+        @stop-autopilot="stopAutopilot"
       />
     </main>
     <BottomNav :active="active" @go="go" />

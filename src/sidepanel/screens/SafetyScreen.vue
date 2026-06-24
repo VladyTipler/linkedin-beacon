@@ -5,10 +5,17 @@ withDefaults(
   defineProps<{
     quarantined?: ActionQueueItem[]
     summary?: EngagementRunSummary | null
+    autopilotRunning?: boolean
   }>(),
-  { quarantined: () => [], summary: null }
+  { quarantined: () => [], summary: null, autopilotRunning: false }
 )
-defineEmits<{ runCampaign: []; pauseAll: []; cancel: [id: string] }>()
+defineEmits<{
+  runCampaign: []
+  pauseAll: []
+  cancel: [id: string]
+  startAutopilot: [host: 'tab' | 'window']
+  stopAutopilot: []
+}>()
 
 const authorOf = (item: ActionQueueItem) => String(item.target.meta?.author ?? 'пост')
 </script>
@@ -45,7 +52,15 @@ const authorOf = (item: ActionQueueItem) => String(item.target.meta?.author ?? '
     </template>
 
     <div class="sect-lbl">Автономный режим</div>
-    <div class="banner" style="margin-bottom:0">🪟 Полностью автоматический режим работает в <b>выделенном окне-воркере</b> (можно вынести на второй монитор). Фоновые вкладки троттлятся браузером — отдельное окно держит сессию «видимой» и автоматизацию живой.</div>
+    <div class="banner" style="margin-bottom:10px">🪟 Автопилот лайкает ленту до дневного бюджета сам. Запусти в этой вкладке или в <b>выделенном окне-воркере</b> (вынеси на второй монитор — фоновые вкладки троттлятся, отдельное окно держит сессию живой).</div>
+    <div v-if="autopilotRunning" class="banner" style="margin-bottom:10px;border-color:rgba(196,255,77,.3)" data-testid="ap-running">
+      ● Автопилот работает…
+    </div>
+    <div class="lvl" style="margin-bottom:10px">
+      <button data-testid="ap-tab" @click="$emit('startAutopilot', 'tab')">В этой вкладке</button>
+      <button data-testid="ap-window" @click="$emit('startAutopilot', 'window')">В окне-воркере</button>
+    </div>
+    <button v-if="autopilotRunning" class="ghost" data-testid="ap-stop" @click="$emit('stopAutopilot')">Стоп автопилота</button>
 
     <div v-if="summary" class="banner" style="margin-top:12px" data-testid="run-summary">
       Прогон: просмотрено <b>{{ summary.scanned }}</b> · релевантных <b>{{ summary.relevant }}</b> · выполнено <b>{{ summary.executed }}</b> · в очереди <b>{{ summary.queued }}</b> · карантин <b>{{ summary.quarantined }}</b>
