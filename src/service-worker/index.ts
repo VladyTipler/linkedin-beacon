@@ -129,8 +129,8 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'RUN_ENGAGEMENT':
-      void runEngagement()
-      return false
+      void runEngagement().then(sendResponse)
+      return true // async sendResponse — reliable result delivery to the panel
 
     case 'LIST_QUARANTINE':
       void quarantine.list().then(sendResponse)
@@ -149,10 +149,11 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
   }
 })
 
-async function runEngagement(): Promise<void> {
+async function runEngagement(): Promise<import('@lib/types').EngagementRunSummary> {
   const settings = await loadSettings(store)
   const summary = await runner.run(settings)
-  broadcast({ type: 'ENGAGEMENT_RESULT', summary })
+  broadcast({ type: 'ENGAGEMENT_RESULT', summary }) // also notify passive listeners
+  return summary
 }
 
 async function harvestPosts(limit: number): Promise<FeedPost[]> {
@@ -174,7 +175,25 @@ async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefin
   try {
     return (await chrome.tabs.sendMessage(tab.id, message)) as T
   } catch {
-    return undefined
+    // The content script may be missing (extension reloaded after the tab loaded).
+    // Re-inject it (path read from the live manifest so it survives hashing), retry once.
+    if (!(await reinjectContentScript(tab.id))) return undefined
+    try {
+      return (await chrome.tabs.sendMessage(tab.id, message)) as T
+    } catch {
+      return undefined
+    }
+  }
+}
+
+async function reinjectContentScript(tabId: number): Promise<boolean> {
+  const files = chrome.runtime.getManifest().content_scripts?.[0]?.js
+  if (!files?.length) return false
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files })
+    return true
+  } catch {
+    return false
   }
 }
 
