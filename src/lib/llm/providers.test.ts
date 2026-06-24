@@ -1,16 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { OpenRouterProvider } from './OpenRouterProvider'
 import { GeminiProvider } from './GeminiProvider'
-import type { HttpClient, LlmRequest } from './contracts'
+import type { HttpClient, HttpGet, LlmRequest } from './contracts'
 
 /** Records the last call and returns a canned response. */
-class FakeHttp implements HttpClient {
+class FakeHttp implements HttpClient, HttpGet {
   calls: { url: string; body: unknown; headers: Record<string, string> }[] = []
   constructor(private readonly response: unknown) {}
   async postJson<T>(url: string, body: unknown, headers: Record<string, string>): Promise<T> {
     this.calls.push({ url, body, headers })
     return this.response as T
   }
+  async getJson<T>(): Promise<T> { throw new Error('not used') }
 }
 
 const req: LlmRequest = { messages: [{ role: 'user', content: 'hi' }] }

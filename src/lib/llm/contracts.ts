@@ -1,4 +1,5 @@
 // LLM layer contracts (ISP + DIP).
+import type { LlmModel } from './models'
 //
 // Two providers ship in V1 (design-spec §10): OpenRouter (always) and the
 // Google Gemini API directly (free-tier friendly for users who don't want to
@@ -57,12 +58,23 @@ export interface HttpClient {
 }
 
 /**
+ * Narrow GET port (DIP), mirror of HttpClient for read-only catalog calls
+ * (model lists). Declared here — not imported from ssi-api — to keep the LLM
+ * layer self-contained. FetchHttpClient structurally satisfies it.
+ */
+export interface HttpGet {
+  getJson<TResponse>(url: string, headers: Record<string, string>): Promise<TResponse>
+}
+
+/**
  * A substitutable LLM backend. Orchestrators depend on this interface only and
  * never type-check the concrete provider (LSP).
  */
 export interface LlmProvider {
   readonly id: LlmProviderId
   complete(request: LlmRequest): Promise<LlmCompletion>
+  /** The provider's available models (falls back to a curated list on failure). */
+  listModels(): Promise<LlmModel[]>
 }
 
 /** Raised when a provider response cannot be interpreted. */

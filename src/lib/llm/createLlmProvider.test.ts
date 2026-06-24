@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { createLlmProvider } from './createLlmProvider'
-import type { HttpClient } from './contracts'
+import type { HttpClient, HttpGet } from './contracts'
 
-const http: HttpClient = { postJson: async <T>() => ({}) as T }
+const http: HttpClient & HttpGet = {
+  postJson: async <T>() => ({}) as T,
+  getJson: async <T>() => ({}) as T
+}
 
 describe('createLlmProvider', () => {
   it('builds an OpenRouter provider', () => {

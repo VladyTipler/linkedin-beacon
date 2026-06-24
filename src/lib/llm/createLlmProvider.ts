@@ -1,4 +1,4 @@
-import type { HttpClient, LlmProvider, LlmProviderConfig, LlmProviderId } from './contracts'
+import type { HttpClient, HttpGet, LlmProvider, LlmProviderConfig, LlmProviderId } from './contracts'
 import { OpenRouterProvider } from './OpenRouterProvider'
 import { GeminiProvider } from './GeminiProvider'
 
@@ -9,13 +9,13 @@ import { GeminiProvider } from './GeminiProvider'
  */
 const REGISTRY: Record<
   LlmProviderId,
-  (config: LlmProviderConfig, http: HttpClient) => LlmProvider
+  (config: LlmProviderConfig, http: HttpClient & HttpGet) => LlmProvider
 > = {
   openrouter: (config, http) => new OpenRouterProvider(config, http),
   gemini: (config, http) => new GeminiProvider(config, http)
 }
 
-export function createLlmProvider(config: LlmProviderConfig, http: HttpClient): LlmProvider {
+export function createLlmProvider(config: LlmProviderConfig, http: HttpClient & HttpGet): LlmProvider {
   const factory = REGISTRY[config.provider]
   if (!factory) {
     throw new Error(`Unsupported LLM provider: ${config.provider}`)
