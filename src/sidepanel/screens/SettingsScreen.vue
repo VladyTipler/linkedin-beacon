@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { useLlmSettings } from '../composables/useLlmSettings'
 import { useExpertiseSettings } from '../composables/useExpertiseSettings'
+import { useContentSettings } from '../composables/useContentSettings'
 
 const { config, modelQuery, filteredModels, keyValid, loading, load, save, fetchModels } = useLlmSettings()
 onMounted(load)
@@ -9,9 +10,11 @@ onMounted(load)
 const exp = useExpertiseSettings()
 onMounted(exp.load)
 
+const content = useContentSettings()
+onMounted(content.load)
+
 async function onSave() {
-  await save()
-  await exp.save()
+  await Promise.allSettled([save(), exp.save(), content.save()])
 }
 </script>
 
@@ -58,6 +61,12 @@ async function onSave() {
     <label class="fld">
       <span class="k">О себе</span>
       <textarea v-model="exp.form.value.bio" rows="3" data-testid="exp-bio" />
+    </label>
+
+    <div class="sect-lbl">Промпт генератора постов</div>
+    <label class="fld">
+      <span class="k">Голос / структура (используется при «В черновик»)</span>
+      <textarea v-model="content.prompt.value" rows="6" data-testid="post-prompt" />
     </label>
 
     <button class="btn primary" data-testid="llm-save" @click="onSave">Сохранить</button>
