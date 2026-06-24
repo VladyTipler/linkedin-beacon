@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { loadSettings, DEFAULT_SETTINGS, parseCsv, applyTargetForm } from './settings'
+import { loadSettings, DEFAULT_SETTINGS, parseCsv, applyTargetForm, applyExpertiseForm } from './settings'
 import type { KeyValueStore } from '../ports'
 import type { ModuleState } from '../types'
 
@@ -77,5 +77,33 @@ describe('loadSettings', () => {
     )
     expect(s.relevanceThreshold).toBe(0.5)
     expect(s.config.level).toBe('full_auto')
+  })
+})
+
+describe('applyExpertiseForm', () => {
+  it('updates expertise without clobbering target or config', () => {
+    const current = {
+      ...DEFAULT_SETTINGS,
+      target: { ...DEFAULT_SETTINGS.target, stack: ['Vue', 'TS'], watchlistCompanies: ['Wise'] }
+    }
+    const next = applyExpertiseForm(current, {
+      headline: 'Frontend TechLead, 11y Vue/TS',
+      stack: 'Vue, TypeScript, Nuxt',
+      bio: 'Mentor & TeamLead'
+    })
+    expect(next.expertise).toEqual({
+      headline: 'Frontend TechLead, 11y Vue/TS',
+      stack: ['Vue', 'TypeScript', 'Nuxt'],
+      bio: 'Mentor & TeamLead'
+    })
+    // critical: the rest of the blob is preserved
+    expect(next.target).toEqual(current.target)
+    expect(next.config).toEqual(current.config)
+    expect(next.relevanceThreshold).toEqual(current.relevanceThreshold)
+  })
+
+  it('omits bio when empty', () => {
+    const next = applyExpertiseForm(DEFAULT_SETTINGS, { headline: 'X', stack: 'Vue', bio: '   ' })
+    expect(next.expertise.bio).toBeUndefined()
   })
 })

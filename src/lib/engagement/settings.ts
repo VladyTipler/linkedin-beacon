@@ -83,3 +83,22 @@ export function applyTargetForm(current: EngagementSettings, form: TargetForm): 
     relevanceThreshold: Math.min(1, Math.max(0, form.threshold))
   }
 }
+
+export interface ExpertiseForm {
+  headline: string
+  stack: string
+  bio: string
+}
+
+/** Apply the expertise form, preserving target/config/threshold (no clobber). */
+export function applyExpertiseForm(current: EngagementSettings, form: ExpertiseForm): EngagementSettings {
+  const bio = form.bio.trim()
+  return {
+    ...current,
+    expertise: {
+      headline: form.headline.trim(),
+      stack: parseCsv(form.stack),
+      ...(bio ? { bio } : {})
+    }
+  }
+}
