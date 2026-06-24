@@ -30,6 +30,11 @@ describe('loadSettings', () => {
     expect(s.config.level).toBe('full_auto')
   })
 
+  it('tolerates a non-array modules:state without crashing', async () => {
+    const s = await loadSettings(memStore({ 'modules:state': { corrupt: true } }))
+    expect(s.config.level).toBe('manual')
+  })
+
   it('keeps the rest of the stored settings while overriding the level', async () => {
     const stored = { ...DEFAULT_SETTINGS, relevanceThreshold: 0.5 }
     const s = await loadSettings(

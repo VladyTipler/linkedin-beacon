@@ -36,8 +36,11 @@ export async function loadSettings(store: KeyValueStore): Promise<EngagementSett
   const base = (await store.get<EngagementSettings>(SETTINGS_KEY)) ?? DEFAULT_SETTINGS
   // automationLevel is owned by the module roster (SSOT) — the UI selector there
   // must actually drive the gate, so derive config.level from it.
+  // chrome.storage is untyped at runtime — tolerate missing/legacy/garbage data.
   const modules = await store.get<ModuleState[]>(MODULES_STATE_KEY)
-  const engagement = modules?.find((m) => m.id === 'engagement')
+  const engagement = Array.isArray(modules)
+    ? modules.find((m) => m?.id === 'engagement')
+    : undefined
   if (!engagement) return base
   return { ...base, config: { ...base.config, level: engagement.automationLevel } }
 }
