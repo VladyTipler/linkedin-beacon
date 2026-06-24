@@ -106,10 +106,13 @@ normalised topic+angle key, for per-card delete), `createLlmProvider` (registry)
 
 ### Messages (`BeaconMessage +=`)
 
-`LIST_MODELS`, `GENERATE_IDEAS`, `LIST_IDEAS`, `GENERATE_DRAFT`, `LIST_DRAFTS`,
-`DELETE_DRAFT`, `DELETE_IDEA`. Reliable request/response via `panelBus.request`
-+ SW `sendResponse` (broadcasts can be missed). Content switch stays exhaustive
-(`assertNever`); SW switch keeps `default: return false`.
+Only three messages are added to `BeaconMessage` (the ones that genuinely need
+the SW — feed harvest + LLM fetch): `LIST_MODELS`, `GENERATE_IDEAS`,
+`GENERATE_DRAFT`. Reliable request/response via `panelBus.request` + SW
+`sendResponse`. Listing and deleting ideas/drafts is done directly from the
+panel composable via `chrome.storage.local` (the `useModules` precedent) — no
+round-trip message needed. Content switch stays exhaustive (`assertNever`); SW
+switch keeps `default: return false`.
 
 ### Storage keys
 

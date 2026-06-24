@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useLlmSettings } from '../composables/useLlmSettings'
 import { useExpertiseSettings } from '../composables/useExpertiseSettings'
 import { useContentSettings } from '../composables/useContentSettings'
@@ -13,8 +13,12 @@ onMounted(exp.load)
 const content = useContentSettings()
 onMounted(content.load)
 
+const saveError = ref(false)
+
 async function onSave() {
-  await Promise.allSettled([save(), exp.save(), content.save()])
+  saveError.value = false
+  const results = await Promise.allSettled([save(), exp.save(), content.save()])
+  saveError.value = results.some((r) => r.status === 'rejected')
 }
 </script>
 
@@ -70,5 +74,6 @@ async function onSave() {
     </label>
 
     <button class="btn primary" data-testid="llm-save" @click="onSave">Сохранить</button>
+    <span v-if="saveError" class="v" data-testid="save-error">Не удалось сохранить — попробуй ещё раз</span>
   </section>
 </template>

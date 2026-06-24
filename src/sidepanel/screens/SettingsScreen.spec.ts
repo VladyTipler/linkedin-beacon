@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import SettingsScreen from './SettingsScreen.vue'
 
 beforeEach(() => {
@@ -15,5 +15,14 @@ describe('SettingsScreen', () => {
     expect(wrapper.find('[data-testid="llm-provider"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="llm-key"]').attributes('type')).toBe('password')
     expect(wrapper.find('[data-testid="llm-save"]').exists()).toBe(true)
+  })
+
+  it('shows a save error when a save fails', async () => {
+    ;(globalThis as any).chrome.storage.local.set = vi.fn().mockRejectedValue(new Error('quota'))
+    const wrapper = mount(SettingsScreen)
+    await flushPromises()
+    await wrapper.find('[data-testid="llm-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="save-error"]').exists()).toBe(true)
   })
 })

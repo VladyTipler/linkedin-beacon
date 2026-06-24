@@ -33,7 +33,4 @@ export class DraftStore {
     await this.store.set(DRAFTS_KEY, next)
   }
 
-  async clear(): Promise<void> {
-    await this.store.set(DRAFTS_KEY, [])
-  }
 }
