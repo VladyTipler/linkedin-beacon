@@ -47,9 +47,19 @@ readable post draft** (auto-publish is Layer 2, out of scope).
   (only non-LinkedIn hosts; required for BYOK). LLM fetch runs in the SW.
 
 **Field-test checklist (Vlad, in Chrome):** ⚙ → enter a real OpenRouter/Gemini key →
-«Загрузить модели» (dropdown populates) → fill Expertise → open the LinkedIn feed →
-Контент/Идеи → «Сгенерировать идеи» (real ideas appear) → «В черновик» → Черновики
-(readable post) → edit/copy. Sanity-check UI against the demo tokens.
+«Загрузить модели» → **CHECK THE COUNT**: the dropdown must show *many* models
+(OpenRouter ~hundreds, Gemini ~dozens). If you see only ~4, the live fetch/parse
+SILENTLY FAILED and you're looking at `FALLBACK_MODELS` — not a real success. → fill
+Expertise → open the LinkedIn feed → Контент/Идеи → «Сгенерировать идеи» (real ideas
+appear) → «В черновик» → Черновики (readable post) → edit/copy. **Run all the way
+through a real generate** — that's the only place a bad key actually surfaces (HTTP 401
+banner); "Модели загружены" alone proves nothing. Sanity-check UI against demo tokens.
+
+⚠️ **Contract-test debt (CLAUDE.md rule not yet fully satisfied):** the OpenRouter/Gemini
+`/models` JSON shapes in `models.test.ts` (`OPENROUTER_RAW`/`GEMINI_RAW`) are HAND-WRITTEN
+assumptions, not captured from a real call — the boundary tests cross the mapper, not the
+wire. If the live model count looks wrong, capture the real `/models` JSON during the
+field-test and add a contract-snapshot test against it.
 
 ## Known limitations (honest — flagged, not silent)
 
