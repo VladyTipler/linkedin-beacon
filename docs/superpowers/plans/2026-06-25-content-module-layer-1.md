@@ -465,32 +465,32 @@ git commit -m "feat(llm): listModels port + OpenRouter/Gemini catalogs + fallbac
 
 ---
 
-## Task A3: `LIST_MODELS` message + SW handler + manifest hosts
+## Task A3: `contentHandlers.ts` + `LIST_MODELS` message + manifest hosts
+
+> **Why a new file:** `src/service-worker/index.ts` is already 371 lines (over the strict ≤300 constraint). The three content/LLM handlers carry real orchestration (key checks, harvest, map, extract, error handling) and cross the LLM boundary, so they live in their own focused, dependency-injected, unit-testable module `src/service-worker/contentHandlers.ts`. `index.ts` only wires switch cases (thin). `generateIdeas`/`generateDraft` get boundary tests in B3/C4.
 
 **Files:**
+- Create: `src/service-worker/contentHandlers.ts` (just `listModels` this task; `generateIdeas` added in B3, `generateDraft` in C4)
 - Modify: `src/lib/types.ts` (add `LIST_MODELS` to `BeaconMessage`)
 - Modify: `manifest.config.ts` (host_permissions += LLM hosts)
-- Modify: `src/service-worker/index.ts` (construct provider from config; handle `LIST_MODELS`)
-- Test: none new — `listModels` logic is covered in A2; SW wiring is verified by build + live run (project convention: pure units fully tested, edge wiring verified by build/live).
+- Modify: `src/service-worker/index.ts` (import the module; wire `LIST_MODELS`)
+- Test: `listModels` is a one-line delegate to `createLlmProvider(...).listModels()` (fully covered in A2); SW switch wiring verified by build + live.
 
 **Interfaces:**
-- Consumes: `loadLlmConfig` (A1), `createLlmProvider` (A2), `FetchHttpClient`, `LlmModel`, `LlmProviderId`.
-- Produces: message `{ type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }` → SW replies `LlmModel[]` via `sendResponse`.
+- Consumes: `createLlmProvider` (A2), `HttpClient & HttpGet`, `LlmModel`, `LlmProviderId`, `FetchHttpClient`.
+- Produces: `listModels(http: HttpClient & HttpGet, provider: LlmProviderId, apiKey: string): Promise<LlmModel[]>` in `contentHandlers.ts`; message `{ type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }` → SW replies `LlmModel[]`.
 
 - [ ] **Step 1: Extend the message union**
 
-In `src/lib/types.ts`, import `LlmModel`/`LlmProviderId` near the other type imports and add the variant inside `BeaconMessage` (before `PING`):
-
-```ts
-  /** sidepanel → SW: list models for a provider+key; SW replies LlmModel[]. */
-  | { type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }
-```
-
-Add at the top of `types.ts` (with the existing imports):
+In `src/lib/types.ts`, add the import (with the existing imports) and the variant inside `BeaconMessage` (before `PING`):
 
 ```ts
 import type { LlmModel } from './llm/models'
 import type { LlmProviderId } from './llm/contracts'
+```
+```ts
+  /** sidepanel → SW: list models for a provider+key; SW replies LlmModel[]. */
+  | { type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }
 ```
 
 - [ ] **Step 2: Add the LLM hosts to the manifest**
@@ -505,49 +505,69 @@ In `manifest.config.ts` replace the `host_permissions` line:
   ],
 ```
 
-- [ ] **Step 3: Wire the SW handler**
-
-In `src/service-worker/index.ts` add imports near the other `@lib` imports:
+- [ ] **Step 3: Create `contentHandlers.ts` with `listModels`**
 
 ```ts
+// src/service-worker/contentHandlers.ts
+// SW-side content/LLM orchestration, extracted from index.ts (SRP + ≤300).
+// All deps are injected so each handler is unit-testable with fakes (the LLM
+// boundary is crossed by a fake HttpClient returning real-shape responses).
 import { createLlmProvider } from '@lib/llm/createLlmProvider'
-import { loadLlmConfig } from '@lib/llm/config'
+import type { HttpClient, HttpGet } from '@lib/llm/contracts'
 import type { LlmModel } from '@lib/llm/models'
+import type { LlmProviderId } from '@lib/llm/contracts'
+
+export type LlmHttp = HttpClient & HttpGet
+
+/** List a provider's models for the settings dropdown (fallback list on failure). */
+export async function listModels(
+  http: LlmHttp,
+  provider: LlmProviderId,
+  apiKey: string
+): Promise<LlmModel[]> {
+  return createLlmProvider({ provider, apiKey }, http).listModels()
+}
 ```
 
-Add a helper near `harvestPosts` (the SW already has `new FetchHttpClient()` usage; create one for LLM):
+- [ ] **Step 4: Wire the SW switch case**
+
+In `src/service-worker/index.ts` add near the other imports:
+
+```ts
+import { FetchHttpClient } from '@/adapters/FetchHttpClient'
+import * as content from './contentHandlers'
+```
+(`FetchHttpClient` is already imported — reuse the existing import; just add the `content` import.)
+
+Add one module-level line near the other singletons (e.g. after `const reportsStore = …`):
 
 ```ts
 const llmHttp = new FetchHttpClient()
-
-async function listModels(provider: 'openrouter' | 'gemini', apiKey: string): Promise<LlmModel[]> {
-  return createLlmProvider({ provider, apiKey }, llmHttp).listModels()
-}
 ```
 
 Add the case inside the `onMessage` switch (next to `LIST_QUARANTINE`):
 
 ```ts
     case 'LIST_MODELS':
-      void listModels(message.provider, message.apiKey).then(sendResponse)
+      void content.listModels(llmHttp, message.provider, message.apiKey).then(sendResponse)
       return true
 ```
 
-- [ ] **Step 4: Verify build + types**
+- [ ] **Step 5: Verify build + types**
 
 Run: `npm run build`
-Expected: success — `vue-tsc --noEmit` clean, `dist/` written, `manifest.json` includes the two new hosts (grep to confirm):
+Expected: success — `vue-tsc --noEmit` clean, `dist/` written, `manifest.json` includes the two new hosts:
 
 ```bash
 grep -o 'openrouter.ai\|generativelanguage.googleapis.com' dist/manifest.json
 ```
 Expected: both hosts printed.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/lib/types.ts manifest.config.ts src/service-worker/index.ts
-git commit -m "feat(llm): LIST_MODELS SW handler + LLM host_permissions"
+git add src/lib/types.ts manifest.config.ts src/service-worker/index.ts src/service-worker/contentHandlers.ts
+git commit -m "feat(llm): contentHandlers.listModels + LIST_MODELS wiring + LLM hosts"
 ```
 
 ---
@@ -988,18 +1008,137 @@ git commit -m "feat(content): FeedPost→FeedItem mapper + IdeaBank.remove"
 
 ---
 
-## Task B3: `GENERATE_IDEAS` message + SW handler
+## Task B3: `generateIdeas` handler (boundary-tested) + `GENERATE_IDEAS` message
 
 **Files:**
+- Create/Modify: `src/service-worker/contentHandlers.ts` (add `generateIdeas` + `IdeaDeps`)
 - Modify: `src/lib/types.ts` (add `GENERATE_IDEAS`)
-- Modify: `src/service-worker/index.ts` (handler: harvest → map → extract → bank)
-- Test: SW wiring verified by build + live (the units — mapper, extractor, bank — are tested).
+- Modify: `src/service-worker/index.ts` (wire the switch case)
+- Test: `src/service-worker/contentHandlers.test.ts` — TDD, crosses the LLM boundary (fake `HttpClient & HttpGet` returns a real-shape OpenRouter completion whose content is the ideas JSON).
 
 **Interfaces:**
-- Consumes: `harvestPosts` (existing SW), `feedPostToFeedItem` (B2), `IdeaExtractor`, `IdeaBank`, `loadLlmConfig` + `createLlmProvider`, `loadSettings` (for `expertise`).
-- Produces: message `{ type: 'GENERATE_IDEAS' }` → SW replies `{ ideas: Idea[]; error?: string }` via `sendResponse`.
+- Consumes: `feedPostToFeedItem` (B2), `IdeaExtractor`, `IdeaBank`, `loadLlmConfig` (A1), `createLlmProvider` (A2), `loadSettings` (expertise), `LlmHttp` (A3), `KeyValueStore`, `FeedPost`, `Idea`.
+- Produces: `generateIdeas(deps: IdeaDeps): Promise<{ ideas: Idea[]; error?: string }>` where `IdeaDeps { store: KeyValueStore; http: LlmHttp; harvest: (limit: number) => Promise<FeedPost[]> }`; message `{ type: 'GENERATE_IDEAS' }` → SW replies `{ ideas, error? }`.
 
-- [ ] **Step 1: Extend the message union**
+- [ ] **Step 1: Write the failing boundary test**
+
+```ts
+// src/service-worker/contentHandlers.test.ts
+import { describe, it, expect } from 'vitest'
+import { generateIdeas } from './contentHandlers'
+import type { KeyValueStore } from '@lib/ports'
+import type { HttpClient, HttpGet } from '@lib/llm/contracts'
+import type { FeedPost } from '@lib/types'
+
+function memStore(initial: Record<string, unknown> = {}): KeyValueStore {
+  const m = new Map<string, unknown>(Object.entries(initial))
+  return {
+    async get<T>(k: string) { return m.has(k) ? (m.get(k) as T) : null },
+    async set<T>(k: string, v: T) { m.set(k, v) }
+  }
+}
+
+/** Returns a real-shape OpenRouter completion whose content is `text`. */
+function fakeHttp(text: string): HttpClient & HttpGet {
+  return {
+    async postJson<T>() { return { choices: [{ message: { content: text } }] } as T },
+    async getJson<T>() { return {} as T }
+  }
+}
+
+const CONFIGURED = {
+  'llm:config': { provider: 'openrouter', apiKey: 'sk-1' },
+  'engagement:settings': {
+    config: { level: 'manual' }, target: { stack: [] },
+    expertise: { headline: 'Frontend TechLead', stack: ['Vue'] }, relevanceThreshold: 0.3
+  }
+}
+const posts: FeedPost[] = [{ urn: 'urn:1', authorName: 'A', text: 'hiring vue devs' }]
+
+describe('generateIdeas', () => {
+  it('errors no_key when the key is empty', async () => {
+    const res = await generateIdeas({ store: memStore(), http: fakeHttp('[]'), harvest: async () => posts })
+    expect(res).toEqual({ ideas: [], error: 'no_key' })
+  })
+
+  it('errors no_expertise when the headline is blank', async () => {
+    const store = memStore({ 'llm:config': { provider: 'openrouter', apiKey: 'sk-1' } })
+    const res = await generateIdeas({ store, http: fakeHttp('[]'), harvest: async () => posts })
+    expect(res).toEqual({ ideas: [], error: 'no_expertise' })
+  })
+
+  it('errors no_feed when harvest is empty', async () => {
+    const res = await generateIdeas({ store: memStore(CONFIGURED), http: fakeHttp('[]'), harvest: async () => [] })
+    expect(res).toEqual({ ideas: [], error: 'no_feed' })
+  })
+
+  it('extracts ideas via the LLM and banks them', async () => {
+    const ideasJson = JSON.stringify([{ topic: 'tRPC vs REST', angle: 'type-safety from Vue' }])
+    const store = memStore(CONFIGURED)
+    const res = await generateIdeas({ store, http: fakeHttp(ideasJson), harvest: async () => posts })
+    expect(res.error).toBeUndefined()
+    expect(res.ideas).toContainEqual({ topic: 'tRPC vs REST', angle: 'type-safety from Vue' })
+    // persisted to the bank
+    expect(await store.get('ideas:bank')).toEqual([{ topic: 'tRPC vs REST', angle: 'type-safety from Vue' }])
+  })
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run src/service-worker/contentHandlers.test.ts`
+Expected: FAIL — `generateIdeas` not exported.
+
+- [ ] **Step 3: Implement `generateIdeas` in `contentHandlers.ts`**
+
+Add imports at the top of `src/service-worker/contentHandlers.ts`:
+
+```ts
+import { loadLlmConfig } from '@lib/llm/config'
+import { loadSettings } from '@lib/engagement/settings'
+import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
+import { IdeaBank } from '@lib/ideas/IdeaBank'
+import { feedPostToFeedItem } from '@lib/ideas/feedItem'
+import type { KeyValueStore } from '@lib/ports'
+import type { FeedPost, Idea } from '@lib/types'
+```
+
+Append:
+
+```ts
+export interface IdeaDeps {
+  store: KeyValueStore
+  http: LlmHttp
+  harvest: (limit: number) => Promise<FeedPost[]>
+}
+
+/** Harvest the feed → extract ideas (LLM) → bank them. Returns the full bank. */
+export async function generateIdeas(deps: IdeaDeps): Promise<{ ideas: Idea[]; error?: string }> {
+  const cfg = await loadLlmConfig(deps.store)
+  if (!cfg.apiKey.trim()) return { ideas: [], error: 'no_key' }
+  const { expertise } = await loadSettings(deps.store)
+  if (!expertise.headline.trim()) return { ideas: [], error: 'no_expertise' }
+  const posts = await deps.harvest(20)
+  if (!posts.length) return { ideas: [], error: 'no_feed' }
+
+  const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, deps.http)
+  const bank = new IdeaBank(deps.store)
+  try {
+    const ideas = await new IdeaExtractor(provider).extract(posts.map(feedPostToFeedItem), expertise)
+    await bank.add(ideas)
+    return { ideas: await bank.all() }
+  } catch (e) {
+    return { ideas: [], error: e instanceof Error ? e.message : 'llm_failed' }
+  }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run src/service-worker/contentHandlers.test.ts`
+Expected: PASS (4).
+
+- [ ] **Step 5: Extend the message union**
 
 In `src/lib/types.ts` add inside `BeaconMessage`:
 
@@ -1008,61 +1147,26 @@ In `src/lib/types.ts` add inside `BeaconMessage`:
   | { type: 'GENERATE_IDEAS' }
 ```
 
-- [ ] **Step 2: Implement the handler**
+- [ ] **Step 6: Wire the switch case**
 
-In `src/service-worker/index.ts` add imports:
-
-```ts
-import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
-import { IdeaBank } from '@lib/ideas/IdeaBank'
-import { feedPostToFeedItem } from '@lib/ideas/feedItem'
-import type { Idea } from '@lib/types'
-```
-
-Add a handler function near `runEngagement`:
-
-```ts
-const ideaBank = new IdeaBank(store)
-
-async function generateIdeas(): Promise<{ ideas: Idea[]; error?: string }> {
-  const cfg = await loadLlmConfig(store)
-  if (!cfg.apiKey.trim()) return { ideas: [], error: 'no_key' }
-  const { expertise } = await loadSettings(store)
-  if (!expertise.headline.trim()) return { ideas: [], error: 'no_expertise' }
-
-  const posts = await harvestPosts(20)
-  if (!posts.length) return { ideas: [], error: 'no_feed' }
-
-  const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, llmHttp)
-  const items = posts.map(feedPostToFeedItem)
-  try {
-    const ideas = await new IdeaExtractor(provider).extract(items, expertise)
-    await ideaBank.add(ideas)
-    return { ideas: await ideaBank.all() }
-  } catch (e) {
-    return { ideas: [], error: e instanceof Error ? e.message : 'llm_failed' }
-  }
-}
-```
-
-Add the switch case:
+In `src/service-worker/index.ts` add the case (the `content` import + `llmHttp` already exist from A3; `harvestPosts` is the existing SW function):
 
 ```ts
     case 'GENERATE_IDEAS':
-      void generateIdeas().then(sendResponse)
+      void content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts }).then(sendResponse)
       return true
 ```
 
-- [ ] **Step 3: Verify build**
+- [ ] **Step 7: Verify build**
 
 Run: `npm run build`
 Expected: clean.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/lib/types.ts src/service-worker/index.ts
-git commit -m "feat(content): GENERATE_IDEAS SW handler (harvest→extract→bank)"
+git add src/lib/types.ts src/service-worker/contentHandlers.ts src/service-worker/contentHandlers.test.ts src/service-worker/index.ts
+git commit -m "feat(content): generateIdeas handler (boundary-tested) + GENERATE_IDEAS"
 ```
 
 ---
@@ -1847,18 +1951,114 @@ git commit -m "feat(content): DraftGenerator (idea+prompt → post draft)"
 
 ---
 
-## Task C4: `GENERATE_DRAFT` message + SW handler
+## Task C4: `generateDraft` handler (boundary-tested) + `GENERATE_DRAFT` message
 
 **Files:**
+- Modify: `src/service-worker/contentHandlers.ts` (add `generateDraft` + `DraftDeps`)
 - Modify: `src/lib/types.ts` (add `GENERATE_DRAFT`)
-- Modify: `src/service-worker/index.ts` (handler)
-- Test: SW wiring verified by build + live (generator/store units tested).
+- Modify: `src/service-worker/index.ts` (wire the switch case)
+- Test: `src/service-worker/contentHandlers.test.ts` (add cases) — TDD, crosses the LLM boundary (fake http returns a real-shape completion whose content is the post body).
 
 **Interfaces:**
-- Consumes: `DraftGenerator` (C3), `DraftStore` (C2), `loadLlmConfig`, `createLlmProvider`, `loadSettings` (expertise), `loadContentSettings` (C1), `randomId`, `SystemClock`.
-- Produces: message `{ type: 'GENERATE_DRAFT'; idea: Idea }` → replies `{ draft: Draft | null; error?: string }`.
+- Consumes: `DraftGenerator` (C3), `DraftStore` (C2), `loadLlmConfig`, `createLlmProvider`, `loadSettings` (expertise), `loadContentSettings` (C1), `Clock`, `LlmHttp` (A3), `KeyValueStore`, `Idea`, `Draft`.
+- Produces: `generateDraft(deps: DraftDeps, idea: Idea): Promise<{ draft: Draft | null; error?: string }>` where `DraftDeps { store: KeyValueStore; http: LlmHttp; clock: Clock; newId: () => string }`; message `{ type: 'GENERATE_DRAFT'; idea: Idea }` → replies `{ draft, error? }`.
 
-- [ ] **Step 1: Extend the message union**
+- [ ] **Step 1: Write the failing boundary test** (append to `contentHandlers.test.ts`)
+
+```ts
+import { generateDraft } from './contentHandlers'
+import type { Clock } from '@lib/ports'
+
+const fixedClock: Clock = { now: () => new Date('2026-06-25T00:00:00.000Z') }
+
+describe('generateDraft', () => {
+  it('errors no_key when the key is empty', async () => {
+    const res = await generateDraft(
+      { store: memStore(), http: fakeHttp('x'), clock: fixedClock, newId: () => 'id1' },
+      { topic: 'T', angle: 'A' }
+    )
+    expect(res).toEqual({ draft: null, error: 'no_key' })
+  })
+
+  it('generates a post via the LLM and stores the draft', async () => {
+    const store = memStore(CONFIGURED)
+    const res = await generateDraft(
+      { store, http: fakeHttp('My post body.'), clock: fixedClock, newId: () => 'id1' },
+      { topic: 'tRPC vs REST', angle: 'type-safety from Vue' }
+    )
+    expect(res.error).toBeUndefined()
+    expect(res.draft).toEqual({
+      id: 'id1',
+      ideaTopic: 'tRPC vs REST',
+      ideaAngle: 'type-safety from Vue',
+      text: 'My post body.',
+      createdAt: '2026-06-25T00:00:00.000Z'
+    })
+    expect(await store.get('content:drafts')).toEqual([res.draft])
+  })
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run src/service-worker/contentHandlers.test.ts`
+Expected: FAIL — `generateDraft` not exported.
+
+- [ ] **Step 3: Implement `generateDraft` in `contentHandlers.ts`**
+
+Add imports at the top:
+
+```ts
+import { loadContentSettings } from '@lib/content/settings'
+import { DraftGenerator } from '@lib/content/DraftGenerator'
+import { DraftStore } from '@lib/content/DraftStore'
+import type { Clock } from '@lib/ports'
+import type { Draft } from '@lib/types'
+```
+
+Append:
+
+```ts
+export interface DraftDeps {
+  store: KeyValueStore
+  http: LlmHttp
+  clock: Clock
+  newId: () => string
+}
+
+/** Idea + custom prompt → post draft (LLM) → store. Returns the new draft. */
+export async function generateDraft(
+  deps: DraftDeps,
+  idea: Idea
+): Promise<{ draft: Draft | null; error?: string }> {
+  const cfg = await loadLlmConfig(deps.store)
+  if (!cfg.apiKey.trim()) return { draft: null, error: 'no_key' }
+  const { expertise } = await loadSettings(deps.store)
+  const { postPrompt } = await loadContentSettings(deps.store)
+  const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, deps.http)
+  try {
+    const text = await new DraftGenerator(provider).generate(idea, expertise, postPrompt)
+    const draft: Draft = {
+      id: deps.newId(),
+      ideaTopic: idea.topic,
+      ideaAngle: idea.angle,
+      text,
+      createdAt: deps.clock.now().toISOString()
+    }
+    await new DraftStore(deps.store).add(draft)
+    return { draft }
+  } catch (e) {
+    return { draft: null, error: e instanceof Error ? e.message : 'llm_failed' }
+  }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run src/service-worker/contentHandlers.test.ts`
+Expected: PASS (6 total).
+
+- [ ] **Step 5: Extend the message union**
 
 In `src/lib/types.ts`:
 
@@ -1867,63 +2067,26 @@ In `src/lib/types.ts`:
   | { type: 'GENERATE_DRAFT'; idea: Idea }
 ```
 
-- [ ] **Step 2: Implement the handler**
+- [ ] **Step 6: Wire the switch case**
 
-In `src/service-worker/index.ts` add imports:
-
-```ts
-import { DraftGenerator } from '@lib/content/DraftGenerator'
-import { DraftStore } from '@lib/content/DraftStore'
-import { loadContentSettings } from '@lib/content/settings'
-import type { Draft } from '@lib/types'
-```
-
-Add near `generateIdeas`:
-
-```ts
-const draftStore = new DraftStore(store)
-
-async function generateDraft(idea: Idea): Promise<{ draft: Draft | null; error?: string }> {
-  const cfg = await loadLlmConfig(store)
-  if (!cfg.apiKey.trim()) return { draft: null, error: 'no_key' }
-  const { expertise } = await loadSettings(store)
-  const { postPrompt } = await loadContentSettings(store)
-  const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, llmHttp)
-  try {
-    const text = await new DraftGenerator(provider).generate(idea, expertise, postPrompt)
-    const draft: Draft = {
-      id: randomId(),
-      ideaTopic: idea.topic,
-      ideaAngle: idea.angle,
-      text,
-      createdAt: clock.now().toISOString()
-    }
-    await draftStore.add(draft)
-    return { draft }
-  } catch (e) {
-    return { draft: null, error: e instanceof Error ? e.message : 'llm_failed' }
-  }
-}
-```
-
-Add the switch case:
+In `src/service-worker/index.ts` add the case (`content`, `llmHttp`, `store`, `clock`, `randomId` all already exist):
 
 ```ts
     case 'GENERATE_DRAFT':
-      void generateDraft(message.idea).then(sendResponse)
+      void content.generateDraft({ store, http: llmHttp, clock, newId: randomId }, message.idea).then(sendResponse)
       return true
 ```
 
-- [ ] **Step 3: Verify build**
+- [ ] **Step 7: Verify build**
 
 Run: `npm run build`
 Expected: clean.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/lib/types.ts src/service-worker/index.ts
-git commit -m "feat(content): GENERATE_DRAFT SW handler (idea→stored draft)"
+git add src/lib/types.ts src/service-worker/contentHandlers.ts src/service-worker/contentHandlers.test.ts src/service-worker/index.ts
+git commit -m "feat(content): generateDraft handler (boundary-tested) + GENERATE_DRAFT"
 ```
 
 ---
