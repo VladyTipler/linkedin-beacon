@@ -81,6 +81,16 @@ export interface ActionQueueItem extends ActionRequest {
   createdAt: string
 }
 
+/** A persisted record of one autopilot run (design-spec §2.3 reports). */
+export interface RunReport {
+  id: string
+  startedAt: string
+  endedAt: string
+  host: 'tab' | 'window'
+  stopReason: 'budget' | 'risk' | 'manual' | 'feed_exhausted'
+  modules: { id: ModuleId; executed: number; skipped: number; failed: number }[]
+}
+
 /** Tally of one engagement pass (design-spec §4.1 metrics). */
 export interface EngagementRunSummary {
   scanned: number
