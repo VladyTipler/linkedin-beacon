@@ -16,7 +16,11 @@ export function useEngagement() {
     quarantined.value = (items ?? []).filter((i) => i.status === 'quarantined')
   }
 
-  const runCampaign = () => panelBus.send({ type: 'RUN_ENGAGEMENT' })
+  const runCampaign = async () => {
+    const result = await panelBus.request<EngagementRunSummary>({ type: 'RUN_ENGAGEMENT' })
+    if (result) summary.value = result
+    await loadQuarantine()
+  }
 
   const cancel = async (id: string) => {
     await panelBus.request({ type: 'CANCEL_QUARANTINE', id })
