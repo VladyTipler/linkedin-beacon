@@ -23,6 +23,7 @@ describe('llm config', () => {
 
   it('hasLlmKey is false for an empty key, true otherwise', () => {
     expect(hasLlmKey({ provider: 'openrouter', apiKey: '' })).toBe(false)
+    expect(hasLlmKey({ provider: 'openrouter', apiKey: '   ' })).toBe(false)
     expect(hasLlmKey({ provider: 'openrouter', apiKey: 'sk-1' })).toBe(true)
   })
 })

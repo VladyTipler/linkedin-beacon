@@ -8,6 +8,9 @@
 /** Supported provider backends. */
 export type LlmProviderId = 'openrouter' | 'gemini'
 
+/** Runtime list of supported provider ids (SSOT for validation/iteration). */
+export const LLM_PROVIDER_IDS: readonly LlmProviderId[] = ['openrouter', 'gemini']
+
 /** Chat roles, normalised. Provider adapters map these to their own wire format. */
 export type LlmRole = 'system' | 'user' | 'assistant'
 

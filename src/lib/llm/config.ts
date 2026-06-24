@@ -1,5 +1,5 @@
 import type { KeyValueStore } from '../ports'
-import type { LlmProviderId } from './contracts'
+import { LLM_PROVIDER_IDS, type LlmProviderId } from './contracts'
 
 /** Storage key for the BYOK LLM config. Lives in chrome.storage.local only. */
 export const LLM_CONFIG_KEY = 'llm:config'
@@ -16,7 +16,7 @@ export const DEFAULT_LLM_CONFIG: LlmConfig = { provider: 'openrouter', apiKey: '
 
 export async function loadLlmConfig(store: KeyValueStore): Promise<LlmConfig> {
   const raw = await store.get<LlmConfig>(LLM_CONFIG_KEY)
-  if (!raw || (raw.provider !== 'openrouter' && raw.provider !== 'gemini')) {
+  if (!raw || !LLM_PROVIDER_IDS.includes(raw.provider as LlmProviderId)) {
     return DEFAULT_LLM_CONFIG
   }
   return { provider: raw.provider, apiKey: raw.apiKey ?? '', model: raw.model }
