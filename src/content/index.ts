@@ -52,14 +52,17 @@ function parseWhenReady(attempt = 0): void {
 // FeedAccumulator/ScrollHarvestPolicy decide dedup + when to stop.
 async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader['parse']>> {
   const acc = new FeedAccumulator()
-  const policy = new ScrollHarvestPolicy({ maxStaleRounds: 2, maxRounds: 15 })
+  // LinkedIn lazy-loads on scroll and can be slow: give it generous read pauses
+  // (1.5–3s, also more human) and 3 empty rounds before concluding the feed is
+  // exhausted, so we don't stop after the first viewport.
+  const policy = new ScrollHarvestPolicy({ maxStaleRounds: 3, maxRounds: 20 })
   let staleRounds = 0
   for (let round = 0; ; round++) {
     const added = acc.add(feed.parse(document))
     staleRounds = added > 0 ? 0 : staleRounds + 1
     if (policy.shouldStop({ collected: acc.size(), target, staleRounds, round })) break
     window.scrollBy(0, Math.round(window.innerHeight * 0.85))
-    await sleep(delay.nextMs(700, 1800))
+    await sleep(delay.nextMs(1500, 3000))
   }
   return acc.items().slice(0, target)
 }
