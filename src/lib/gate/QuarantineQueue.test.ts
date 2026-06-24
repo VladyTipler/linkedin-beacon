@@ -119,6 +119,16 @@ describe('QuarantineQueue', () => {
     expect(due[0].id).toBe('act-1')
   })
 
+  it('tolerates a non-array value at the storage key (legacy/garbage)', async () => {
+    const store = memStore()
+    await store.set('engagement:quarantine', { corrupt: true })
+    const { clock } = mutableClock(START)
+    const { scheduler } = fakeScheduler()
+    const q = new QuarantineQueue({ store, clock, scheduler, newId: counterIds() })
+    expect(await q.list()).toEqual([])
+    expect(await q.due()).toEqual([])
+  })
+
   it('markSent removes the item from the due set', async () => {
     const store = memStore()
     const { clock, advanceMin } = mutableClock(START)

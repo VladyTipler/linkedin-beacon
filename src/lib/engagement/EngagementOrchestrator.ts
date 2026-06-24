@@ -104,7 +104,8 @@ export class EngagementOrchestrator {
   }
 
   async pending(): Promise<ActionQueueItem[]> {
-    return (await this.deps.store.get<ActionQueueItem[]>(PENDING_KEY)) ?? []
+    const stored = await this.deps.store.get<ActionQueueItem[]>(PENDING_KEY)
+    return Array.isArray(stored) ? stored : []
   }
 
   private judgeIfContent(action: ActionRequest, guardrails: Guardrails): JudgeVerdict | undefined {

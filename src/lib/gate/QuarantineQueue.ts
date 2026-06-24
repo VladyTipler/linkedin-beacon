@@ -80,7 +80,8 @@ export class QuarantineQueue {
   }
 
   private async load(): Promise<ActionQueueItem[]> {
-    return (await this.deps.store.get<ActionQueueItem[]>(QUARANTINE_KEY)) ?? []
+    const stored = await this.deps.store.get<ActionQueueItem[]>(QUARANTINE_KEY)
+    return Array.isArray(stored) ? stored : []
   }
 
   private async save(queue: ActionQueueItem[]): Promise<void> {

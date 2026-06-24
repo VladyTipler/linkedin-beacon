@@ -70,7 +70,7 @@ function build(start = '2026-06-24T12:00:00.000Z') {
     executor,
     newId: counterIds()
   })
-  return { orch, executed, advanceMin }
+  return { orch, executed, advanceMin, store }
 }
 
 const cfg = (level: EngagementConfig['level']): EngagementConfig => ({
@@ -124,6 +124,15 @@ describe('EngagementOrchestrator', () => {
     advanceMin(5)
     expect(await orch.releaseDue()).toBe(1)
     expect(executed).toHaveLength(1)
+  })
+
+  it('tolerates a non-array pending queue in storage', async () => {
+    const { orch, store } = build()
+    await store.set('engagement:pending', { corrupt: true })
+    expect(await orch.pending()).toEqual([])
+    // a fresh manual submit still works on top of the garbage
+    const out = await orch.submit(like, cfg('manual'))
+    expect(out.status).toBe('queued')
   })
 
   it('keeps separate daily budgets per action type', async () => {
