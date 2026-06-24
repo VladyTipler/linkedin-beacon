@@ -6,6 +6,9 @@ import { createSsiParser } from '@lib/ssi/createSsiParser'
 import { FeedReader } from '@lib/feed/FeedReader'
 import { FeedAccumulator } from '@lib/feed/FeedAccumulator'
 import { ScrollHarvestPolicy } from '@lib/feed/ScrollHarvestPolicy'
+import { LikeFilter } from '@lib/engagement/LikeFilter'
+import { HumanBreakPolicy } from '@lib/autopilot/HumanBreakPolicy'
+import type { RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
@@ -17,6 +20,8 @@ const parser = createSsiParser(new SystemClock())
 const source = new DomSsiSource()
 const feed = new FeedReader()
 const delay = new HumanDelay(new MathRandomRng())
+const likeFilter = new LikeFilter()
+const humanBreak = new HumanBreakPolicy()
 
 function parseAndReport(): void {
   const root = source.getRoot()
@@ -87,11 +92,116 @@ async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader
   return acc.items().slice(0, target)
 }
 
+// ── Autopilot loop: the continuous engagement run lives here (survives SW
+// eviction while this tab is open). SW is the authoritative gatekeeper. ──
+let autopilotRunning = false
+let actionsSinceBreak = 0
+const actedUrns = new Set<string>()
+
+/** Cheap per-action risk probe (design-spec §5.4). Detection only — SW judges. */
+function detectRisk(): RiskMarker | null {
+  if (document.querySelector('iframe[src*="captcha" i], [id*="captcha" i]')) return 'captcha'
+  const body = document.body?.innerText ?? ''
+  if (/unusual activity|verify it'?s you|security check|are you a human/i.test(body)) {
+    return 'challenge'
+  }
+  return null
+}
+
+async function ask<T>(message: BeaconMessage): Promise<T | undefined> {
+  try {
+    return (await chrome.runtime.sendMessage(message)) as T
+  } catch {
+    return undefined
+  }
+}
+
+/** Tell the SW to finalize the run (single report; SW guards against double). */
+async function endRun(reason: import('@lib/types').StopReason): Promise<void> {
+  autopilotRunning = false
+  await ask({ type: 'AUTOPILOT_ENDED', reason })
+}
+
+async function runAutopilotLoop(): Promise<void> {
+  if (autopilotRunning) return
+  autopilotRunning = true
+  actedUrns.clear()
+  actionsSinceBreak = 0
+  let emptyHarvests = 0
+  try {
+    while (autopilotRunning) {
+      const posts = await harvestByScrolling(25)
+      const { likeable } = likeFilter.select(posts)
+      // Already-liked posts drop out of `likeable` (FeedReader reads the live
+      // reaction state); actedUrns also drops anything we already attempted, so a
+      // failed like is not retried forever. When nothing fresh remains twice in a
+      // row, the feed is exhausted.
+      const fresh = likeable.filter((p) => !actedUrns.has(p.urn))
+      if (fresh.length === 0) {
+        if (++emptyHarvests >= 2) {
+          await endRun('feed_exhausted')
+          break
+        }
+        continue
+      }
+      emptyHarvests = 0
+
+      for (const post of fresh) {
+        if (!autopilotRunning) break
+        const risk = detectRisk()
+        if (risk) await ask({ type: 'AUTOPILOT_RISK', marker: risk })
+
+        const decision = await ask<{ action: string; waitMs?: number }>({
+          type: 'AUTOPILOT_MAY_ACT',
+          actionType: 'like'
+        })
+        if (!decision) {
+          // SW unreachable — try to finalize; if that also fails, just stop.
+          await endRun('manual')
+          break
+        }
+        if (decision.action === 'stop') {
+          // SW already wrote the report when it returned a stop decision.
+          autopilotRunning = false
+          break
+        }
+        if (decision.action === 'wait') {
+          await sleep(decision.waitMs ?? 30_000)
+          continue
+        }
+
+        actedUrns.add(post.urn)
+        const res = executeLike(document, post.urn)
+        await ask({ type: 'AUTOPILOT_ACTED', ok: res.ok })
+        if (res.ok) actionsSinceBreak += 1
+        await sleep(delay.nextMs(8000, 45000)) // base pacing between actions
+        // Occasionally take a longer "human break" (1–3 min) — anti-ban §5.1.
+        const breakMs = humanBreak.nextBreakMs(actionsSinceBreak, new MathRandomRng())
+        if (breakMs > 0) {
+          actionsSinceBreak = 0
+          await sleep(breakMs)
+        }
+      }
+    }
+  } finally {
+    autopilotRunning = false
+  }
+}
+
 chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendResponse) => {
   switch (message.type) {
     case 'REQUEST_SSI':
       parseAndReport()
       sendResponse({ ok: true })
+      return false
+
+    case 'AUTOPILOT_RUN_LOOP':
+      void runAutopilotLoop()
+      sendResponse({ ok: true })
+      return false
+
+    case 'STOP_AUTOPILOT':
+      autopilotRunning = false
       return false
 
     case 'REQUEST_FEED_HARVEST': {
@@ -127,11 +237,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'LIST_QUARANTINE':
     case 'CANCEL_QUARANTINE':
     case 'START_AUTOPILOT':
-    case 'STOP_AUTOPILOT':
     case 'AUTOPILOT_MAY_ACT':
     case 'AUTOPILOT_ACTED':
     case 'AUTOPILOT_RISK':
-    case 'AUTOPILOT_RUN_LOOP':
+    case 'AUTOPILOT_ENDED':
     case 'AUTOPILOT_STATUS':
     case 'AUTOPILOT_REPORT':
     case 'LIST_REPORTS':

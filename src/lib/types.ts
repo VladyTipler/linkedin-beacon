@@ -237,6 +237,8 @@ export type BeaconMessage =
   | { type: 'AUTOPILOT_ACTED'; ok: boolean }
   /** content → SW: a risk marker was seen on the page. */
   | { type: 'AUTOPILOT_RISK'; marker: RiskMarker }
+  /** content → SW: the loop concluded locally; finalize the run with this reason. */
+  | { type: 'AUTOPILOT_ENDED'; reason: StopReason }
   /** SW → content: begin the harvest→act loop in this tab. */
   | { type: 'AUTOPILOT_RUN_LOOP' }
   /** SW → sidepanel: live autopilot status (broadcast). */
