@@ -1,6 +1,7 @@
 import { ref, onMounted } from 'vue'
 import type { AutomationLevel, ModuleId, ModuleState } from '@lib/types'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
+import { asArray } from '@lib/engagement/settings'
 import { panelBus } from '../lib/panelBus'
 
 const STORE_KEY = 'modules:state'
@@ -21,13 +22,16 @@ export function useModules() {
   const store = new ChromeStorageStore()
 
   const persist = () => {
-    if (panelBus.available()) void store.set(STORE_KEY, modules.value)
+    // Persist a PLAIN array, not the Vue reactive proxy — chrome.storage
+    // serialises a reactive array as an array-like object {0:..,1:..}, which then
+    // reads back as a non-array and silently breaks the SSOT level bridge.
+    if (panelBus.available()) void store.set(STORE_KEY, modules.value.map((m) => ({ ...m })))
   }
 
   onMounted(async () => {
     if (!panelBus.available()) return
-    const saved = await store.get<ModuleState[]>(STORE_KEY).catch(() => null)
-    if (saved?.length) modules.value = mergeWithDefaults(saved)
+    const saved = asArray<ModuleState>(await store.get<ModuleState[]>(STORE_KEY).catch(() => null))
+    if (saved.length) modules.value = mergeWithDefaults(saved)
   })
 
   const find = (id: ModuleId) => modules.value.find((m) => m.id === id)

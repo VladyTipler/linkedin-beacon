@@ -92,6 +92,14 @@ export class EngagementOrchestrator {
     return { status: 'executed' }
   }
 
+  /** Reject a manually-queued action: drop it from the queue without executing. */
+  async reject(id: string): Promise<boolean> {
+    const pending = await this.pending()
+    if (!pending.some((i) => i.id === id)) return false
+    await this.savePending(pending.filter((i) => i.id !== id))
+    return true
+  }
+
   /** Send any quarantined actions whose cancel window has elapsed. Returns the count. */
   async releaseDue(): Promise<number> {
     const due = await this.deps.quarantine.due()

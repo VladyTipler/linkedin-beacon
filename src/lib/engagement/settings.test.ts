@@ -60,6 +60,16 @@ describe('loadSettings', () => {
     expect(s.config.level).toBe('manual')
   })
 
+  it('reads the level from an array-like object (chrome.storage serialised a reactive array)', async () => {
+    // chrome.storage stores a Vue reactive array as {0:..,1:..} — must still be read.
+    const arrayLike = {
+      0: { id: 'engagement', automationLevel: 'full_auto', available: true, enabled: true },
+      1: { id: 'smart_connect', automationLevel: 'manual', available: true, enabled: true }
+    }
+    const s = await loadSettings(memStore({ 'modules:state': arrayLike }))
+    expect(s.config.level).toBe('full_auto')
+  })
+
   it('keeps the rest of the stored settings while overriding the level', async () => {
     const stored = { ...DEFAULT_SETTINGS, relevanceThreshold: 0.5 }
     const s = await loadSettings(

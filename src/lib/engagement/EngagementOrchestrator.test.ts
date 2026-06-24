@@ -92,6 +92,17 @@ describe('EngagementOrchestrator', () => {
     expect(executed[0]).toMatchObject(like)
   })
 
+  it('rejects a queued action: drops it without executing', async () => {
+    const { orch, executed } = build()
+    const out = await orch.submit(like, cfg('manual'))
+    expect((await orch.pending()).map((i) => i.id)).toContain((out as { id: string }).id)
+
+    expect(await orch.reject((out as { id: string }).id)).toBe(true)
+    expect(await orch.pending()).toEqual([])
+    expect(executed).toHaveLength(0)
+    expect(await orch.reject('nope')).toBe(false)
+  })
+
   it('executes immediately in full_auto and spends the budget', async () => {
     const { orch, executed } = build()
     expect((await orch.submit(like, cfg('full_auto'))).status).toBe('executed')

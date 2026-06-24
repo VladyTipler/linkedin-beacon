@@ -36,13 +36,21 @@ export async function loadSettings(store: KeyValueStore): Promise<EngagementSett
   const base = (await store.get<EngagementSettings>(SETTINGS_KEY)) ?? DEFAULT_SETTINGS
   // automationLevel is owned by the module roster (SSOT) — the UI selector there
   // must actually drive the gate, so derive config.level from it.
-  // chrome.storage is untyped at runtime — tolerate missing/legacy/garbage data.
-  const modules = await store.get<ModuleState[]>(MODULES_STATE_KEY)
-  const engagement = Array.isArray(modules)
-    ? modules.find((m) => m?.id === 'engagement')
-    : undefined
+  const modules = asArray<ModuleState>(await store.get<ModuleState[]>(MODULES_STATE_KEY))
+  const engagement = modules.find((m) => m?.id === 'engagement')
   if (!engagement) return base
   return { ...base, config: { ...base.config, level: engagement.automationLevel } }
+}
+
+/**
+ * Coerce a stored value to an array. chrome.storage serialises a Vue reactive
+ * array as an array-like object `{0:..,1:..}`, so a plain Array.isArray check
+ * would wrongly discard valid data; Object.values rescues it. Garbage → [].
+ */
+export function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (value !== null && typeof value === 'object') return Object.values(value) as T[]
+  return []
 }
 
 export async function saveSettings(store: KeyValueStore, settings: EngagementSettings): Promise<void> {
