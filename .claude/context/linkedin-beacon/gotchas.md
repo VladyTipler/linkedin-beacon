@@ -1,4 +1,4 @@
-# Beacon — Gotchas (hard-won, 2026-06-24)
+# Beacon — Gotchas (hard-won, 2026-06-24..25)
 
 Non-obvious traps discovered live. Each cost real debugging.
 
@@ -31,7 +31,7 @@ Non-obvious traps discovered live. Each cost real debugging.
 - **Fix both sides:** persist a PLAIN array (`.map(m=>({...m}))`), and read with `asArray()`
   (`Object.values` for array-like) in `src/lib/engagement/settings.ts`. All array reads
   from storage use `Array.isArray`/`asArray` guards now (QuarantineQueue, orchestrator,
-  RunReportStore). **Rule: never trust the shape of a chrome.storage value.**
+  RunReportStore, **DraftStore**). **Rule: never trust the shape of a chrome.storage value.**
 
 ## MV3 service worker + content script
 
@@ -47,26 +47,42 @@ Non-obvious traps discovered live. Each cost real debugging.
   asks the SW per-action; the SW rehydrates state from storage each tick.
 - **Background tabs are throttled** → lazy-load stalls. The worker-window host keeps the
   feed tab `visible` (active in its own window) so the loop doesn't degrade (spec §2.3).
+- **The content switch over `BeaconMessage` is EXHAUSTIVE (`assertNever` default).** Every
+  NEW message variant (even sidepanel→SW-only ones like `LIST_MODELS`/`GENERATE_*`) MUST
+  get a no-op `case` in `src/content/index.ts` (grouped with the other `return false`
+  cases) or `vue-tsc` fails. SW switch uses `default: return false` so it's lenient.
 
-## Testing harness (no subagent browser; use CDP directly)
+## LLM / BYOK layer (Content module)
 
-- Live testing = real Windows Chrome via CDP, NOT Playwright headed (LinkedIn flags bots).
-  Launch: `chrome.exe --remote-debugging-port=9222 --user-data-dir="E:\chrome-debug"
-  --load-extension="H:\...\dist" "https://www.linkedin.com/feed/"`. Vlad logs into
-  LinkedIn once in that window (session persists in the debug profile).
-- `agent-browser --cdp 9222` attaches to the WRONG tab when several exist (Gemini/Wappalyzer
-  pages). Reliable path: raw CDP via a tiny python helper (`websockets` lib) targeting a
-  specific `webSocketDebuggerUrl` from `/json/list`. Helper used this session lives in the
-  session scratchpad (`cdp_eval.py`) — re-create if needed (Runtime.evaluate over ws).
-- Drive the extension from the **sidepanel page context** (open a tab to
-  `chrome-extension://<id>/src/sidepanel/index.html`) — it has `chrome.runtime`/`chrome.storage`.
-  Beacon extension id this session: `mcaopdffmgobjbkmmfejfhjhnechmkek` (changes per load).
-- For a fast autopilot test, START then patch `autopilot:state.ceiling = 2` in storage.
+- **`listModels` returns a non-empty fallback on ANY failure, and OpenRouter's list is
+  keyless.** So a "models loaded" signal is NOT a key-validity signal — it's green for any
+  key. Real key-invalidity only surfaces at generation time (provider HTTP error in the
+  error banner). If you ever need a true validity light, make `listModels` return
+  `{models, fromFallback}` and drive the indicator off `fromFallback`.
+- **`HttpGet` is a separate narrow port in `llm/contracts.ts`** (NOT a widened
+  `HttpClient`). `FetchHttpClient` structurally satisfies `HttpClient & HttpGet`. Keeps ISP.
+- **Boundary tests for SW content handlers** (`contentHandlers.test.ts`) inject a fake
+  `HttpClient & HttpGet` that returns the REAL OpenRouter shape `{choices:[{message:
+  {content}}]}`, so `createLlmProvider` → `OpenRouterProvider` → the real mapper runs.
+  That genuinely crosses the LLM boundary (CLAUDE.md's iron rule) without a live call.
+- **`e.message` from a failed LLM call IS surfaced to the UI** (kept deliberately — it
+  aids BYOK debugging: the user sees e.g. "HTTP 401 …"). Safe because `FetchHttpClient`
+  error strings are `status + statusText + response body`, NOT the URL — so the Gemini
+  key (which lives in the URL query) never leaks into the message.
 
 ## Workflow / process
 
 - **Todoist API is v1** — v2 returns "deprecated". Results under `.results`.
 - **Spec→plan→TDD per increment** (superpowers brainstorming → writing-plans →
-  executing-plans). Pure units first (full TDD), edge wiring verified by build + live run.
+  executing-plans / subagent-driven-development). Pure units first (full TDD); SW message
+  WIRING verified by build, but extract handler LOGIC into an injectable module
+  (`contentHandlers.ts`) so it gets real unit/boundary tests instead of "build-only".
 - Call **advisor** before edge-wiring and before "done" — it caught the burst-once-per-batch
-  risk gap, the infinite-loop-on-empty-feed, and the "daily budget isn't daily" issues.
+  risk gap, the infinite-loop-on-empty-feed, the "daily budget isn't daily", and the
+  expertise-RMW-clobber / harvest-type-mismatch issues this slice.
+- **Subagent-driven gotcha (2026-06-25):** an implementer subagent fixed two test fakes
+  (added `listModels` to inline `LlmProvider` fakes) but **forgot to `git add` them**.
+  Every later task's build passed because it ran against the DIRTY working tree — the
+  uncommitted fix masked a broken committed state (a clean checkout would fail `vue-tsc`).
+  **After each subagent task AND at slice end, run `git status` — it MUST be clean.** A
+  dangling modified file = the history is broken even though the suite is "green".
