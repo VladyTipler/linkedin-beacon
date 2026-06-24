@@ -265,6 +265,8 @@ export type BeaconMessage =
   | { type: 'LIST_MODELS'; provider: LlmProviderId; apiKey: string }
   /** sidepanel → SW: idea + prompt → post draft; replies { draft, error? }. */
   | { type: 'GENERATE_DRAFT'; idea: Idea }
+  /** sidepanel → SW: harvest feed → extract ideas → bank; replies { ideas, error? }. */
+  | { type: 'GENERATE_IDEAS' }
   | { type: 'PING' }
   | { type: 'PONG' }
 

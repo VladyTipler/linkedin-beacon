@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { generateDraft } from './contentHandlers'
+import { generateDraft, generateIdeas } from './contentHandlers'
 import type { KeyValueStore, Clock } from '@lib/ports'
 import type { HttpClient, HttpGet } from '@lib/llm/contracts'
+import type { FeedPost } from '@lib/types'
 
 function memStore(initial: Record<string, unknown> = {}): KeyValueStore {
   const m = new Map<string, unknown>(Object.entries(initial))
@@ -29,6 +30,8 @@ const CONFIGURED = {
 
 const fixedClock: Clock = { now: () => new Date('2026-06-25T00:00:00.000Z') }
 
+const posts: FeedPost[] = [{ urn: 'urn:1', authorName: 'A', text: 'hiring vue devs' }]
+
 describe('generateDraft', () => {
   it('errors no_key when the key is empty', async () => {
     const res = await generateDraft(
@@ -53,5 +56,33 @@ describe('generateDraft', () => {
       createdAt: '2026-06-25T00:00:00.000Z'
     })
     expect(await store.get('content:drafts')).toEqual([res.draft])
+  })
+})
+
+describe('generateIdeas', () => {
+  it('errors no_key when the key is empty', async () => {
+    const res = await generateIdeas({ store: memStore(), http: fakeHttp('[]'), harvest: async () => posts })
+    expect(res).toEqual({ ideas: [], error: 'no_key' })
+  })
+
+  it('errors no_expertise when the headline is blank', async () => {
+    const store = memStore({ 'llm:config': { provider: 'openrouter', apiKey: 'sk-1' } })
+    const res = await generateIdeas({ store, http: fakeHttp('[]'), harvest: async () => posts })
+    expect(res).toEqual({ ideas: [], error: 'no_expertise' })
+  })
+
+  it('errors no_feed when harvest is empty', async () => {
+    const res = await generateIdeas({ store: memStore(CONFIGURED), http: fakeHttp('[]'), harvest: async () => [] })
+    expect(res).toEqual({ ideas: [], error: 'no_feed' })
+  })
+
+  it('extracts ideas via the LLM and banks them', async () => {
+    const ideasJson = JSON.stringify([{ topic: 'tRPC vs REST', angle: 'type-safety from Vue' }])
+    const store = memStore(CONFIGURED)
+    const res = await generateIdeas({ store, http: fakeHttp(ideasJson), harvest: async () => posts })
+    expect(res.error).toBeUndefined()
+    expect(res.ideas).toContainEqual({ topic: 'tRPC vs REST', angle: 'type-safety from Vue' })
+    // persisted to the bank
+    expect(await store.get('ideas:bank')).toEqual([{ topic: 'tRPC vs REST', angle: 'type-safety from Vue' }])
   })
 })

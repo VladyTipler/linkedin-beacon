@@ -250,6 +250,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       void content.generateDraft({ store, http: llmHttp, clock, newId: randomId }, message.idea).then(sendResponse)
       return true
 
+    case 'GENERATE_IDEAS':
+      void content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts }).then(sendResponse)
+      return true
+
     case 'LIST_QUARANTINE':
       void quarantine.list().then(sendResponse)
       return true

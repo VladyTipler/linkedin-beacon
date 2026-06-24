@@ -8,11 +8,13 @@ import { loadContentSettings } from '@lib/content/settings'
 import { DraftGenerator } from '@lib/content/DraftGenerator'
 import { DraftStore } from '@lib/content/DraftStore'
 import { loadSettings } from '@lib/engagement/settings'
-import type { HttpClient, HttpGet } from '@lib/llm/contracts'
+import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
+import { IdeaBank } from '@lib/ideas/IdeaBank'
+import { feedPostToFeedItem } from '@lib/ideas/feedItem'
+import type { HttpClient, HttpGet, LlmProviderId } from '@lib/llm/contracts'
 import type { LlmModel } from '@lib/llm/models'
-import type { LlmProviderId } from '@lib/llm/contracts'
 import type { Clock, KeyValueStore } from '@lib/ports'
-import type { Draft, Idea } from '@lib/types'
+import type { Draft, FeedPost, Idea } from '@lib/types'
 
 export type LlmHttp = HttpClient & HttpGet
 
@@ -58,5 +60,31 @@ export async function generateDraft(
     return { draft }
   } catch (e) {
     return { draft: null, error: e instanceof Error ? e.message : 'llm_failed' }
+  }
+}
+
+export interface IdeaDeps {
+  store: KeyValueStore
+  http: LlmHttp
+  harvest: (limit: number) => Promise<FeedPost[]>
+}
+
+/** Harvest the feed → extract ideas (LLM) → bank them. Returns the full bank. */
+export async function generateIdeas(deps: IdeaDeps): Promise<{ ideas: Idea[]; error?: string }> {
+  const cfg = await loadLlmConfig(deps.store)
+  if (!cfg.apiKey.trim()) return { ideas: [], error: 'no_key' }
+  const { expertise } = await loadSettings(deps.store)
+  if (!expertise.headline.trim()) return { ideas: [], error: 'no_expertise' }
+  const posts = await deps.harvest(20)
+  if (!posts.length) return { ideas: [], error: 'no_feed' }
+
+  const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, deps.http)
+  const bank = new IdeaBank(deps.store)
+  try {
+    const ideas = await new IdeaExtractor(provider).extract(posts.map(feedPostToFeedItem), expertise)
+    await bank.add(ideas)
+    return { ideas: await bank.all() }
+  } catch (e) {
+    return { ideas: [], error: e instanceof Error ? e.message : 'llm_failed' }
   }
 }
