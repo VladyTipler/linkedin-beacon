@@ -1,0 +1,54 @@
+import { describe, it, expect } from 'vitest'
+import { LikeFilter } from './LikeFilter'
+import type { FeedPost, TargetProfile } from '@lib/types'
+
+const post = (over: Partial<FeedPost>): FeedPost => ({
+  urn: 'u',
+  authorName: 'a',
+  text: 'A normal, genuine professional post about work.',
+  ...over
+})
+
+describe('LikeFilter', () => {
+  const filter = new LikeFilter()
+
+  it('likes a normal post', () => {
+    expect(filter.worthLiking(post({})).ok).toBe(true)
+  })
+
+  it('skips an already-liked post', () => {
+    expect(filter.worthLiking(post({ alreadyLiked: true }))).toEqual({
+      ok: false,
+      reason: 'already_liked'
+    })
+  })
+
+  it('skips an empty/too-short post', () => {
+    expect(filter.worthLiking(post({ text: 'hi' })).reason).toBe('empty')
+  })
+
+  it('skips obvious promo/ads (case-insensitive)', () => {
+    expect(filter.worthLiking(post({ text: 'Use code SAVE20 — sign up now!' })).reason).toBe('promo')
+    expect(filter.worthLiking(post({ text: 'Full guide — Link in comments 👇' })).reason).toBe('promo')
+  })
+
+  it('skips a hashtag wall', () => {
+    expect(filter.worthLiking(post({ text: 'launch #a #b #c #d #e #f #g' })).reason).toBe(
+      'hashtag_wall'
+    )
+  })
+
+  it('select splits likeable/skipped and orders stack-relevant first', () => {
+    const profile: TargetProfile = { stack: ['Vue'], targetRoles: [], geos: [], watchlistCompanies: [] }
+    const out = filter.select(
+      [
+        post({ urn: '1', text: 'random cooking thoughts for the weekend' }),
+        post({ urn: '2', text: 'shipping a new Vue component library today' }),
+        post({ urn: '3', text: 'great giveaway! use code FREE' })
+      ],
+      profile
+    )
+    expect(out.likeable.map((p) => p.urn)).toEqual(['2', '1']) // Vue post first
+    expect(out.skipped).toEqual([{ urn: '3', reason: 'promo' }])
+  })
+})
