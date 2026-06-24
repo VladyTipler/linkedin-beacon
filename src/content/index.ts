@@ -50,18 +50,38 @@ function parseWhenReady(attempt = 0): void {
 // Scroll the feed human-like, harvesting unique posts until the target is met or
 // the feed stops yielding new posts. Variable pauses (Rng) = anti-ban. The pure
 // FeedAccumulator/ScrollHarvestPolicy decide dedup + when to stop.
+/**
+ * LinkedIn's feed scrolls an inner `<main>` container (overflow-y: scroll), NOT
+ * the window — `window.scrollBy` does nothing. Find the scrollable ancestor of a
+ * post so we drive the real scroller and trigger lazy-load.
+ */
+function feedScroller(): Element {
+  const anchor =
+    document.querySelector('button[aria-label="Comment"]') ??
+    document.querySelector('[data-testid="expandable-text-box"]')
+  let node: Element | null = anchor
+  while (node && node !== document.body) {
+    node = node.parentElement
+    if (node && node.scrollHeight > node.clientHeight + 80) {
+      const overflow = getComputedStyle(node).overflowY
+      if (overflow === 'auto' || overflow === 'scroll') return node
+    }
+  }
+  return document.scrollingElement ?? document.documentElement
+}
+
 async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader['parse']>> {
   const acc = new FeedAccumulator()
-  // LinkedIn lazy-loads on scroll and can be slow: give it generous read pauses
-  // (1.5–3s, also more human) and 3 empty rounds before concluding the feed is
-  // exhausted, so we don't stop after the first viewport.
+  // LinkedIn lazy-loads on scroll and can be slow: generous read pauses (1.5–3s,
+  // also more human) and 3 empty rounds before concluding the feed is exhausted.
   const policy = new ScrollHarvestPolicy({ maxStaleRounds: 3, maxRounds: 20 })
   let staleRounds = 0
   for (let round = 0; ; round++) {
     const added = acc.add(feed.parse(document))
     staleRounds = added > 0 ? 0 : staleRounds + 1
     if (policy.shouldStop({ collected: acc.size(), target, staleRounds, round })) break
-    window.scrollBy(0, Math.round(window.innerHeight * 0.85))
+    const scroller = feedScroller()
+    scroller.scrollTop = scroller.scrollHeight // to the bottom → triggers lazy-load
     await sleep(delay.nextMs(1500, 3000))
   }
   return acc.items().slice(0, target)
