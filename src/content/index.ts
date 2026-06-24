@@ -126,6 +126,15 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'ENGAGEMENT_RESULT':
     case 'LIST_QUARANTINE':
     case 'CANCEL_QUARANTINE':
+    case 'START_AUTOPILOT':
+    case 'STOP_AUTOPILOT':
+    case 'AUTOPILOT_MAY_ACT':
+    case 'AUTOPILOT_ACTED':
+    case 'AUTOPILOT_RISK':
+    case 'AUTOPILOT_RUN_LOOP':
+    case 'AUTOPILOT_STATUS':
+    case 'AUTOPILOT_REPORT':
+    case 'LIST_REPORTS':
     case 'PONG':
       return false
     default:

@@ -1,5 +1,7 @@
 // ── Domain model. Mirrors design-spec §3 (SSI), §4 (modules), §6 (inbox). ──
 
+import type { RiskMarker } from './autopilot/RiskAssessor'
+
 /** The four SSI pillars LinkedIn reports on /sales/ssi (each scored 0..25). */
 export type SsiPillarKey = 'brand' | 'people' | 'insights' | 'relationships'
 
@@ -81,14 +83,38 @@ export interface ActionQueueItem extends ActionRequest {
   createdAt: string
 }
 
+export type AutopilotHost = 'tab' | 'window'
+export type StopReason = 'budget' | 'risk' | 'manual' | 'feed_exhausted'
+
 /** A persisted record of one autopilot run (design-spec §2.3 reports). */
 export interface RunReport {
   id: string
   startedAt: string
   endedAt: string
-  host: 'tab' | 'window'
-  stopReason: 'budget' | 'risk' | 'manual' | 'feed_exhausted'
+  host: AutopilotHost
+  stopReason: StopReason
   modules: { id: ModuleId; executed: number; skipped: number; failed: number }[]
+}
+
+/** SW-owned persisted autopilot state. */
+export interface AutopilotState {
+  running: boolean
+  host: AutopilotHost
+  windowId?: number
+  tabId?: number
+  ceiling: number
+  used: number
+  actionTimestamps: number[]
+  actionsSinceBreak: number
+  manualStop: boolean
+  startedAt: string
+}
+
+export interface AutopilotStatus {
+  running: boolean
+  used: number
+  ceiling: number
+  stopReason?: StopReason
 }
 
 /** Tally of one engagement pass (design-spec §4.1 metrics). */
@@ -201,6 +227,24 @@ export type BeaconMessage =
   | { type: 'REQUEST_REFRESH' }
   /** sidepanel → SW: force a background SSI refresh now (manual refresh button). */
   | { type: 'FORCE_REFRESH' }
+  /** sidepanel → SW: start the autonomous loop in the chosen host. */
+  | { type: 'START_AUTOPILOT'; host: AutopilotHost }
+  /** sidepanel → SW / SW → content: stop the autonomous loop. */
+  | { type: 'STOP_AUTOPILOT' }
+  /** content → SW: may I perform this action? SW replies a GateDecision via sendResponse. */
+  | { type: 'AUTOPILOT_MAY_ACT'; actionType: ActionType }
+  /** content → SW: an action was attempted (ok = it landed). */
+  | { type: 'AUTOPILOT_ACTED'; ok: boolean }
+  /** content → SW: a risk marker was seen on the page. */
+  | { type: 'AUTOPILOT_RISK'; marker: RiskMarker }
+  /** SW → content: begin the harvest→act loop in this tab. */
+  | { type: 'AUTOPILOT_RUN_LOOP' }
+  /** SW → sidepanel: live autopilot status (broadcast). */
+  | { type: 'AUTOPILOT_STATUS'; status: AutopilotStatus }
+  /** SW → sidepanel: a run finished and was recorded (broadcast). */
+  | { type: 'AUTOPILOT_REPORT'; report: RunReport }
+  /** sidepanel → SW: list run reports; SW replies RunReport[] via sendResponse. */
+  | { type: 'LIST_REPORTS' }
   | { type: 'PING' }
   | { type: 'PONG' }
 
