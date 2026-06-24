@@ -102,6 +102,8 @@ export interface AutopilotState {
   host: AutopilotHost
   windowId?: number
   tabId?: number
+  /** UTC day key (YYYY-MM-DD) the ceiling/used belong to — makes the budget daily. */
+  day: string
   ceiling: number
   used: number
   actionTimestamps: number[]

@@ -31,6 +31,7 @@ import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
+import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -110,6 +111,10 @@ function saveAutopilot(s: AutopilotState): Promise<void> {
   return store.set(AUTOPILOT_KEY, s)
 }
 
+function dayKey(): string {
+  return clock.now().toISOString().slice(0, 10)
+}
+
 async function startAutopilot(host: AutopilotHost): Promise<void> {
   const existing = await autopilotState()
   if (existing?.running) return
@@ -123,13 +128,18 @@ async function startAutopilot(host: AutopilotHost): Promise<void> {
   } else {
     tabId = (await activeLinkedInTab())?.id
   }
+  // Carry over today's ceiling AND used so re-running in the same day does NOT
+  // re-grant the budget — the cap is genuinely daily (design-spec §5).
+  const prev = existing ? { day: existing.day, ceiling: existing.ceiling, used: existing.used } : null
+  const budget = resolveDailyBudget(prev, dayKey(), dailyCeiling.forDay(autopilotRng))
   const state: AutopilotState = {
     running: true,
     host,
     windowId,
     tabId,
-    ceiling: dailyCeiling.forDay(autopilotRng),
-    used: 0,
+    day: budget.day,
+    ceiling: budget.ceiling,
+    used: budget.used,
     actionTimestamps: [],
     actionsSinceBreak: 0,
     manualStop: false,
