@@ -19,15 +19,37 @@ Decided so far:
 - New **«Отчёты» (Reports) tab**: each run persists a `RunReport` (timestamp +
   per-module tallies: done / skipped / failed). Tab lists recent runs.
 
-Open architecture questions (resolve in the brainstorm):
-- **Where the continuous loop lives** (MV3 resilience): a 20–40 min run vs the SW
-  being evicted on idle + unreliable `setTimeout`. Options: active feed tab
-  (content script drives it, tab stays alive while open), a **dedicated worker
-  window** (`chrome.windows.create`, ideally a separate Beacon profile — the §2.3
-  ideal, true set-and-forget), or `chrome.alarms`-chunked.
-- Anti-ban depth for a long run: **work-hours window**, **burst-guard** (≤5 actions
-  / 3 min, §5.2), randomised daily budgets, occasional "human breaks".
-- Kill-switch / Stop control to abort mid-run.
+Decided in brainstorm (2026-06-24), pending spec:
+- **Loop host = user choice**: current feed tab OR a dedicated worker window
+  (`chrome.windows.create`, park on a 2nd monitor). The loop lives in the feed
+  content script either way (survives SW eviction while the tab is open). SW is
+  the authoritative gatekeeper (budget/burst/risk, persisted).
+- **Daily ceiling = random around a base** (e.g. base 40 → 30–50/day via
+  rng+jitter) + warmup ramp for new accounts. Not a fixed number, not a timer.
+- **Full anti-ban for continuous run**: pacing (done) + `BurstGuard` (≤5 actions
+  / 3 min) + occasional "human breaks" (1–3 min) + `RiskMonitor` kill-switch
+  (captcha/challenge/429 → global stop). Work-hours gate deferred (not chosen).
+- **Module-aware**: «Запустить» runs enabled modules; today only engagement-likes
+  acts. Stop reasons recorded: budget / risk / manual.
+- **«Отчёты» tab** + Start/Stop controls + live status dot in the top bar.
+
+## 3. Content module — idea bank → custom prompt → drafts → approve → publish
+
+The content pipeline (design-spec §4.3, §4.3.1), increments 2–3.
+
+- **Idea bank** (inc 2): whole diverse feed → `IdeaExtractor` → `IdeaBank`, with a
+  bank screen. The signal layer for everything below.
+- **Settings tab → post-generator prompt**: the user pastes a custom prompt (voice,
+  tone, structure). Stored in settings (SSOT, not hard-coded). `draftGeneration`
+  takes an idea from the bank + this prompt → a post draft.
+- **«Черновики» (Drafts) tab**: queue of generated posts → preview →
+  **Approve / Reject / Edit** → publish via the composer DOM adapter.
+- **Posts are human-in-the-loop by default — NOT full-auto.** Rationale (§5.5): a
+  post under the user's real name is the most public, least reversible action; one
+  bad AI post read by recruiters undoes the brand-building that is the product's
+  whole point. Full-auto for posts is a later, opt-in step once the draft history
+  proves quality (the manual → guardrails → full ladder, with a high trust bar for
+  posts). Likes stay broad/auto; posts stay approve-first.
 
 ## 2. Usage telemetry — anonymous active-user count
 
