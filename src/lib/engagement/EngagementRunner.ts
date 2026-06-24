@@ -1,48 +1,43 @@
 import type { ActionRequest, EngagementRunSummary, FeedPost } from '../types'
-import type { RelevanceScorer } from './RelevanceScorer'
+import type { LikeFilter } from './LikeFilter'
 import type { EngagementOrchestrator, SubmitOutcome } from './EngagementOrchestrator'
 import type { EngagementSettings } from './settings'
 
 export interface EngagementRunnerDeps {
-  /** Harvest up to `limit` feed posts (content-script DOM read). */
   harvest: (limit: number) => Promise<FeedPost[]>
-  scorer: RelevanceScorer
+  likeFilter: LikeFilter
   orchestrator: EngagementOrchestrator
-  /**
-   * Anti-ban pause AFTER each action that touched (or will touch) the page —
-   * the "8–45s random between actions" guard (design-spec §5.1). No-op in tests
-   * so the runner stays pure; the SW injects a real HumanDelay-backed sleep.
-   */
+  /** Anti-ban pause after each action that hit the page. No-op in tests. */
   pace?: () => Promise<void>
 }
 
-const HARVEST_LIMIT = 20
+const HARVEST_TARGET = 25
 
 /**
- * One engagement pass (design-spec §4.1): harvest the feed, keep posts that are
- * relevant and not already liked, and route a like through the orchestrator for
- * each. Pure orchestration over injected deps → fully fake-tested. The gate
- * decides what actually happens (queue/quarantine/execute) per automationLevel.
+ * One autonomous engagement pass (design-spec §4.1): harvest the feed, keep every
+ * non-junk post (broad — a like is cheap/reversible), and route a like through the
+ * orchestrator for each, paced. Stack only orders candidates (LikeFilter), it never
+ * gates. Pure orchestration over injected deps → fake-tested.
  */
 export class EngagementRunner {
   constructor(private readonly deps: EngagementRunnerDeps) {}
 
   async run(settings: EngagementSettings): Promise<EngagementRunSummary> {
-    const posts = await this.deps.harvest(HARVEST_LIMIT)
+    const posts = await this.deps.harvest(HARVEST_TARGET)
+    const { likeable, skipped } = this.deps.likeFilter.select(posts, settings.target)
+
     const summary: EngagementRunSummary = {
       scanned: posts.length,
-      relevant: 0,
+      relevant: likeable.length,
       executed: 0,
       queued: 0,
       quarantined: 0,
-      skipped: 0,
-      blocked: 0
+      skipped: skipped.length,
+      blocked: 0,
+      failed: 0
     }
 
-    for (const post of posts) {
-      if (post.alreadyLiked) continue
-      if (!this.deps.scorer.isRelevant(post, settings.target, settings.relevanceThreshold)) continue
-      summary.relevant++
+    for (const post of likeable) {
       const action: ActionRequest = {
         type: 'like',
         target: {
@@ -52,12 +47,10 @@ export class EngagementRunner {
       }
       const outcome = await this.deps.orchestrator.submit(action, settings.config)
       tally(summary, outcome)
-      // Space out only actions that hit the page; skipped/blocked/queued don't.
       if (outcome.status === 'executed' || outcome.status === 'quarantined') {
         await this.deps.pace?.()
       }
     }
-
     return summary
   }
 }
@@ -78,6 +71,9 @@ function tally(summary: EngagementRunSummary, outcome: SubmitOutcome): void {
       break
     case 'blocked':
       summary.blocked++
+      break
+    case 'failed':
+      summary.failed++
       break
   }
 }

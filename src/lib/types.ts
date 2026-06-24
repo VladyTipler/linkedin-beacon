@@ -90,6 +90,7 @@ export interface EngagementRunSummary {
   quarantined: number
   skipped: number
   blocked: number
+  failed: number
 }
 
 export interface InboundLead {

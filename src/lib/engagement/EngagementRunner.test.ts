@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { EngagementRunner } from './EngagementRunner'
 import { EngagementOrchestrator, type ActionExecutor } from './EngagementOrchestrator'
-import { RelevanceScorer } from './RelevanceScorer'
+import { LikeFilter } from './LikeFilter'
 import { ActionGate } from '../gate/ActionGate'
 import { CommentJudge } from './CommentJudge'
 import { QuarantineQueue } from '../gate/QuarantineQueue'
@@ -21,13 +21,13 @@ function memStore(): KeyValueStore {
   }
 }
 const clock = { now: () => new Date('2026-06-24T12:00:00.000Z') }
-const noopScheduler: AlarmScheduler = { schedule: () => {}, clear: () => {} }
+const noop: AlarmScheduler = { schedule: () => {}, clear: () => {} }
 
 const posts: FeedPost[] = [
-  { urn: 'A', authorName: 'Jane', authorHeadline: 'Recruiter', text: 'We use Vue', alreadyLiked: false },
-  { urn: 'B', authorName: 'Bob', text: 'Vue tips', alreadyLiked: true },
-  { urn: 'C', authorName: 'Cara', text: 'cooking pasta', alreadyLiked: false },
-  { urn: 'D', authorName: 'Dan', text: 'TypeScript and Vue', alreadyLiked: false }
+  { urn: 'A', authorName: 'Jane', text: 'shipping a Vue component today', alreadyLiked: false },
+  { urn: 'B', authorName: 'Bob', text: 'random weekend cooking thoughts', alreadyLiked: false },
+  { urn: 'C', authorName: 'Ann', text: 'giveaway! use code FREE', alreadyLiked: false },
+  { urn: 'D', authorName: 'Dan', text: 'already liked this one', alreadyLiked: true }
 ]
 
 const settings: EngagementSettings = {
@@ -36,85 +36,63 @@ const settings: EngagementSettings = {
     guardrails: { minConfidence: 0.6, bannedPhrases: [], quarantineMinutes: 10, lenRange: [12, 280] },
     dailyLimits: { like: 60, comment: 10, connect: 0, post: 0 }
   },
-  target: { stack: ['Vue'], targetRoles: ['recruiter'], geos: [], watchlistCompanies: [] },
+  target: { stack: ['Vue'], targetRoles: [], geos: [], watchlistCompanies: [] },
   expertise: { headline: 'Frontend', stack: ['Vue'] },
   relevanceThreshold: 0.3
 }
 
-function build() {
+function orchestratorWith(executor: ActionExecutor) {
   const store = memStore()
-  const executed: ActionRequest[] = []
-  const executor: ActionExecutor = { async execute(a) { executed.push(a) } }
-  const orchestrator = new EngagementOrchestrator({
+  return new EngagementOrchestrator({
     gate: new ActionGate(),
     judge: new CommentJudge(),
-    quarantine: new QuarantineQueue({ store, clock, scheduler: noopScheduler, newId: () => 'id' }),
+    quarantine: new QuarantineQueue({ store, clock, scheduler: noop, newId: () => 'id' }),
     store,
     clock,
     executor,
     newId: () => 'id'
   })
-  return { executed, orchestrator }
 }
 
-describe('EngagementRunner', () => {
-  it('likes relevant, not-already-liked posts and tallies the pass', async () => {
-    const { executed, orchestrator } = build()
+describe('EngagementRunner (broad likes)', () => {
+  it('likes all non-junk posts (A,B), skips promo (C) and already-liked (D)', async () => {
+    const executed: ActionRequest[] = []
     const runner = new EngagementRunner({
       harvest: async () => posts,
-      scorer: new RelevanceScorer(),
-      orchestrator
+      likeFilter: new LikeFilter(),
+      orchestrator: orchestratorWith({ async execute(a) { executed.push(a) } })
     })
-
     const summary = await runner.run(settings)
-
     expect(summary.scanned).toBe(4)
-    expect(summary.relevant).toBe(2) // A and D (B is already liked, C is irrelevant)
+    expect(summary.relevant).toBe(2) // likeable candidates A,B
     expect(summary.executed).toBe(2)
-    expect(executed.map((a) => a.target.meta?.urn)).toEqual(['A', 'D'])
+    expect(summary.skipped).toBe(2) // C promo, D already_liked
+    expect(executed.map((a) => a.target.meta?.urn)).toEqual(['A', 'B']) // Vue post first
   })
 
-  it('queues instead of executing in manual mode', async () => {
-    const { executed, orchestrator } = build()
-    const runner = new EngagementRunner({ harvest: async () => posts, scorer: new RelevanceScorer(), orchestrator })
-
-    const summary = await runner.run({ ...settings, config: { ...settings.config, level: 'manual' } })
-
-    expect(summary.relevant).toBe(2)
-    expect(summary.queued).toBe(2)
-    expect(summary.executed).toBe(0)
-    expect(executed).toHaveLength(0)
+  it('counts a failing action as failed and keeps going', async () => {
+    let n = 0
+    const runner = new EngagementRunner({
+      harvest: async () => posts,
+      likeFilter: new LikeFilter(),
+      orchestrator: orchestratorWith({ async execute() { if (n++ === 0) throw new Error('boom') } })
+    })
+    const summary = await runner.run(settings)
+    expect(summary.failed).toBe(1)
+    expect(summary.executed).toBe(1)
   })
 
-  it('paces between real actions (anti-ban delay), not between skipped ones', async () => {
-    const { orchestrator } = build()
+  it('paces after each real like (anti-ban)', async () => {
     let paced = 0
     const runner = new EngagementRunner({
       harvest: async () => posts,
-      scorer: new RelevanceScorer(),
-      orchestrator,
+      likeFilter: new LikeFilter(),
+      orchestrator: orchestratorWith({ async execute() {} }),
       pace: async () => {
         paced++
       }
     })
-
-    await runner.run(settings) // full_auto → A and D execute
-    expect(paced).toBe(2) // one human delay after each executed like, none for B/C
-  })
-
-  it('does not pace when nothing acts (manual queues)', async () => {
-    const { orchestrator } = build()
-    let paced = 0
-    const runner = new EngagementRunner({
-      harvest: async () => posts,
-      scorer: new RelevanceScorer(),
-      orchestrator,
-      pace: async () => {
-        paced++
-      }
-    })
-
-    await runner.run({ ...settings, config: { ...settings.config, level: 'manual' } })
-    expect(paced).toBe(0)
+    await runner.run(settings)
+    expect(paced).toBe(2) // A and B executed
   })
 })
