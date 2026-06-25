@@ -2,6 +2,14 @@ import { ref } from 'vue'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { IdeaBank } from '@lib/ideas/IdeaBank'
 import { DraftStore } from '@lib/content/DraftStore'
+import { loadContentSettings } from '@lib/content/settings'
+import {
+  remainingPosts,
+  rolloverPostWeek,
+  isoWeekKey,
+  POST_WEEK_BUDGET_KEY,
+  type PostWeek
+} from '@lib/content/PostWeekBudget'
 import type { Idea, Draft } from '@lib/types'
 import { panelBus } from '../lib/panelBus'
 
@@ -16,6 +24,8 @@ export function useContent() {
   const draftList = ref<Draft[]>([])
   const generating = ref(false)
   const error = ref<string | null>(null)
+  const publishing = ref<string | null>(null)
+  const postsLeft = ref(0)
 
   async function loadIdeas() {
     ideas.value = await bank.all()
@@ -59,9 +69,31 @@ export function useContent() {
     await loadDrafts()
   }
 
+  /** Remaining publishes this ISO-week, against the configured weekly cap. */
+  async function loadPostBudget() {
+    const { postsPerWeek } = await loadContentSettings(store)
+    const week = isoWeekKey(new Date())
+    const budget = rolloverPostWeek((await store.get<PostWeek>(POST_WEEK_BUDGET_KEY)) ?? null, week)
+    postsLeft.value = remainingPosts(budget, postsPerWeek)
+  }
+
+  /** Approve-first publish: SW gates the week cap + drives the composer adapter. */
+  async function publishDraft(id: string) {
+    publishing.value = id
+    error.value = null
+    const res = await panelBus.request<{ ok: boolean; reason?: string }>({ type: 'PUBLISH_POST', draftId: id })
+    publishing.value = null
+    if (!res?.ok) {
+      error.value = res?.reason ?? 'publish_failed'
+      return
+    }
+    await loadDrafts()
+    await loadPostBudget()
+  }
+
   return {
-    tab, ideas, drafts: draftList, generating, error,
+    tab, ideas, drafts: draftList, generating, error, publishing, postsLeft,
     loadIdeas, generateIdeas, removeIdea,
-    loadDrafts, toDraft, removeDraft, updateDraft
+    loadDrafts, toDraft, removeDraft, updateDraft, publishDraft, loadPostBudget
   }
 }

@@ -3,14 +3,15 @@ import { onMounted } from 'vue'
 import { useContent } from '../composables/useContent'
 
 const {
-  tab, ideas, drafts, generating, error,
+  tab, ideas, drafts, generating, error, publishing, postsLeft,
   loadIdeas, generateIdeas, removeIdea, toDraft,
-  loadDrafts, removeDraft, updateDraft
+  loadDrafts, removeDraft, updateDraft, publishDraft, loadPostBudget
 } = useContent()
 
 onMounted(async () => {
   await loadIdeas()
   await loadDrafts()
+  await loadPostBudget()
 })
 
 const ERR: Record<string, string> = {
@@ -18,7 +19,12 @@ const ERR: Record<string, string> = {
   no_expertise: 'Заполни профиль экспертизы в настройках (⚙).',
   no_feed: 'Открой вкладку ленты LinkedIn.',
   ideas_not_json:
-    'Модель вернула ответ не в том формате. Выбери модель посильнее (⚙) — например openai/gpt-4o-mini или google/gemini-2.5-flash — и попробуй снова.'
+    'Модель вернула ответ не в том формате. Выбери модель посильнее (⚙) — например openai/gpt-4o-mini или google/gemini-2.5-flash — и попробуй снова.',
+  budget: 'Лимит публикаций на эту неделю исчерпан.',
+  composer_trigger_not_found: 'Не удалось открыть форму публикации. Открой ленту LinkedIn и попробуй снова.',
+  composer_not_found: 'Не удалось открыть форму публикации. Открой ленту LinkedIn и попробуй снова.',
+  post_button_disabled: 'Не получилось ввести текст в форму. Попробуй ещё раз.',
+  modal_did_not_close: 'Публикация не подтвердилась. Проверь ленту и попробуй ещё раз.'
 }
 
 async function copy(text: string) {
@@ -57,10 +63,17 @@ async function copy(text: string) {
     <!-- DRAFTS -->
     <template v-else>
       <p v-if="!drafts.length" class="banner">Нет черновиков. Сгенерируй пост из идеи.</p>
+      <p v-if="drafts.length" class="lbl" style="opacity:.7" data-testid="posts-left">
+        Осталось публикаций на неделе: {{ postsLeft }}
+      </p>
       <div v-for="d in drafts" :key="d.id" class="note" :data-testid="`draft-${d.id}`">
         <div class="lbl">{{ d.ideaTopic }}</div>
         <textarea :value="d.text" rows="6" @change="updateDraft(d.id, ($event.target as HTMLTextAreaElement).value)" />
         <div class="row">
+          <button class="btn primary" :disabled="publishing === d.id || postsLeft <= 0"
+                  :data-testid="`publish-${d.id}`" @click="publishDraft(d.id)">
+            {{ publishing === d.id ? 'Публикую…' : 'Опубликовать' }}
+          </button>
           <button class="btn" data-testid="copy" @click="copy(d.text)">Копировать</button>
           <button class="btn" @click="toDraft({ topic: d.ideaTopic, angle: d.ideaAngle })">Перегенерировать</button>
           <button class="btn" @click="removeDraft(d.id)">Удалить</button>
