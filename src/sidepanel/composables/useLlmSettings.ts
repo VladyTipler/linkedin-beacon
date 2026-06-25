@@ -13,12 +13,16 @@ export function useLlmSettings() {
   const keyValid = ref<boolean | null>(null)
   const loading = ref(false)
 
+  /** Cap the dropdown — OpenRouter returns hundreds; render a usable shortlist. */
+  const MODEL_LIMIT = 10
   const filteredModels = computed(() => {
     const q = modelQuery.value.trim().toLowerCase()
-    if (!q) return models.value
-    return models.value.filter(
-      (m) => m.id.toLowerCase().includes(q) || (m.label ?? '').toLowerCase().includes(q)
-    )
+    const matched = q
+      ? models.value.filter(
+          (m) => m.id.toLowerCase().includes(q) || (m.label ?? '').toLowerCase().includes(q)
+        )
+      : models.value
+    return matched.slice(0, MODEL_LIMIT)
   })
 
   async function load() {

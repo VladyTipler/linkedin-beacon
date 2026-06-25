@@ -4,7 +4,8 @@ import { useLlmSettings } from '../composables/useLlmSettings'
 import { useExpertiseSettings } from '../composables/useExpertiseSettings'
 import { useContentSettings } from '../composables/useContentSettings'
 
-const { config, modelQuery, filteredModels, keyValid, loading, load, save, fetchModels } = useLlmSettings()
+const { config, models, modelQuery, filteredModels, keyValid, loading, load, save, fetchModels } =
+  useLlmSettings()
 onMounted(load)
 
 const exp = useExpertiseSettings()
@@ -45,12 +46,13 @@ async function onSave() {
     <span v-if="keyValid === true" class="v ok" data-testid="llm-valid">Модели загружены</span>
     <span v-else-if="keyValid === false" class="v" data-testid="llm-invalid">Не удалось загрузить модели — проверь ключ или сеть</span>
 
-    <label class="fld" v-if="filteredModels.length">
-      <span class="k">Модель</span>
+    <label class="fld" v-if="models.length">
+      <span class="k">Модель ({{ config.model ?? 'не выбрана' }})</span>
       <input v-model="modelQuery" placeholder="поиск модели…" data-testid="model-search" />
       <select v-model="config.model" data-testid="model-select" size="6">
         <option v-for="m in filteredModels" :key="m.id" :value="m.id">{{ m.label ?? m.id }}</option>
       </select>
+      <span v-if="!filteredModels.length" class="v" data-testid="model-empty">Ничего не найдено — уточни запрос</span>
     </label>
 
     <div class="sect-lbl">Экспертиза</div>
