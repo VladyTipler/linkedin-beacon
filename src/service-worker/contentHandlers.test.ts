@@ -116,4 +116,20 @@ describe('extractRunIdeas (LLM boundary)', () => {
     const store = memStore({ ...CONFIGURED, ...CONTENT_MODS, 'ideas:budget': { day: '2026-06-25', used: 5 } })
     expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({ stored: 0 })
   })
+
+  it('returns stored:0 (no extraction) when the content module is disabled', async () => {
+    const store = memStore({
+      ...CONFIGURED,
+      'modules:state': [{ id: 'content', enabled: false, available: true, automationLevel: 'manual', dailyLimit: 5 }]
+    })
+    expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({ stored: 0 })
+  })
+
+  it('errors no_expertise when the headline is blank', async () => {
+    const store = memStore({ 'llm:config': { provider: 'openrouter', apiKey: 'sk-1' }, ...CONTENT_MODS })
+    expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({
+      stored: 0,
+      error: 'no_expertise'
+    })
+  })
 })

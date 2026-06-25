@@ -8,6 +8,7 @@ import { loadContentSettings } from '@lib/content/settings'
 import { DraftGenerator } from '@lib/content/DraftGenerator'
 import { DraftStore } from '@lib/content/DraftStore'
 import { loadSettings } from '@lib/engagement/settings'
+import { enabledModules } from '@lib/autopilot/startGate'
 import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
 import { IdeaBank } from '@lib/ideas/IdeaBank'
 import { feedPostToFeedItem } from '@lib/ideas/feedItem'
@@ -106,12 +107,16 @@ export async function extractRunIdeas(
   posts: FeedPost[]
 ): Promise<{ stored: number; error?: string }> {
   if (!posts.length) return { stored: 0, error: 'no_feed' }
+  const modulesState = await deps.store.get('modules:state')
+  // SW self-guards (gatekeeper SSOT): never extract for a disabled content module,
+  // even if a future caller or a manual message reaches this handler.
+  if (!enabledModules(modulesState).some((m) => m.id === 'content')) return { stored: 0 }
   const cfg = await loadLlmConfig(deps.store)
   if (!cfg.apiKey.trim()) return { stored: 0, error: 'no_key' }
   const { expertise } = await loadSettings(deps.store)
   if (!expertise.headline.trim()) return { stored: 0, error: 'no_expertise' }
 
-  const limit = ideasPerDayLimit(await deps.store.get('modules:state'))
+  const limit = ideasPerDayLimit(modulesState)
   const today = deps.clock.now().toISOString().slice(0, 10)
   const budget = rolloverIdeaDay((await deps.store.get<IdeaDay>(IDEA_BUDGET_KEY)) ?? null, today)
   const allowance = remainingIdeas(budget, limit)
