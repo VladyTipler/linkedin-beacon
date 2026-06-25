@@ -5,6 +5,8 @@ export interface CommentDraftInput {
   post: FeedPost
   expertise: ExpertiseProfile
   tone: CommentTone
+  /** Language for the generated comment (defaults handled by the caller). */
+  language: string
 }
 
 const TONE_HINT: Record<CommentTone, string> = {
@@ -23,12 +25,13 @@ export class CommentDraftService {
   constructor(private readonly provider: LlmProvider) {}
 
   async draft(input: CommentDraftInput): Promise<string> {
-    const { post, expertise, tone } = input
+    const { post, expertise, tone, language } = input
     const system = [
       'You write LinkedIn comments in the first person as the user.',
       `The user is: ${expertise.headline}. Stack: ${expertise.stack.join(', ')}.`,
       expertise.bio ? `Background: ${expertise.bio}.` : '',
       'Rules: one or two sentences, under 280 characters.',
+      `Write the comment in ${language}.`,
       'Do NOT restate or summarise the post. No generic praise ("great post").',
       `Add a specific point from the user's own experience. Tone: ${TONE_HINT[tone]}.`
     ]

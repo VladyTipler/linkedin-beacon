@@ -18,6 +18,7 @@ describe('content settings', () => {
     expect(s.commentsPerDay).toBe(5)
     expect(s.commentTone).toBe('expert')
     expect(s.postsPerWeek).toBe(3)
+    expect(s.contentLanguage).toBe('en')
   })
 
   it('round-trips custom prompt + comment config', async () => {
@@ -27,7 +28,8 @@ describe('content settings', () => {
       commentsEnabled: true,
       commentsPerDay: 3,
       commentTone: 'friendly',
-      postsPerWeek: 5
+      postsPerWeek: 5,
+      contentLanguage: 'ru'
     })
     const s = await loadContentSettings(store)
     expect(s.postPrompt).toBe('Write like a pirate.')
@@ -35,5 +37,6 @@ describe('content settings', () => {
     expect(s.commentsPerDay).toBe(3)
     expect(s.commentTone).toBe('friendly')
     expect(s.postsPerWeek).toBe(5)
+    expect(s.contentLanguage).toBe('ru')
   })
 })

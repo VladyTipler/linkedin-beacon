@@ -4,7 +4,7 @@
 // boundary is crossed by a fake HttpClient returning real-shape responses).
 import { createLlmProvider } from '@lib/llm/createLlmProvider'
 import { loadLlmConfig } from '@lib/llm/config'
-import { loadContentSettings } from '@lib/content/settings'
+import { loadContentSettings, languageName } from '@lib/content/settings'
 import { DraftGenerator } from '@lib/content/DraftGenerator'
 import { DraftStore } from '@lib/content/DraftStore'
 import {
@@ -55,13 +55,18 @@ export async function generateDraft(
   const cfg = await loadLlmConfig(deps.store)
   if (!cfg.apiKey.trim()) return { draft: null, error: 'no_key' }
   const { expertise } = await loadSettings(deps.store)
-  const { postPrompt } = await loadContentSettings(deps.store)
+  const { postPrompt, contentLanguage } = await loadContentSettings(deps.store)
   const provider = createLlmProvider(
     { provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model },
     deps.http
   )
   try {
-    const text = await new DraftGenerator(provider).generate(idea, expertise, postPrompt)
+    const text = await new DraftGenerator(provider).generate(
+      idea,
+      expertise,
+      postPrompt,
+      languageName(contentLanguage)
+    )
     const draft: Draft = {
       id: deps.newId(),
       ideaTopic: idea.topic,
@@ -195,7 +200,8 @@ export async function commentOnPost(
     const text = await new CommentDraftService(provider).draft({
       post,
       expertise,
-      tone: settings.commentTone
+      tone: settings.commentTone,
+      language: languageName(settings.contentLanguage)
     })
     const verdict = new CommentJudge().judge(text, COMMENT_GUARDRAILS)
     if (!verdict.ok) return { ok: false, reason: verdict.reasons.join(',') || 'judged' }

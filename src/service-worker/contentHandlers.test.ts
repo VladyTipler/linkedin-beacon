@@ -234,3 +234,39 @@ describe('publishPost', () => {
     expect(await store.get('content:drafts')).toEqual([draft])
   })
 })
+
+/** Captures each postJson body so we can assert what reached the LLM wire. */
+function capturingHttp(text = 'A specific, real take from my own Vue experience here.'): {
+  http: HttpClient & HttpGet
+  bodies: unknown[]
+} {
+  const bodies: unknown[] = []
+  return {
+    bodies,
+    http: {
+      async postJson<T>(_url: string, body: unknown) {
+        bodies.push(body)
+        return { choices: [{ message: { content: text } }] } as T
+      },
+      async getJson<T>() {
+        return {} as T
+      }
+    }
+  }
+}
+
+describe('content language reaches the LLM wire', () => {
+  it('generateDraft injects the configured language into the post request', async () => {
+    const { http, bodies } = capturingHttp('My post body.')
+    const store = memStore({ ...CONFIGURED, 'content:settings': { contentLanguage: 'en' } })
+    await generateDraft({ store, http, clock: fixedClock, newId: () => 'id1' }, { topic: 'T', angle: 'A' })
+    expect(JSON.stringify(bodies[0])).toMatch(/English/)
+  })
+
+  it('commentOnPost injects the configured language into the comment request', async () => {
+    const { http, bodies } = capturingHttp()
+    const store = memStore({ ...COMMENT_CFG, 'content:settings': { commentsEnabled: true, commentsPerDay: 5, commentTone: 'expert', contentLanguage: 'en' } })
+    await commentOnPost({ store, http, clock: fixedClock }, RELEVANT_POST)
+    expect(JSON.stringify(bodies[0])).toMatch(/English/)
+  })
+})

@@ -10,12 +10,18 @@ import type { ExpertiseProfile, Idea } from '../types'
 export class DraftGenerator {
   constructor(private readonly provider: LlmProvider) {}
 
-  async generate(idea: Idea, expertise: ExpertiseProfile, postPrompt: string): Promise<string> {
+  async generate(
+    idea: Idea,
+    expertise: ExpertiseProfile,
+    postPrompt: string,
+    language: string
+  ): Promise<string> {
     const system = [
       'You write LinkedIn posts in the user\'s own voice.',
       `The user is: ${expertise.headline}. Stack: ${expertise.stack.join(', ')}.`,
       expertise.bio ? `Background: ${expertise.bio}.` : '',
       'Write ONE post. Output only the post text — no preamble, no markdown headers, no quotes.',
+      `Write the post in ${language}.`,
       'Never sound like generic AI thought-leadership; be specific and grounded in the user\'s experience.'
     ]
       .filter(Boolean)

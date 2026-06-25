@@ -24,7 +24,8 @@ const input: CommentDraftInput = {
     text: 'How do you handle SSR hydration mismatches?'
   },
   expertise: { headline: 'Frontend TechLead', stack: ['Vue', 'TypeScript'], bio: '11y' },
-  tone: 'expert'
+  tone: 'expert',
+  language: 'English'
 }
 
 describe('CommentDraftService', () => {
@@ -41,6 +42,7 @@ describe('CommentDraftService', () => {
     expect(joined).toContain('ssr hydration mismatches')
     expect(joined).toContain('vue')
     expect(joined).toContain('expert')
+    expect(joined).toContain('english')
   })
 
   it('sends a system instruction (anti-slop framing) plus the user prompt', async () => {

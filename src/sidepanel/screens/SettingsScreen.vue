@@ -101,6 +101,19 @@ async function onSave() {
       </select>
     </label>
 
+    <div class="sect-lbl">Публикация постов</div>
+    <label class="fld">
+      <span class="k">Постов в неделю (рек. 2–3, approve-first)</span>
+      <input type="number" min="1" v-model.number="content.postsPerWeek.value" data-testid="posts-per-week" />
+    </label>
+    <label class="fld">
+      <span class="k">Язык постов и комментариев</span>
+      <select v-model="content.contentLanguage.value" data-testid="content-language">
+        <option value="en">English</option>
+        <option value="ru">Русский</option>
+      </select>
+    </label>
+
     <button class="btn primary" data-testid="llm-save" @click="onSave">Сохранить</button>
     <span v-if="saveError" class="v" data-testid="save-error">Не удалось сохранить — попробуй ещё раз</span>
   </section>

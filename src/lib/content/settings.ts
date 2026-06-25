@@ -15,9 +15,19 @@ export interface ContentSettings {
   commentTone: CommentTone
   /** Weekly publish cap — a safety limit on the manual approve-first publish (anti-ban). */
   postsPerWeek: number
+  /** Language for generated posts AND comments (Vlad targets USD-remote → English). */
+  contentLanguage: string
 }
 
 export const DEFAULT_COMMENTS_PER_DAY = 5
+export const DEFAULT_CONTENT_LANGUAGE = 'en'
+
+const LANG_NAMES: Record<string, string> = { en: 'English', ru: 'Russian' }
+
+/** Human-readable language name for prompt injection (defaults to English). */
+export function languageName(code: string): string {
+  return LANG_NAMES[code] ?? 'English'
+}
 
 /** Sensible default so generation works before the user customises it. */
 export const DEFAULT_POST_PROMPT = [
@@ -41,7 +51,8 @@ export async function loadContentSettings(store: KeyValueStore): Promise<Content
     postsPerWeek:
       typeof raw?.postsPerWeek === 'number' && raw.postsPerWeek > 0
         ? raw.postsPerWeek
-        : DEFAULT_POSTS_PER_WEEK
+        : DEFAULT_POSTS_PER_WEEK,
+    contentLanguage: raw?.contentLanguage?.trim() ? raw.contentLanguage : DEFAULT_CONTENT_LANGUAGE
   }
 }
 

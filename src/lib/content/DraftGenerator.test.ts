@@ -20,17 +20,18 @@ const expertise: ExpertiseProfile = { headline: 'Frontend TechLead, 11y Vue/TS',
 describe('DraftGenerator', () => {
   it('returns the trimmed post text', async () => {
     const gen = new DraftGenerator(new FakeProvider('  Here is the post.  \n'))
-    expect(await gen.generate(idea, expertise, 'Write like an expert.')).toBe('Here is the post.')
+    expect(await gen.generate(idea, expertise, 'Write like an expert.', 'English')).toBe('Here is the post.')
   })
 
   it('feeds the idea, expertise and custom prompt into the request', async () => {
     const provider = new FakeProvider('x')
-    await new DraftGenerator(provider).generate(idea, expertise, 'MY_CUSTOM_PROMPT')
+    await new DraftGenerator(provider).generate(idea, expertise, 'MY_CUSTOM_PROMPT', 'English')
     const joined = provider.last!.messages.map((m) => m.content).join('\n')
     expect(joined).toContain('tRPC vs REST')
     expect(joined).toContain('type-safety from a Vue codebase')
     expect(joined).toContain('Frontend TechLead')
     expect(joined).toContain('MY_CUSTOM_PROMPT')
+    expect(joined).toContain('English')
   })
 })
 
@@ -41,7 +42,7 @@ describe('DraftGenerator spark grounding', () => {
       topic: 'T', angle: 'A',
       spark: { claim: 'Speed over purity', quote: 'ship fast', source: { author: 'Anna', id: 'urn:a' } }
     }
-    await new DraftGenerator(provider).generate(sparked, expertise, 'be punchy')
+    await new DraftGenerator(provider).generate(sparked, expertise, 'be punchy', 'English')
     const joined = provider.last!.messages.map((m) => m.content).join('\n')
     expect(joined).toContain('Speed over purity')
     expect(joined).toContain('ship fast')
@@ -50,7 +51,7 @@ describe('DraftGenerator spark grounding', () => {
 
   it('omits spark wording when the idea has no spark', async () => {
     const provider = new FakeProvider('x')
-    await new DraftGenerator(provider).generate(idea, expertise, 'be punchy') // existing `idea` has no spark
+    await new DraftGenerator(provider).generate(idea, expertise, 'be punchy', 'English') // existing `idea` has no spark
     expect(provider.last!.messages.map((m) => m.content).join('\n')).not.toMatch(/sparked by/i)
   })
 })
