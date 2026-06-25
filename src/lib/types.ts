@@ -89,6 +89,12 @@ export interface ActionQueueItem extends ActionRequest {
 export type AutopilotHost = 'tab' | 'window'
 export type StopReason = 'budget' | 'risk' | 'manual' | 'feed_exhausted'
 
+/** Reply to START_AUTOPILOT: did the run start, and if not, why (UI surfaces a hint). */
+export interface StartAutopilotResult {
+  started: boolean
+  reason?: 'no-modules'
+}
+
 /** A persisted record of one autopilot run (design-spec §2.3 reports). */
 export interface RunReport {
   id: string

@@ -19,6 +19,7 @@ import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
 import { ChromeWindows } from '@/adapters/ChromeWindows'
 import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
 import { engagementLimit } from '@lib/autopilot/engagementLimit'
+import { decideAutopilotStart } from '@lib/autopilot/startGate'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
@@ -31,6 +32,7 @@ import type {
   BeaconMessage,
   FeedPost,
   RunReport,
+  StartAutopilotResult,
   StopReason
 } from '@lib/types'
 
@@ -77,9 +79,13 @@ function dayKey(): string {
   return clock.now().toISOString().slice(0, 10)
 }
 
-async function startAutopilot(host: AutopilotHost): Promise<void> {
+async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult> {
   const existing = await autopilotState()
-  if (existing?.running) return
+  const modulesState = await store.get('modules:state')
+  // One-button promise: the run only starts if there's an ENABLED+available module.
+  // Disabling engagement in «Модули» must stop the launch, not silently keep liking.
+  const decision = decideAutopilotStart(modulesState, existing)
+  if (!decision.started || existing?.running) return decision
   sessionRisk = []
   let tabId: number | undefined
   let windowId: number | undefined
@@ -93,7 +99,7 @@ async function startAutopilot(host: AutopilotHost): Promise<void> {
   // Carry over today's ceiling AND used so re-running in the same day does NOT
   // re-grant the budget — the cap is genuinely daily (design-spec §5).
   const prev = existing ? { day: existing.day, ceiling: existing.ceiling, used: existing.used } : null
-  const base = engagementLimit(await store.get('modules:state'))
+  const base = engagementLimit(modulesState)
   const budget = resolveDailyBudget(prev, dayKey(), new DailyCeiling({ base }).forDay(autopilotRng))
   const state: AutopilotState = {
     running: true,
@@ -138,6 +144,7 @@ async function startAutopilot(host: AutopilotHost): Promise<void> {
   // A freshly-created window needs a moment to load the content script.
   if (host === 'window') setTimeout(() => void launch(), 4000)
   else void launch()
+  return decision
 }
 
 /** Send AUTOPILOT_RUN_LOOP to a tab; true if the content script answered. */
@@ -254,8 +261,8 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return true
 
     case 'START_AUTOPILOT':
-      void startAutopilot(message.host)
-      return false
+      void startAutopilot(message.host).then(sendResponse)
+      return true
 
     case 'STOP_AUTOPILOT':
       void stopAutopilot('manual')

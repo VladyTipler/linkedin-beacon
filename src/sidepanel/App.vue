@@ -14,20 +14,26 @@ import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
 import { useEngagement } from './composables/useEngagement'
 import { useAutopilot } from './composables/useAutopilot'
+import { enabledModules } from '@lib/autopilot/startGate'
 import { DEMO_LEADS } from './lib/demo'
 
 const { active, go } = useNavigation()
 const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
 const { modules, toggle, setLimit } = useModules()
 const { quarantined, cancel } = useEngagement()
-const { status: autopilotStatus, reports, start: startAutopilot, stop: stopAutopilot } = useAutopilot()
+const {
+  status: autopilotStatus,
+  reports,
+  startHint,
+  start: startAutopilot,
+  stop: stopAutopilot
+} = useAutopilot()
 
-const anyActive = computed(() => modules.value.some((m) => m.available && m.enabled))
+// Same "runnable module" predicate the SW gate uses (SSOT) — drives the TopBar pulse.
+const anyActive = computed(() => enabledModules(modules.value).length > 0)
 
 function pauseAll() {
-  modules.value.forEach((m) => {
-    if (m.available && m.enabled) toggle(m.id)
-  })
+  enabledModules(modules.value).forEach((m) => toggle(m.id))
 }
 </script>
 
@@ -43,6 +49,7 @@ function pauseAll() {
         :is-real="isReal"
         :refreshing="refreshing"
         :autopilot-running="autopilotStatus?.running ?? false"
+        :start-hint="startHint"
         @refresh="refresh"
         @start-autopilot="startAutopilot"
         @stop-autopilot="stopAutopilot"

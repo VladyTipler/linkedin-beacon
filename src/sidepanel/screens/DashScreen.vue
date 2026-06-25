@@ -12,6 +12,7 @@ const props = defineProps<{
   isReal: boolean
   refreshing: boolean
   autopilotRunning?: boolean
+  startHint?: string | null
 }>()
 defineEmits<{
   refresh: []
@@ -60,6 +61,14 @@ const chip = computed(() => {
     <div v-if="!autopilotRunning" class="lvl" style="margin-bottom:10px">
       <button data-testid="ap-tab" @click="$emit('startAutopilot', 'tab')">В этой вкладке</button>
       <button data-testid="ap-window" @click="$emit('startAutopilot', 'window')">В окне-воркере</button>
+    </div>
+    <div
+      v-if="!autopilotRunning && startHint"
+      class="banner"
+      style="margin-bottom:10px;border-color:rgba(255,176,32,.35)"
+      data-testid="ap-no-modules"
+    >
+      ⚠ {{ startHint }}
     </div>
     <button v-else class="ghost" data-testid="ap-stop" @click="$emit('stopAutopilot')">Стоп автопилота</button>
 
