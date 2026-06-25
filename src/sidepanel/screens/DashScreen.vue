@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { SsiSnapshot } from '@lib/types'
 import type { PillarView } from '../lib/ssiView'
+import { weeklyGoal } from '@lib/ssi/weeklyGoal'
 import SsiGauge from '../components/SsiGauge.vue'
 import PillarBar from '../components/PillarBar.vue'
 
@@ -26,6 +27,9 @@ const chip = computed(() => {
   if (props.snapshot.networkRank) parts.push(`${props.snapshot.networkRank} в твоей сети`)
   return parts.join(' · ')
 })
+
+// Week's focus: the weakest SSI pillar + the module that raises it (pure, no LLM).
+const goal = computed(() => weeklyGoal(props.snapshot.pillars))
 </script>
 
 <template>
@@ -72,16 +76,14 @@ const chip = computed(() => {
     </div>
     <button v-else class="ghost" data-testid="ap-stop" @click="$emit('stopAutopilot')">Стоп автопилота</button>
 
-    <div class="sect-lbl">Эффект на этой неделе</div>
-    <div class="mod" style="margin-bottom:0">
-      <div class="mod-stats" style="margin-top:0;padding-top:0;border:0">
-        <div class="stat"><div class="n lime">7</div><div class="l">входящих от рекрутёров</div></div>
-        <div class="stat"><div class="n blue">×3.2</div><div class="l">просмотров профиля</div></div>
-        <div class="stat"><div class="n warm">41%</div><div class="l">accept rate коннектов</div></div>
-      </div>
+    <div class="sect-lbl">Цель недели</div>
+    <div v-if="goal" class="banner" data-testid="weekly-goal">
+      🎯 {{ goal.message }} Цель — поднять до <b>{{ goal.target }}/25</b>.
     </div>
 
-    <div class="sect-lbl">Цель недели</div>
-    <div class="banner">🎯 Поднять <b>«Построение связей»</b> до 18/25 — это самый слабый столб. Beacon добавит +30 целевых коннектов с рекрутёрами в безопасном темпе и усилит вовлечённость в их постах.</div>
+    <div class="sect-lbl">Эффект на этой неделе</div>
+    <div class="banner" style="color:var(--mut)">
+      Метрики входящих, просмотров и accept-rate появятся вместе с модулями «Входящие» и Smart Connect — без выдуманных цифр.
+    </div>
   </section>
 </template>
