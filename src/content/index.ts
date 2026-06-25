@@ -15,7 +15,7 @@ import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike } from './domActions'
 import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
-import { SCANNING, LIKING, pauseLabel, breakLabel } from '@lib/autopilot/statusLabels'
+import { SCANNING, LIKING, GENERATING_IDEAS, pauseLabel, breakLabel } from '@lib/autopilot/statusLabels'
 import { assertNever, type BeaconMessage, type FeedItem } from '@lib/types'
 
 const parser = createSsiParser(new SystemClock())
@@ -94,11 +94,16 @@ async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader
   return acc.items().slice(0, target)
 }
 
+const IDEA_TARGET = 25 // unique posts buffered before the one-per-run extraction
+const IDEA_FLOOR = 8 // minimum buffer to bother extracting at run end
+
 // ── Autopilot loop: the continuous engagement run lives here (survives SW
 // eviction while this tab is open). SW is the authoritative gatekeeper. ──
 let autopilotRunning = false
 let actionsSinceBreak = 0
 const actedUrns = new Set<string>()
+let wantLike = true
+let wantIdeas = false
 
 /** Cheap per-action risk probe (design-spec §5.4). Detection only — SW judges. */
 function detectRisk(): RiskMarker | null {
@@ -130,68 +135,89 @@ async function runAutopilotLoop(): Promise<void> {
   actedUrns.clear()
   actionsSinceBreak = 0
   let emptyHarvests = 0
-  showActivity(document, SCANNING)
+  let extractedThisRun = false
+  const runBuffer = new FeedAccumulator()
+  const idleLabel = () => (wantLike ? SCANNING : GENERATING_IDEAS)
+  showActivity(document, idleLabel())
   try {
     while (autopilotRunning) {
-      setActivityLabel(SCANNING)
+      setActivityLabel(idleLabel())
       const posts = await harvestByScrolling(25)
-      const { likeable } = likeFilter.select(posts)
-      // Already-liked posts drop out of `likeable` (FeedReader reads the live
-      // reaction state); actedUrns also drops anything we already attempted, so a
-      // failed like is not retried forever. When nothing fresh remains twice in a
-      // row, the feed is exhausted.
-      const fresh = likeable.filter((p) => !actedUrns.has(p.urn))
-      if (fresh.length === 0) {
-        if (++emptyHarvests >= 2) {
+      if (wantIdeas) runBuffer.add(posts)
+
+      // One grounded extraction per run, as soon as there's enough signal.
+      if (wantIdeas && !extractedThisRun && runBuffer.size() >= IDEA_TARGET) {
+        setActivityLabel(GENERATING_IDEAS)
+        await ask({ type: 'EXTRACT_RUN_IDEAS', posts: runBuffer.items() })
+        extractedThisRun = true
+      }
+
+      if (wantLike) {
+        const { likeable } = likeFilter.select(posts)
+        const fresh = likeable.filter((p) => !actedUrns.has(p.urn))
+        if (fresh.length === 0) {
+          if (++emptyHarvests >= 2) {
+            await endRun('feed_exhausted')
+            break
+          }
+          continue
+        }
+        emptyHarvests = 0
+
+        for (const post of fresh) {
+          if (!autopilotRunning) break
+          const risk = detectRisk()
+          if (risk) await ask({ type: 'AUTOPILOT_RISK', marker: risk })
+
+          const decision = await ask<{ action: string; waitMs?: number }>({
+            type: 'AUTOPILOT_MAY_ACT',
+            actionType: 'like'
+          })
+          if (!decision) {
+            await endRun('manual')
+            break
+          }
+          if (decision.action === 'stop') {
+            autopilotRunning = false
+            break
+          }
+          if (decision.action === 'wait') {
+            await sleep(decision.waitMs ?? 30_000)
+            continue
+          }
+
+          actedUrns.add(post.urn)
+          setActivityLabel(LIKING)
+          const res = executeLike(document, post.urn)
+          await ask({ type: 'AUTOPILOT_ACTED', ok: res.ok })
+          if (res.ok) actionsSinceBreak += 1
+          const paceMs = delay.nextMs(8000, 45000)
+          setActivityLabel(pauseLabel(paceMs))
+          await sleep(paceMs)
+          const breakMs = humanBreak.nextBreakMs(actionsSinceBreak, new MathRandomRng())
+          if (breakMs > 0) {
+            actionsSinceBreak = 0
+            setActivityLabel(breakLabel(breakMs))
+            await sleep(breakMs)
+          }
+        }
+      } else {
+        // Content-only run: no liking to pace — once ideas are in, we're done.
+        if (extractedThisRun) {
           await endRun('feed_exhausted')
           break
         }
-        continue
-      }
-      emptyHarvests = 0
-
-      for (const post of fresh) {
-        if (!autopilotRunning) break
-        const risk = detectRisk()
-        if (risk) await ask({ type: 'AUTOPILOT_RISK', marker: risk })
-
-        const decision = await ask<{ action: string; waitMs?: number }>({
-          type: 'AUTOPILOT_MAY_ACT',
-          actionType: 'like'
-        })
-        if (!decision) {
-          // SW unreachable — try to finalize; if that also fails, just stop.
-          await endRun('manual')
+        if (++emptyHarvests >= 3) {
+          await endRun('feed_exhausted')
           break
-        }
-        if (decision.action === 'stop') {
-          // SW already wrote the report when it returned a stop decision.
-          autopilotRunning = false
-          break
-        }
-        if (decision.action === 'wait') {
-          await sleep(decision.waitMs ?? 30_000)
-          continue
-        }
-
-        actedUrns.add(post.urn)
-        setActivityLabel(LIKING)
-        const res = executeLike(document, post.urn)
-        await ask({ type: 'AUTOPILOT_ACTED', ok: res.ok })
-        if (res.ok) actionsSinceBreak += 1
-        const paceMs = delay.nextMs(8000, 45000) // base pacing between actions
-        setActivityLabel(pauseLabel(paceMs))
-        await sleep(paceMs)
-        // Occasionally take a longer "human break" (1–3 min) — anti-ban §5.1.
-        const breakMs = humanBreak.nextBreakMs(actionsSinceBreak, new MathRandomRng())
-        if (breakMs > 0) {
-          actionsSinceBreak = 0
-          setActivityLabel(breakLabel(breakMs))
-          await sleep(breakMs)
         }
       }
     }
   } finally {
+    // Catch-up: extract from a smaller buffer if the run ended before the target.
+    if (wantIdeas && !extractedThisRun && runBuffer.size() >= IDEA_FLOOR) {
+      await ask({ type: 'EXTRACT_RUN_IDEAS', posts: runBuffer.items() })
+    }
     autopilotRunning = false
     hideActivity()
   }
@@ -205,6 +231,8 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'AUTOPILOT_RUN_LOOP':
+      wantLike = message.modules.engagement
+      wantIdeas = message.modules.content
       void runAutopilotLoop()
       sendResponse({ ok: true })
       return false
