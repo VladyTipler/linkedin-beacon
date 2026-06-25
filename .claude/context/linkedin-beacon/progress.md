@@ -1,6 +1,6 @@
 # Beacon — Progress (as of 2026-06-25)
 
-`main` is the working branch (user commits directly to main this project). **251 tests
+`main` is the working branch (user commits directly to main this project). **258 tests
 green, `npm run build` clean.** Repo: GitLab `v_sandz/linkedin-beacon`.
 
 ## This session (2026-06-25) — beyond content Layer 1
@@ -15,14 +15,20 @@ green, `npm run build` clean.** Repo: GitLab `v_sandz/linkedin-beacon`.
   throttling, with no feedback. The status pill is the fix.
 - **Autopilot launch moved to Dash** (`0c12e92`, pushed) — superseded by the
   consolidation below (launch stays on Dash, config moves to «Модули»).
-- **⭐ Automation consolidation — DESIGNED, NOT YET EXECUTED.** Spec `7e68ad0` + plan
-  `6af495f` (LOCAL, unpushed): one button (Dash) + per-module limits in «Модули»,
-  remove the campaign + automation-level UI, single budget (likes/day = ceiling base
-  ± jitter). 3 TDD tasks A→B→C. **This is the one-button principle now in the
-  architecture overview — all future module phases follow it.** Next action: execute
-  this plan (subagent-driven).
-
-## Done & live-verified (on Vlad's real authorized LinkedIn account)
+- **⭐ Automation consolidation — DONE & live-verified (CDP).** Spec
+  `2026-06-25-automation-consolidation-design.md`, plan `…-automation-consolidation.md`.
+  3 TDD tasks (A `d70eb84`+fix `2589704`; B `8440fd0`; C `f9192e6`) + final opus review
+  + fix `1642586`. Delivered: «Модули» = per-module limit input (likes/day, рек. 30–40)
+  replacing the automation-level selector; smart_connect/content → «Скоро»
+  (`available:false`, pinned on merge so an old `available:true` can't resurrect them);
+  the engagement limit is the `DailyCeiling` **base** (verified live: dailyLimit 100 →
+  ceiling 102 = base ± jitter); the one-shot «Запустить кампанию» (`RUN_ENGAGEMENT`) +
+  its budget counter removed → `autopilot:state` is the SINGLE budget. **This is the
+  one-button principle (architecture overview) — all future module phases follow it.**
+  - **FOLLOW-UP #1 (next phase, important):** `startAutopilot` reads the engagement
+    *limit* but NOT its `enabled` toggle — disabling engagement in «Модули» and pressing
+    launch still likes. The one-button promise is "run ENABLED modules"; wire the enable
+    check (and ideally a "no modules enabled" hint). Pre-existing, flagged by final review.
 
 ## Done & live-verified (on Vlad's real authorized LinkedIn account)
 
