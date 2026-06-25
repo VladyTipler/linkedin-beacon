@@ -33,6 +33,7 @@ import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
+import { SCANNING, GENERATING_IDEAS } from '@lib/autopilot/statusLabels'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -149,12 +150,44 @@ async function startAutopilot(host: AutopilotHost): Promise<void> {
   }
   await saveAutopilot(state)
   broadcastStatus(state)
-  // A freshly-created window needs a moment to load the content script.
-  const startLoop = () => {
-    if (tabId) chrome.tabs.sendMessage(tabId, { type: 'AUTOPILOT_RUN_LOOP' }).catch(() => {})
+  // Kick the loop in the content script. If the script is orphaned (extension
+  // reloaded after the tab loaded), re-inject and retry — otherwise START would
+  // set running=true with no loop ever running (a silent phantom-running state).
+  // The crxjs loader imports the real content module asynchronously, so after a
+  // re-inject the onMessage listener isn't up immediately — poll until it answers.
+  const startLoop = async (): Promise<boolean> => {
+    if (!tabId) return false
+    if (await sendRunLoop(tabId)) return true
+    if (!(await reinjectContentScript(tabId))) return false
+    for (let i = 0; i < 10; i++) {
+      await sleep(500)
+      if (await sendRunLoop(tabId)) return true
+    }
+    return false
   }
-  if (host === 'window') setTimeout(startLoop, 4000)
-  else startLoop()
+  const launch = async () => {
+    if (await startLoop()) return
+    // Couldn't reach the page — roll back so the UI doesn't show a phantom "running".
+    const s = await autopilotState()
+    if (s) {
+      s.running = false
+      await saveAutopilot(s)
+      broadcastStatus(s)
+    }
+  }
+  // A freshly-created window needs a moment to load the content script.
+  if (host === 'window') setTimeout(() => void launch(), 4000)
+  else void launch()
+}
+
+/** Send AUTOPILOT_RUN_LOOP to a tab; true if the content script answered. */
+async function sendRunLoop(tabId: number): Promise<boolean> {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'AUTOPILOT_RUN_LOOP' })
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function stopAutopilot(reason: StopReason): Promise<void> {
@@ -239,7 +272,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'RUN_ENGAGEMENT':
-      void withPageActivity(runEngagement).then(sendResponse)
+      void withPageActivity(runEngagement, SCANNING).then(sendResponse)
       return true // async sendResponse — reliable result delivery to the panel
 
     case 'LIST_MODELS':
@@ -251,8 +284,9 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return true
 
     case 'GENERATE_IDEAS':
-      void withPageActivity(() =>
-        content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts })
+      void withPageActivity(
+        () => content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts }),
+        GENERATING_IDEAS
       ).then(sendResponse)
       return true
 
@@ -338,8 +372,8 @@ async function runEngagement(): Promise<import('@lib/types').EngagementRunSummar
  * working" border (lit at the start, cleared in a finally so an error never
  * leaves it stuck on). The autopilot loop manages its own border locally.
  */
-async function withPageActivity<T>(op: () => Promise<T>): Promise<T> {
-  void forwardToLinkedInTab({ type: 'SET_ACTIVITY', active: true })
+async function withPageActivity<T>(op: () => Promise<T>, label: string): Promise<T> {
+  void forwardToLinkedInTab({ type: 'SET_ACTIVITY', active: true, label })
   try {
     return await op()
   } finally {

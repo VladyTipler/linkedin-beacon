@@ -1,10 +1,12 @@
 // A pulsing lime border overlay shown while Beacon is acting on the page — the
-// "agent is working" cue (like Claude's computer-use window highlight). Pure DOM
-// edge: injected once, ref-counted so overlapping activities don't flicker, and
-// `pointer-events:none` so it never blocks the user. Lives in the content layer
-// (the only layer in the LinkedIn DOM).
+// "agent is working" cue (like Claude's computer-use window highlight), plus a
+// small status pill so the user can tell "working slowly (anti-ban pacing /
+// human break)" from "stuck". Pure DOM edge: injected once, ref-counted so
+// overlapping activities don't flicker, and `pointer-events:none` so it never
+// blocks the user. Lives in the content layer (the only layer in the LinkedIn DOM).
 
 const OVERLAY_ID = 'beacon-activity-overlay'
+const LABEL_ID = 'beacon-activity-label'
 const STYLE_ID = 'beacon-activity-style'
 const LIME = '#c4ff4d'
 
@@ -14,9 +16,9 @@ const LIME = '#c4ff4d'
 let active = 0
 
 function ensureInjected(doc: Document): HTMLElement {
-  const existing = doc.getElementById(OVERLAY_ID)
-  if (existing) return existing
-
+  // Each part is ensured independently and idempotently: a stale overlay from a
+  // prior build (the page DOM survives an extension reload) might be missing the
+  // label child, so we must (re)add it rather than return early.
   if (!doc.getElementById(STYLE_ID)) {
     const style = doc.createElement('style')
     style.id = STYLE_ID
@@ -31,28 +33,52 @@ function ensureInjected(doc: Document): HTMLElement {
         animation: beacon-activity-pulse 1.4s ease-in-out infinite;
       }
       #${OVERLAY_ID}[data-on="1"] { display: block }
+      #${LABEL_ID} {
+        position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+        background: rgba(10,14,23,.92); color: ${LIME}; pointer-events: none;
+        font: 600 12px/1.4 'Spline Sans Mono', ui-monospace, monospace;
+        padding: 6px 12px; border-radius: 999px; border: 1px solid ${LIME};
+        white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      }
+      #${LABEL_ID}:empty { display: none }
     `
     ;(doc.head ?? doc.documentElement).appendChild(style)
   }
 
-  const el = doc.createElement('div')
-  el.id = OVERLAY_ID
-  el.setAttribute('aria-hidden', 'true')
-  ;(doc.body ?? doc.documentElement).appendChild(el)
+  let el = doc.getElementById(OVERLAY_ID)
+  if (!el) {
+    el = doc.createElement('div')
+    el.id = OVERLAY_ID
+    el.setAttribute('aria-hidden', 'true')
+    ;(doc.body ?? doc.documentElement).appendChild(el)
+  }
+  if (!doc.getElementById(LABEL_ID)) {
+    const label = doc.createElement('div')
+    label.id = LABEL_ID
+    el.appendChild(label)
+  }
   return el
 }
 
 /** Begin one activity span — show the pulsing border (idempotent, ref-counted). */
-export function showActivity(doc: Document = document): void {
+export function showActivity(doc: Document = document, label = ''): void {
   active += 1
   ensureInjected(doc).setAttribute('data-on', '1')
+  setActivityLabel(label, doc)
 }
 
-/** End one activity span — hide the border once every span has ended. */
+/** Update the status pill text (no-op if the overlay was never injected). */
+export function setActivityLabel(text: string, doc: Document = document): void {
+  const label = doc.getElementById(LABEL_ID)
+  if (label) label.textContent = text
+}
+
+/** End one activity span — hide the border (and clear the label) once every span has ended. */
 export function hideActivity(doc: Document = document): void {
   active = Math.max(0, active - 1)
   if (active === 0) {
     doc.getElementById(OVERLAY_ID)?.setAttribute('data-on', '0')
+    setActivityLabel('', doc)
   }
 }
 

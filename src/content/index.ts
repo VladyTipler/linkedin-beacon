@@ -14,7 +14,8 @@ import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike } from './domActions'
-import { showActivity, hideActivity } from './activityOverlay'
+import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
+import { SCANNING, LIKING, pauseLabel, breakLabel } from '@lib/autopilot/statusLabels'
 import { assertNever, type BeaconMessage, type FeedItem } from '@lib/types'
 
 const parser = createSsiParser(new SystemClock())
@@ -129,9 +130,10 @@ async function runAutopilotLoop(): Promise<void> {
   actedUrns.clear()
   actionsSinceBreak = 0
   let emptyHarvests = 0
-  showActivity()
+  showActivity(document, SCANNING)
   try {
     while (autopilotRunning) {
+      setActivityLabel(SCANNING)
       const posts = await harvestByScrolling(25)
       const { likeable } = likeFilter.select(posts)
       // Already-liked posts drop out of `likeable` (FeedReader reads the live
@@ -173,14 +175,18 @@ async function runAutopilotLoop(): Promise<void> {
         }
 
         actedUrns.add(post.urn)
+        setActivityLabel(LIKING)
         const res = executeLike(document, post.urn)
         await ask({ type: 'AUTOPILOT_ACTED', ok: res.ok })
         if (res.ok) actionsSinceBreak += 1
-        await sleep(delay.nextMs(8000, 45000)) // base pacing between actions
+        const paceMs = delay.nextMs(8000, 45000) // base pacing between actions
+        setActivityLabel(pauseLabel(paceMs))
+        await sleep(paceMs)
         // Occasionally take a longer "human break" (1–3 min) — anti-ban §5.1.
         const breakMs = humanBreak.nextBreakMs(actionsSinceBreak, new MathRandomRng())
         if (breakMs > 0) {
           actionsSinceBreak = 0
+          setActivityLabel(breakLabel(breakMs))
           await sleep(breakMs)
         }
       }
@@ -230,7 +236,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'SET_ACTIVITY':
-      if (message.active) showActivity()
+      if (message.active) showActivity(document, message.label ?? '')
       else hideActivity()
       return false
 

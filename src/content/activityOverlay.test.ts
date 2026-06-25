@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { showActivity, hideActivity, __resetActivity } from './activityOverlay'
+import { showActivity, hideActivity, setActivityLabel, __resetActivity } from './activityOverlay'
 
 beforeEach(() => {
   document.head.innerHTML = ''
@@ -36,5 +36,31 @@ describe('activityOverlay', () => {
     hideActivity(document)
     showActivity(document)
     expect(document.getElementById('beacon-activity-overlay')!.getAttribute('data-on')).toBe('1')
+  })
+
+  it('shows the status label passed to showActivity', () => {
+    showActivity(document, 'Сканирую ленту…')
+    expect(document.getElementById('beacon-activity-label')!.textContent).toBe('Сканирую ленту…')
+  })
+
+  it('updates the label via setActivityLabel while active', () => {
+    showActivity(document)
+    setActivityLabel('Пауза 22с')
+    expect(document.getElementById('beacon-activity-label')!.textContent).toBe('Пауза 22с')
+  })
+
+  it('clears the label when the overlay hides', () => {
+    showActivity(document, 'Ставлю лайк…')
+    hideActivity(document)
+    expect(document.getElementById('beacon-activity-label')!.textContent).toBe('')
+  })
+
+  it('adds the label child to a stale overlay left over from a prior build', () => {
+    // Simulate a label-less overlay persisted in the page DOM across an extension reload.
+    const stale = document.createElement('div')
+    stale.id = 'beacon-activity-overlay'
+    document.body.appendChild(stale)
+    showActivity(document, 'Сканирую ленту…')
+    expect(document.getElementById('beacon-activity-label')!.textContent).toBe('Сканирую ленту…')
   })
 })
