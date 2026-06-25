@@ -233,9 +233,11 @@ export async function publishPost(
   const draft = (await drafts.all()).find((d) => d.id === draftId)
   if (!draft) return { ok: false, reason: 'not_found' }
 
-  const { postsPerWeek } = await loadContentSettings(deps.store)
-  const weekKey = isoWeekKey(deps.clock.now())
-  const budget = rolloverPostWeek((await deps.store.get<PostWeek>(POST_WEEK_BUDGET_KEY)) ?? null, weekKey)
+  const [{ postsPerWeek }, rawBudget] = await Promise.all([
+    loadContentSettings(deps.store),
+    deps.store.get<PostWeek>(POST_WEEK_BUDGET_KEY)
+  ])
+  const budget = rolloverPostWeek(rawBudget ?? null, isoWeekKey(deps.clock.now()))
   if (remainingPosts(budget, postsPerWeek) <= 0) return { ok: false, reason: 'budget' }
 
   const res = await deps.publish(draft.text)

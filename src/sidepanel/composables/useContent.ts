@@ -71,9 +71,11 @@ export function useContent() {
 
   /** Remaining publishes this ISO-week, against the configured weekly cap. */
   async function loadPostBudget() {
-    const { postsPerWeek } = await loadContentSettings(store)
-    const week = isoWeekKey(new Date())
-    const budget = rolloverPostWeek((await store.get<PostWeek>(POST_WEEK_BUDGET_KEY)) ?? null, week)
+    const [{ postsPerWeek }, rawBudget] = await Promise.all([
+      loadContentSettings(store),
+      store.get<PostWeek>(POST_WEEK_BUDGET_KEY)
+    ])
+    const budget = rolloverPostWeek(rawBudget ?? null, isoWeekKey(new Date()))
     postsLeft.value = remainingPosts(budget, postsPerWeek)
   }
 
@@ -87,8 +89,7 @@ export function useContent() {
       error.value = res?.reason ?? 'publish_failed'
       return
     }
-    await loadDrafts()
-    await loadPostBudget()
+    await Promise.all([loadDrafts(), loadPostBudget()])
   }
 
   return {

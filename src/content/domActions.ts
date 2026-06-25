@@ -51,7 +51,7 @@ export async function executeComment(
   if (!open) return { ok: false, reason: 'comment_button_not_found' }
   open.click()
 
-  const editor = await waitFor<HTMLElement>(() => document.querySelector(EDITOR), 5000)
+  const editor = await waitForValue<HTMLElement>(() => document.querySelector<HTMLElement>(EDITOR), 5000)
   if (!editor) return { ok: false, reason: 'editor_not_found' }
   editor.focus()
   placeCaretAtEnd(editor)
@@ -122,9 +122,9 @@ export async function executeComposerPost(
   const { editor, shadow } = handle
 
   editor.focus()
-  placeCaretAtEndIn(editor, shadow)
+  placeCaretAtEnd(editor, shadow)
   for (const char of [...text]) {
-    document.execCommand('insertText', false, char)
+    root.execCommand('insertText', false, char)
     await sleep(delay.nextMs(40, 160))
   }
 
@@ -134,7 +134,7 @@ export async function executeComposerPost(
   // read a stale `disabled=true` forever (a false post_button_disabled failure).
   const ready = await waitForCond(() => findComposer(root)?.post.disabled === false, 4000)
   if (!ready) {
-    await dismissComposer(root, shadow)
+    await dismissComposer(shadow)
     return { ok: false, reason: 'post_button_disabled' }
   }
   findComposer(root)?.post.click()
@@ -143,41 +143,29 @@ export async function executeComposerPost(
   // window yields a false-negative (post landed, we report failure → draft kept → re-post).
   const closed = await waitForCond(() => findComposer(root) === null, 12000)
   if (!closed) {
-    await dismissComposer(root, shadow)
+    await dismissComposer(shadow)
     return { ok: false, reason: 'modal_did_not_close' }
   }
   return { ok: true }
 }
 
 /** Abandon the composer cleanly: Dismiss → confirm Discard (NOT "Save as draft"). */
-async function dismissComposer(root: Document, shadow: ShadowRoot): Promise<void> {
+async function dismissComposer(shadow: ShadowRoot): Promise<void> {
   shadow.querySelector<HTMLElement>(DISMISS)?.click()
-  const discard = await waitForValue(() => {
-    const host = root.querySelector(SHADOW_HOST) as HTMLElement | null
-    const sr = host?.shadowRoot
-    return (
-      [...(sr?.querySelectorAll<HTMLElement>('button') ?? [])].find(
+  const discard = await waitForValue(
+    () =>
+      [...shadow.querySelectorAll<HTMLElement>('button')].find(
         (b) => (b.textContent ?? '').trim().toLowerCase() === 'discard'
-      ) ?? null
-    )
-  }, 2000)
+      ) ?? null,
+    2000
+  )
   discard?.click()
 }
 
-function placeCaretAtEnd(el: HTMLElement): void {
-  const selection = window.getSelection()
-  if (!selection) return
-  const range = document.createRange()
-  range.selectNodeContents(el)
-  range.collapse(false)
-  selection.removeAllRanges()
-  selection.addRange(range)
-}
-
-/** Caret at end, selection scoped to the shadow root the editor lives in. */
-function placeCaretAtEndIn(el: HTMLElement, shadow: ShadowRoot): void {
+/** Caret at the end of `el`; selection scoped to `shadow` when the editor lives in one. */
+function placeCaretAtEnd(el: HTMLElement, shadow?: ShadowRoot): void {
   const selection =
-    (shadow as unknown as { getSelection?: () => Selection | null }).getSelection?.() ??
+    (shadow as unknown as { getSelection?: () => Selection | null } | undefined)?.getSelection?.() ??
     window.getSelection()
   if (!selection) return
   const range = document.createRange()
@@ -189,19 +177,6 @@ function placeCaretAtEndIn(el: HTMLElement, shadow: ShadowRoot): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function waitFor<T extends Element>(
-  find: () => Element | null,
-  timeoutMs: number
-): Promise<T | null> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    const found = find()
-    if (found) return found as T
-    await sleep(100)
-  }
-  return null
 }
 
 /** Poll a predicate until true or timeout. Returns whether it became true. */

@@ -8,11 +8,7 @@ const {
   loadDrafts, removeDraft, updateDraft, publishDraft, loadPostBudget
 } = useContent()
 
-onMounted(async () => {
-  await loadIdeas()
-  await loadDrafts()
-  await loadPostBudget()
-})
+onMounted(() => Promise.all([loadIdeas(), loadDrafts(), loadPostBudget()]))
 
 const ERR: Record<string, string> = {
   no_key: 'Задай LLM-ключ в настройках (⚙).',
