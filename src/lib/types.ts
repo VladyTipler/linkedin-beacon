@@ -229,6 +229,8 @@ export type BeaconMessage =
   | { type: 'REQUEST_FEED_POSTS'; limit: number }
   /** SW → content: perform a gated action in the DOM; content replies ActionResult. */
   | { type: 'EXECUTE_ACTION'; action: ActionRequest }
+  /** SW → content: toggle the "agent is working" pulsing border overlay on the page. */
+  | { type: 'SET_ACTIVITY'; active: boolean }
   /** sidepanel → SW: run one engagement pass (harvest → score → gate likes). */
   | { type: 'RUN_ENGAGEMENT' }
   /** SW → sidepanel: outcome of an engagement run (broadcast). */

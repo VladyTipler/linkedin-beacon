@@ -239,7 +239,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'RUN_ENGAGEMENT':
-      void runEngagement().then(sendResponse)
+      void withPageActivity(runEngagement).then(sendResponse)
       return true // async sendResponse — reliable result delivery to the panel
 
     case 'LIST_MODELS':
@@ -251,7 +251,9 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return true
 
     case 'GENERATE_IDEAS':
-      void content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts }).then(sendResponse)
+      void withPageActivity(() =>
+        content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts })
+      ).then(sendResponse)
       return true
 
     case 'LIST_QUARANTINE':
@@ -329,6 +331,20 @@ async function runEngagement(): Promise<import('@lib/types').EngagementRunSummar
   const summary = await runner.run(settings)
   broadcast({ type: 'ENGAGEMENT_RESULT', summary }) // also notify passive listeners
   return summary
+}
+
+/**
+ * Run a page-touching operation while the LinkedIn tab shows the "agent is
+ * working" border (lit at the start, cleared in a finally so an error never
+ * leaves it stuck on). The autopilot loop manages its own border locally.
+ */
+async function withPageActivity<T>(op: () => Promise<T>): Promise<T> {
+  void forwardToLinkedInTab({ type: 'SET_ACTIVITY', active: true })
+  try {
+    return await op()
+  } finally {
+    void forwardToLinkedInTab({ type: 'SET_ACTIVITY', active: false })
+  }
 }
 
 async function harvestPosts(limit: number): Promise<FeedPost[]> {

@@ -14,6 +14,7 @@ import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike } from './domActions'
+import { showActivity, hideActivity } from './activityOverlay'
 import { assertNever, type BeaconMessage, type FeedItem } from '@lib/types'
 
 const parser = createSsiParser(new SystemClock())
@@ -128,6 +129,7 @@ async function runAutopilotLoop(): Promise<void> {
   actedUrns.clear()
   actionsSinceBreak = 0
   let emptyHarvests = 0
+  showActivity()
   try {
     while (autopilotRunning) {
       const posts = await harvestByScrolling(25)
@@ -185,6 +187,7 @@ async function runAutopilotLoop(): Promise<void> {
     }
   } finally {
     autopilotRunning = false
+    hideActivity()
   }
 }
 
@@ -224,6 +227,11 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'PING':
       sendResponse({ type: 'PONG' })
+      return false
+
+    case 'SET_ACTIVITY':
+      if (message.active) showActivity()
+      else hideActivity()
       return false
 
     // Outbound / SW-only / sidepanel-only — content never handles these.
