@@ -18,7 +18,7 @@ import { DEMO_LEADS } from './lib/demo'
 
 const { active, go } = useNavigation()
 const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
-const { modules, toggle, setLevel } = useModules()
+const { modules, toggle, setLimit } = useModules()
 const { summary, quarantined, runCampaign, cancel } = useEngagement()
 const { status: autopilotStatus, reports, start: startAutopilot, stop: stopAutopilot } = useAutopilot()
 
@@ -51,7 +51,7 @@ function pauseAll() {
         v-else-if="active === 'v-auto'"
         :modules="modules"
         @toggle="toggle"
-        @set-level="setLevel"
+        @set-limit="setLimit"
       />
       <InboxScreen v-else-if="active === 'v-inbox'" :leads="DEMO_LEADS" />
       <ReportsScreen v-else-if="active === 'v-reports'" :reports="reports" />

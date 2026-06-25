@@ -49,6 +49,8 @@ export interface ModuleState {
   automationLevel: AutomationLevel
   /** Whether the module is shipped or "coming soon" in the current build. */
   available: boolean
+  /** Per-module budget: likes/day (engagement), connects/week, posts/week. */
+  dailyLimit: number
 }
 
 // ── Action model (design-spec §9) — what the gate routes and the queue persists. ──

@@ -16,7 +16,7 @@ function memStore(seed: Record<string, unknown> = {}): KeyValueStore {
 }
 
 const modules: ModuleState[] = [
-  { id: 'engagement', enabled: true, automationLevel: 'full_auto', available: true }
+  { id: 'engagement', enabled: true, automationLevel: 'full_auto', available: true, dailyLimit: 35 }
 ]
 
 describe('loadSettings', () => {

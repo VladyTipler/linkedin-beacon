@@ -1,18 +1,15 @@
 <script setup lang="ts">
-import type { AutomationLevel, ModuleState } from '@lib/types'
+import type { ModuleState } from '@lib/types'
 
 defineProps<{
   module: ModuleState
   title: string
   desc: string
+  /** When set, render a daily-limit input (omit for modules without a budget, e.g. auto_apply). */
+  limitLabel?: string
+  recommended?: string
 }>()
-defineEmits<{ toggle: []; setLevel: [level: AutomationLevel] }>()
-
-const LEVELS: { id: AutomationLevel; label: string }[] = [
-  { id: 'manual', label: 'Ручной' },
-  { id: 'auto_guardrails', label: 'Авто+карантин' },
-  { id: 'full_auto', label: 'Полный авто' }
-]
+defineEmits<{ toggle: []; setLimit: [n: number] }>()
 </script>
 
 <template>
@@ -35,16 +32,16 @@ const LEVELS: { id: AutomationLevel; label: string }[] = [
 
     <slot />
 
-    <div v-if="module.available && module.enabled" class="lvl">
-      <button
-        v-for="l in LEVELS"
-        :key="l.id"
-        :class="{ on: module.automationLevel === l.id }"
-        :data-testid="`level-${module.id}-${l.id}`"
-        @click="$emit('setLevel', l.id)"
-      >
-        {{ l.label }}
-      </button>
-    </div>
+    <label v-if="limitLabel" class="fld" style="margin-top:10px">
+      <span class="k">{{ limitLabel }} <span style="color:var(--mut)">{{ recommended }}</span></span>
+      <input
+        type="number"
+        min="0"
+        :value="module.dailyLimit"
+        :disabled="!module.available"
+        :data-testid="`limit-${module.id}`"
+        @change="$emit('setLimit', Number(($event.target as HTMLInputElement).value))"
+      />
+    </label>
   </div>
 </template>

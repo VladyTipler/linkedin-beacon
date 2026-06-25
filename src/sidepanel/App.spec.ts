@@ -52,12 +52,14 @@ describe('App (side panel)', () => {
     expect(w.find('[data-testid="toggle-engagement"]').classes()).not.toContain('on')
   })
 
-  it('changes automation level for an enabled module', async () => {
+  it('edits the engagement daily limit', async () => {
     const w = await mountApp()
     await w.find('[data-testid="nav-v-auto"]').trigger('click')
-    const full = w.find('[data-testid="level-engagement-full_auto"]')
-    expect(full.classes()).not.toContain('on')
-    await full.trigger('click')
-    expect(w.find('[data-testid="level-engagement-full_auto"]').classes()).toContain('on')
+    const input = w.find('[data-testid="limit-engagement"]')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('35')
+    await input.setValue('50')
+    await input.trigger('change')
+    expect((w.find('[data-testid="limit-engagement"]').element as HTMLInputElement).value).toBe('50')
   })
 })

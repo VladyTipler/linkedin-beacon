@@ -1,30 +1,29 @@
 import { ref, onMounted } from 'vue'
-import type { AutomationLevel, ModuleId, ModuleState } from '@lib/types'
+import type { ModuleId, ModuleState } from '@lib/types'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { asArray } from '@lib/engagement/settings'
 import { panelBus } from '../lib/panelBus'
 
 const STORE_KEY = 'modules:state'
 
-/** Default module roster — mirrors the demo (auto_apply is "coming soon"). */
+/** Default module roster. Only engagement acts today; the rest are "coming soon". */
 export function defaultModules(): ModuleState[] {
   return [
-    { id: 'engagement', enabled: true, automationLevel: 'manual', available: true },
-    { id: 'smart_connect', enabled: true, automationLevel: 'manual', available: true },
-    { id: 'content', enabled: true, automationLevel: 'manual', available: true },
-    { id: 'auto_apply', enabled: false, automationLevel: 'manual', available: false }
+    { id: 'engagement', enabled: true, automationLevel: 'manual', available: true, dailyLimit: 35 },
+    { id: 'smart_connect', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 80 },
+    { id: 'content', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 3 },
+    { id: 'auto_apply', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 0 }
   ]
 }
 
-/** Owns module enable/automation state with persistence. SRP: module config. */
+/** Owns module enable + per-module daily limit with persistence. SRP: module config. */
 export function useModules() {
   const modules = ref<ModuleState[]>(defaultModules())
   const store = new ChromeStorageStore()
 
   const persist = () => {
-    // Persist a PLAIN array, not the Vue reactive proxy — chrome.storage
-    // serialises a reactive array as an array-like object {0:..,1:..}, which then
-    // reads back as a non-array and silently breaks the SSOT level bridge.
+    // Persist a PLAIN array, not the Vue reactive proxy — chrome.storage serialises
+    // a reactive array as an array-like object {0:..,1:..}, which reads back non-array.
     if (panelBus.available()) void store.set(STORE_KEY, modules.value.map((m) => ({ ...m })))
   }
 
@@ -43,17 +42,20 @@ export function useModules() {
     persist()
   }
 
-  const setLevel = (id: ModuleId, level: AutomationLevel) => {
+  const setLimit = (id: ModuleId, n: number) => {
     const m = find(id)
-    if (!m || !m.available) return
-    m.automationLevel = level
+    if (!m) return
+    m.dailyLimit = Math.max(0, Math.round(n))
     persist()
   }
 
-  return { modules, toggle, setLevel }
+  return { modules, toggle, setLimit }
 }
 
-/** Keep new default modules if storage predates them (forward-compatible). */
+/** Keep new default modules if storage predates them; backfill a missing dailyLimit. */
 function mergeWithDefaults(saved: ModuleState[]): ModuleState[] {
-  return defaultModules().map((def) => saved.find((s) => s.id === def.id) ?? def)
+  return defaultModules().map((def) => {
+    const s = saved.find((x) => x.id === def.id)
+    return s ? { ...def, ...s, dailyLimit: typeof s.dailyLimit === 'number' ? s.dailyLimit : def.dailyLimit } : def
+  })
 }

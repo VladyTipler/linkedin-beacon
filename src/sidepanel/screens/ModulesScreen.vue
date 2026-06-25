@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import type { AutomationLevel, ModuleId, ModuleState } from '@lib/types'
+import type { ModuleId, ModuleState } from '@lib/types'
 import ModuleCard from '../components/ModuleCard.vue'
 import EngagementSettingsForm from '../components/EngagementSettingsForm.vue'
 
 defineProps<{ modules: ModuleState[] }>()
-defineEmits<{ toggle: [id: ModuleId]; setLevel: [id: ModuleId, level: AutomationLevel] }>()
+defineEmits<{ toggle: [id: ModuleId]; setLimit: [id: ModuleId, n: number] }>()
 
-const byId = (modules: ModuleState[], id: ModuleId) =>
-  modules.find((m) => m.id === id)!
+const byId = (modules: ModuleState[], id: ModuleId) => modules.find((m) => m.id === id)!
 </script>
 
 <template>
@@ -18,8 +17,10 @@ const byId = (modules: ModuleState[], id: ModuleId) =>
       :module="byId(modules, 'engagement')"
       title="Вовлечённость в ленте"
       desc="Умные лайки + AI-комментарии к постам твоей ЦА и рекрутёров"
+      limit-label="Лайков/день"
+      recommended="рек. 30–40"
       @toggle="$emit('toggle', 'engagement')"
-      @set-level="(l) => $emit('setLevel', 'engagement', l)"
+      @set-limit="(n) => $emit('setLimit', 'engagement', n)"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none"><path d="M7 10v10M2 12.5C2 11 3 10 4.5 10H7l1.5-6c.3-1.2 1.5-1.8 2.6-1.3.8.4 1.2 1.3 1 2.2L11 9h6.5c1.6 0 2.8 1.5 2.4 3l-1.6 7c-.3 1.2-1.3 2-2.5 2H7" stroke="#c4ff4d" stroke-width="1.8" stroke-linejoin="round" /></svg>
@@ -37,8 +38,10 @@ const byId = (modules: ModuleState[], id: ModuleId) =>
       :module="byId(modules, 'smart_connect')"
       title="Smart Connect — рекрутёры"
       desc="Таргет по роли/гео/стеку + персональный Note к каждому"
+      limit-label="Коннектов/неделю"
+      recommended="рек. 60–80"
       @toggle="$emit('toggle', 'smart_connect')"
-      @set-level="(l) => $emit('setLevel', 'smart_connect', l)"
+      @set-limit="(n) => $emit('setLimit', 'smart_connect', n)"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="#c4ff4d" stroke-width="1.8" /><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round" /><path d="M18 7v6M21 10h-6" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round" /></svg>
@@ -59,8 +62,10 @@ const byId = (modules: ModuleState[], id: ModuleId) =>
       :module="byId(modules, 'content')"
       title="Контент-автопилот"
       desc="2–3 поста в неделю из идей ленты · AI-черновик + ручной аппрув"
+      limit-label="Постов/неделю"
+      recommended="рек. 2–3"
       @toggle="$emit('toggle', 'content')"
-      @set-level="(l) => $emit('setLevel', 'content', l)"
+      @set-limit="(n) => $emit('setLimit', 'content', n)"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none"><path d="M5 3h10l4 4v14H5z" stroke="#c4ff4d" stroke-width="1.8" stroke-linejoin="round" /><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round" /></svg>
@@ -77,7 +82,6 @@ const byId = (modules: ModuleState[], id: ModuleId) =>
       title="Авто-отклики"
       desc="Easy Apply + cover letter (свой движок или через Job Radar)"
       @toggle="$emit('toggle', 'auto_apply')"
-      @set-level="(l) => $emit('setLevel', 'auto_apply', l)"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4z" stroke="#ff8a5c" stroke-width="1.8" stroke-linejoin="round" /><path d="M4 7v6l8 4 8-4V7M9 14v4" stroke="#ff8a5c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
