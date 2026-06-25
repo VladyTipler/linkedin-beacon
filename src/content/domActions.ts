@@ -119,7 +119,7 @@ export async function executeComposerPost(
 
   const handle = await waitForValue(() => findComposer(root), 6000)
   if (!handle) return { ok: false, reason: 'composer_not_found' }
-  const { editor, post, shadow } = handle
+  const { editor, shadow } = handle
 
   editor.focus()
   placeCaretAtEndIn(editor, shadow)
@@ -129,14 +129,19 @@ export async function executeComposerPost(
   }
 
   // Quill registers via MutationObserver → the Post button enables on a later tick.
-  const ready = await waitForCond(() => !post.disabled, 4000)
+  // Re-query the button each poll/click via findComposer: artdeco/Ember may REPLACE
+  // the button node on the disabled→enabled re-render, so a captured reference would
+  // read a stale `disabled=true` forever (a false post_button_disabled failure).
+  const ready = await waitForCond(() => findComposer(root)?.post.disabled === false, 4000)
   if (!ready) {
     await dismissComposer(root, shadow)
     return { ok: false, reason: 'post_button_disabled' }
   }
-  post.click()
+  findComposer(root)?.post.click()
 
-  const closed = await waitForCond(() => findComposer(root) === null, 8000)
+  // Generous close-detection: a slow network can delay the modal teardown; too short a
+  // window yields a false-negative (post landed, we report failure → draft kept → re-post).
+  const closed = await waitForCond(() => findComposer(root) === null, 12000)
   if (!closed) {
     await dismissComposer(root, shadow)
     return { ok: false, reason: 'modal_did_not_close' }
