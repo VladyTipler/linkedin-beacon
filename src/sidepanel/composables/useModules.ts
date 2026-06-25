@@ -52,10 +52,17 @@ export function useModules() {
   return { modules, toggle, setLimit }
 }
 
-/** Keep new default modules if storage predates them; backfill a missing dailyLimit. */
+/** Keep new default modules if storage predates them; backfill a missing dailyLimit. Pin availability from current build. */
 function mergeWithDefaults(saved: ModuleState[]): ModuleState[] {
   return defaultModules().map((def) => {
     const s = saved.find((x) => x.id === def.id)
-    return s ? { ...def, ...s, dailyLimit: typeof s.dailyLimit === 'number' ? s.dailyLimit : def.dailyLimit } : def
+    return s
+      ? {
+          ...def,
+          ...s,
+          available: def.available,
+          dailyLimit: typeof s.dailyLimit === 'number' ? s.dailyLimit : def.dailyLimit
+        }
+      : def
   })
 }
