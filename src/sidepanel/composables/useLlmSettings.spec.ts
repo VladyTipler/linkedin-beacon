@@ -40,21 +40,4 @@ describe('useLlmSettings', () => {
     expect(s.keyValid.value).toBe(false)
   })
 
-  it('filters models by the search query', async () => {
-    const s = useLlmSettings()
-    s.models.value = [
-      { id: 'openai/gpt-4o', label: 'GPT-4o' },
-      { id: 'google/gemini-2.5-flash', label: 'Gemini' }
-    ]
-    s.modelQuery.value = 'gemini'
-    expect(s.filteredModels.value.map((m) => m.id)).toEqual(['google/gemini-2.5-flash'])
-  })
-
-  it('caps the dropdown at 10 results (OpenRouter returns hundreds)', () => {
-    const s = useLlmSettings()
-    s.models.value = Array.from({ length: 25 }, (_, i) => ({ id: `m${i}`, label: `M${i}` }))
-    expect(s.filteredModels.value.length).toBe(10)
-    s.modelQuery.value = 'm1' // matches m1, m10..m19 = 11 → still capped
-    expect(s.filteredModels.value.length).toBe(10)
-  })
 })

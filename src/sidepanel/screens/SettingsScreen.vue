@@ -3,10 +3,17 @@ import { onMounted, ref } from 'vue'
 import { useLlmSettings } from '../composables/useLlmSettings'
 import { useExpertiseSettings } from '../composables/useExpertiseSettings'
 import { useContentSettings } from '../composables/useContentSettings'
+import ModelCombobox from '../components/ModelCombobox.vue'
 
-const { config, models, modelQuery, filteredModels, keyValid, loading, load, save, fetchModels } =
-  useLlmSettings()
+const { config, models, keyValid, loading, load, save, fetchModels } = useLlmSettings()
 onMounted(load)
+
+// Picking a model persists immediately so there's no "did it save?" doubt.
+const modelSaved = ref(false)
+async function onModelPicked() {
+  await save()
+  modelSaved.value = true
+}
 
 const exp = useExpertiseSettings()
 onMounted(exp.load)
@@ -47,12 +54,11 @@ async function onSave() {
     <span v-else-if="keyValid === false" class="v" data-testid="llm-invalid">Не удалось загрузить модели — проверь ключ или сеть</span>
 
     <label class="fld" v-if="models.length">
-      <span class="k">Модель ({{ config.model ?? 'не выбрана' }})</span>
-      <input v-model="modelQuery" placeholder="поиск модели…" data-testid="model-search" />
-      <select v-model="config.model" data-testid="model-select" size="6">
-        <option v-for="m in filteredModels" :key="m.id" :value="m.id">{{ m.label ?? m.id }}</option>
-      </select>
-      <span v-if="!filteredModels.length" class="v" data-testid="model-empty">Ничего не найдено — уточни запрос</span>
+      <span class="k">Модель</span>
+      <ModelCombobox :models="models" v-model="config.model" @update:model-value="onModelPicked" />
+      <span v-if="modelSaved && config.model" class="v ok" data-testid="model-saved">
+        ✓ Сохранена: {{ config.model }}
+      </span>
     </label>
 
     <div class="sect-lbl">Экспертиза</div>

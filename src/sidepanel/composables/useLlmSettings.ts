@@ -1,29 +1,16 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { loadLlmConfig, saveLlmConfig, type LlmConfig } from '@lib/llm/config'
 import type { LlmModel } from '@lib/llm/models'
 import { panelBus } from '../lib/panelBus'
 
-/** Settings-screen state for the BYOK LLM config + the searchable model catalog. */
+/** Settings-screen state for the BYOK LLM config + the loaded model catalog. */
 export function useLlmSettings() {
   const store = new ChromeStorageStore()
   const config = ref<LlmConfig>({ provider: 'openrouter', apiKey: '' })
   const models = ref<LlmModel[]>([])
-  const modelQuery = ref('')
   const keyValid = ref<boolean | null>(null)
   const loading = ref(false)
-
-  /** Cap the dropdown — OpenRouter returns hundreds; render a usable shortlist. */
-  const MODEL_LIMIT = 10
-  const filteredModels = computed(() => {
-    const q = modelQuery.value.trim().toLowerCase()
-    const matched = q
-      ? models.value.filter(
-          (m) => m.id.toLowerCase().includes(q) || (m.label ?? '').toLowerCase().includes(q)
-        )
-      : models.value
-    return matched.slice(0, MODEL_LIMIT)
-  })
 
   async function load() {
     config.value = await loadLlmConfig(store)
@@ -49,5 +36,5 @@ export function useLlmSettings() {
     }
   }
 
-  return { config, models, modelQuery, filteredModels, keyValid, loading, load, save, fetchModels }
+  return { config, models, keyValid, loading, load, save, fetchModels }
 }
