@@ -36,7 +36,7 @@ defineEmits<{ toggle: []; setLimit: [n: number] }>()
       <span class="k">{{ limitLabel }} <span style="color:var(--mut)">{{ recommended }}</span></span>
       <input
         type="number"
-        min="0"
+        min="1"
         :value="module.dailyLimit"
         :disabled="!module.available"
         :data-testid="`limit-${module.id}`"

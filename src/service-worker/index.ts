@@ -1,7 +1,7 @@
-// MV3 service worker: message router + SSI persistence/refresh + engagement
-// orchestration. SRP: wiring only — decisions live in ActionGate, routing in
-// EngagementOrchestrator, scoring in RelevanceScorer, DOM mutation in the content
-// script. The SW never touches the DOM.
+// MV3 service worker: message router + SSI persistence/refresh + autopilot
+// gatekeeping (budget/burst/risk) + LLM/content handlers. SRP: wiring only —
+// decisions live in the autopilot gatekeeper and the content/LLM handlers; the
+// SW never touches the DOM.
 
 import { SsiRepository } from '@lib/storage/SsiRepository'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'

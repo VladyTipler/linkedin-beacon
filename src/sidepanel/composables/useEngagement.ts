@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import type { ActionQueueItem } from '@lib/types'
 import { panelBus } from '../lib/panelBus'
 
@@ -20,12 +20,7 @@ export function useEngagement() {
     await loadQuarantine()
   }
 
-  let off = () => {}
-  onMounted(() => {
-    void loadQuarantine()
-    off = panelBus.onMessage(() => {})
-  })
-  onUnmounted(() => off())
+  onMounted(() => void loadQuarantine())
 
   return { quarantined, cancel, loadQuarantine }
 }
