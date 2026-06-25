@@ -1,12 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ModuleId, ModuleState } from '@lib/types'
 import ModuleCard from '../components/ModuleCard.vue'
 import EngagementSettingsForm from '../components/EngagementSettingsForm.vue'
+import { useEngagementStats } from '../composables/useEngagementStats'
 
 defineProps<{ modules: ModuleState[] }>()
 defineEmits<{ toggle: [id: ModuleId]; setLimit: [id: ModuleId, n: number] }>()
 
 const byId = (modules: ModuleState[], id: ModuleId) => modules.find((m) => m.id === id)!
+
+// Real, live engagement counters (not the demo hardcodes).
+const { likes, comments, ceiling } = useEngagementStats()
+const barWidth = computed(() =>
+  ceiling.value > 0 ? `${Math.min(100, Math.round((likes.value / ceiling.value) * 100))}%` : '0%'
+)
 </script>
 
 <template>
@@ -26,11 +34,11 @@ const byId = (modules: ModuleState[], id: ModuleId) => modules.find((m) => m.id 
         <svg viewBox="0 0 24 24" fill="none"><path d="M7 10v10M2 12.5C2 11 3 10 4.5 10H7l1.5-6c.3-1.2 1.5-1.8 2.6-1.3.8.4 1.2 1.3 1 2.2L11 9h6.5c1.6 0 2.8 1.5 2.4 3l-1.6 7c-.3 1.2-1.3 2-2.5 2H7" stroke="#c4ff4d" stroke-width="1.8" stroke-linejoin="round" /></svg>
       </template>
       <div class="mod-stats">
-        <div class="stat"><div class="n lime">23</div><div class="l">лайков сегодня</div></div>
-        <div class="stat"><div class="n lime">6</div><div class="l">комментов</div></div>
-        <div class="stat"><div class="n">8</div><div class="l">в очереди</div></div>
+        <div class="stat"><div class="n lime" data-testid="stat-likes">{{ likes }}</div><div class="l">лайков сегодня</div></div>
+        <div class="stat"><div class="n lime" data-testid="stat-comments">{{ comments }}</div><div class="l">комментов</div></div>
+        <div class="stat"><div class="n">{{ Math.max(0, ceiling - likes) }}</div><div class="l">осталось</div></div>
       </div>
-      <div class="limitbar"><div class="lh"><span>Дневной лимит вовлечённости</span><span class="mono">29/60</span></div><div class="track"><div class="fill" style="width:48%;background:linear-gradient(90deg,#c4ff4d,#8fbb2e)"></div></div></div>
+      <div class="limitbar"><div class="lh"><span>Дневной лимит вовлечённости</span><span class="mono">{{ likes }}/{{ ceiling || '—' }}</span></div><div class="track"><div class="fill" :style="{ width: barWidth, background: 'linear-gradient(90deg,#c4ff4d,#8fbb2e)' }"></div></div></div>
       <EngagementSettingsForm />
     </ModuleCard>
 
