@@ -28,10 +28,17 @@ reconciliation in the spec §2).
   prompts; boundary test asserts it reaches the LLM wire. Settings dropdown + posts/week input.
 - Also: TopBar settings icon → proper gear (`94da246`).
 
-**⏳ NEXT (human-gate, Vlad in Chrome):** the LIVE test — real publish of a throwaway draft
-(test+delete), then verify cap decrements + button disables at 0. The deferred isolated-world
-smoke folds into this (DOM-only risk, re-query fix de-risks the held-ref failure). Then a
-`/ce-simplify-code` pass before push. Commits NOT yet pushed to origin.
+**✅ LIVE-VERIFIED (2026-06-26, CDP on Vlad's account):** the adapter published a REAL post
+end-to-end from the content-script isolated world ("Post successful", verified, then deleted —
+account clean, no test posts). The full SW→content→adapter→post chain returns `{ok:true}` in
+~6 s when the feed tab isn't throttled. Apparent "hangs" during testing were the LinkedIn tab
+being OS-occluded/throttled in headless WSL Chrome (Vlad's own hypothesis) — a test artifact,
+not a product bug; in production the docked panel sits next to the genuinely-foreground tab.
+See gotchas "Live-testing the publish via CDP". Re-query Post-button fix kept (defensive;
+artdeco didn't replace the node in this build — `sameNode:true`).
+
+**⏳ NEXT:** `/ce-simplify-code` pass before push; commits NOT yet pushed to origin (still local
+`main`). Optional UI polish: surface the «Опубликовать» disabled-at-0 cap in a manual panel test.
 
 ## Prior session (2026-06-25) — beyond content Layer 1
 

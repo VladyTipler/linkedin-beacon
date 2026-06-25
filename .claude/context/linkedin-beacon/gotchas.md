@@ -27,6 +27,34 @@ Non-obvious traps discovered live. Each cost real debugging.
   only world-specific thing (the page's Quill JS instance) is NOT used by the adapter.
 - Capture method: `agent-browser --cdp 9222`, read-only (typed throwaway → cleared →
   Discard). Never published during recon.
+- **Live-verified 2026-06-26:** the adapter publishes a real post end-to-end from the
+  content-script isolated world ("Post successful" toast, post found in feed, then
+  deleted). The held-vs-requery probe showed artdeco does NOT replace the Post node in
+  this build (`sameNode:true`), so the re-query fix is defensive, not load-bearing — keep it.
+
+## Live-testing the publish via CDP — throttling will fake a "hang" (2026-06-26)
+
+- **A backgrounded / OS-occluded LinkedIn tab throttles `setTimeout`**, so the composer
+  adapter (which paces typing + polls via `sleep`) crawls to minutes and LOOKS hung.
+  Driving Chrome headless from WSL, the window is OS-occluded → the feed tab throttles
+  even though `document.visibilityState === 'visible'`. Symptom seen: `EXECUTE_ACTION`
+  /`PUBLISH_POST` "never returns" in a 40 s poll, draft not consumed, no post.
+- **Fix for tests:** attach a CDP session to the LinkedIn page (`Target.attachToTarget`)
+  and/or re-`Target.activateTarget` it each second — a debugger-attached page is not
+  throttled. With that, the full SW→content→adapter→real-post chain returns `{ok:true}`
+  in ~6 s. **In production this is a non-issue:** the side panel is docked next to the
+  user's genuinely-foreground LinkedIn tab, so timers run at full speed.
+- **crxjs SW first-message race:** the MV3 service-worker entry is an async loader, so a
+  message sent to a freshly-woken SW before its `onMessage` registers is lost (returns
+  `undefined`). Warm it with a `PING` first when scripting. (Same family as the orphaned-
+  content-script reload gotcha.)
+- **Test-harness artifact, not a product bug:** `--load-extension` + opening the feed URL
+  in the SAME launch can race so the content script never injects (`"Receiving end does
+  not exist"`). A page reload (manifest auto-inject) fixes it. In real use the user opens
+  LinkedIn AFTER the extension is installed, so injection is normal.
+- **Deleting a test post via CDP:** the post's ⋯ menu → "Delete post" → a light-DOM
+  confirm modal with `Cancel`/`Delete` (NOT in the interop shadow root). On the home feed
+  your own fresh post may drop out after reload; find it on `…/in/me/recent-activity/all/`.
 
 ## LinkedIn DOM (new hashed-class build)
 
