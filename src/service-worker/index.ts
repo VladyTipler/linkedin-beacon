@@ -26,7 +26,7 @@ import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
-import { GENERATING_IDEAS } from '@lib/autopilot/statusLabels'
+import { GENERATING_IDEAS, PUBLISHING } from '@lib/autopilot/statusLabels'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -272,6 +272,25 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'COMMENT_ON_POST':
       void content.commentOnPost({ store, http: llmHttp, clock }, message.post).then(sendResponse)
+      return true
+
+    case 'PUBLISH_POST':
+      void withPageActivity(
+        () =>
+          content.publishPost(
+            {
+              store,
+              clock,
+              publish: (text) =>
+                sendToLinkedInTab<{ ok: boolean; reason?: string }>({
+                  type: 'EXECUTE_ACTION',
+                  action: { type: 'post', target: { url: 'https://www.linkedin.com/feed/' }, payload: { post: text } }
+                })
+            },
+            message.draftId
+          ),
+        PUBLISHING
+      ).then(sendResponse)
       return true
 
     case 'LIST_QUARANTINE':

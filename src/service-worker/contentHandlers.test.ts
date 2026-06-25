@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas } from './contentHandlers'
+import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas, publishPost } from './contentHandlers'
 import type { KeyValueStore, Clock } from '@lib/ports'
 import type { HttpClient, HttpGet } from '@lib/llm/contracts'
-import type { FeedPost } from '@lib/types'
+import type { Draft, FeedPost } from '@lib/types'
 
 function memStore(initial: Record<string, unknown> = {}): KeyValueStore {
   const m = new Map<string, unknown>(Object.entries(initial))
@@ -181,5 +181,56 @@ describe('commentOnPost (LLM boundary)', () => {
       ok: false,
       reason: 'budget'
     })
+  })
+})
+
+describe('publishPost', () => {
+  const draft: Draft = {
+    id: 'd1', ideaTopic: 'T', ideaAngle: 'A', text: 'Hello world',
+    createdAt: '2026-06-26T00:00:00.000Z'
+  }
+  const base = () => memStore({ 'content:drafts': [draft], 'content:settings': { postsPerWeek: 3 } })
+
+  it('not_found when the draft id is unknown', async () => {
+    const res = await publishPost(
+      { store: base(), clock: fixedClock, publish: async () => ({ ok: true }) },
+      'missing'
+    )
+    expect(res).toEqual({ ok: false, reason: 'not_found' })
+  })
+
+  it('budget when the week cap is exhausted', async () => {
+    const store = memStore({
+      'content:drafts': [draft], 'content:settings': { postsPerWeek: 1 },
+      'posts:budget': { week: '2026-W26', used: 1 }
+    })
+    const res = await publishPost(
+      { store, clock: fixedClock, publish: async () => ({ ok: true }) },
+      'd1'
+    )
+    expect(res).toEqual({ ok: false, reason: 'budget' })
+  })
+
+  it('publishes: removes the draft and records the week budget', async () => {
+    const store = base()
+    let publishedText = ''
+    const res = await publishPost(
+      { store, clock: fixedClock, publish: async (t) => { publishedText = t; return { ok: true } } },
+      'd1'
+    )
+    expect(res).toEqual({ ok: true })
+    expect(publishedText).toBe('Hello world')
+    expect(await store.get('content:drafts')).toEqual([])
+    expect(await store.get('posts:budget')).toEqual({ week: '2026-W26', used: 1 })
+  })
+
+  it('keeps the draft and surfaces the reason when the DOM publish fails', async () => {
+    const store = base()
+    const res = await publishPost(
+      { store, clock: fixedClock, publish: async () => ({ ok: false, reason: 'post_button_disabled' }) },
+      'd1'
+    )
+    expect(res).toEqual({ ok: false, reason: 'post_button_disabled' })
+    expect(await store.get('content:drafts')).toEqual([draft])
   })
 })

@@ -9,6 +9,8 @@ export const COMMENTING = 'Пишу комментарий…'
 export const COLLECTING_IDEAS = 'Собираю идеи…'
 /** Shown at the moment the buffer is sent to the LLM for extraction. */
 export const GENERATING_IDEAS = 'Генерирую идеи…'
+/** Shown while the approved draft is being typed + posted into the composer. */
+export const PUBLISHING = 'Публикую…'
 
 /** "Пауза 22с" — the anti-ban gap before the next action. */
 export function pauseLabel(ms: number): string {

@@ -314,6 +314,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'GENERATE_IDEAS':
     case 'EXTRACT_RUN_IDEAS':
     case 'COMMENT_ON_POST':
+    case 'PUBLISH_POST':
     case 'PONG':
       return false
     default:

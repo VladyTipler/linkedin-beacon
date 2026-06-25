@@ -7,6 +7,14 @@ import { loadLlmConfig } from '@lib/llm/config'
 import { loadContentSettings } from '@lib/content/settings'
 import { DraftGenerator } from '@lib/content/DraftGenerator'
 import { DraftStore } from '@lib/content/DraftStore'
+import {
+  isoWeekKey,
+  rolloverPostWeek,
+  recordPostWeek,
+  remainingPosts,
+  POST_WEEK_BUDGET_KEY,
+  type PostWeek
+} from '@lib/content/PostWeekBudget'
 import { loadSettings } from '@lib/engagement/settings'
 import { CommentDraftService } from '@lib/engagement/CommentDraftService'
 import { CommentJudge } from '@lib/engagement/CommentJudge'
@@ -196,4 +204,38 @@ export async function commentOnPost(
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : 'llm_failed' }
   }
+}
+
+export interface PublishDeps {
+  store: KeyValueStore
+  clock: Clock
+  /** Sends the text to the content script's composer adapter; undefined if no tab. */
+  publish: (text: string) => Promise<{ ok: boolean; reason?: string } | undefined>
+}
+
+/**
+ * Approve-first publish of ONE draft (Vlad clicked «Опубликовать»). Gated by the
+ * weekly post cap (a safety limit on a manual action, NOT an autopilot budget). On a
+ * successful DOM publish: consume the draft + record the week. A failed publish keeps
+ * the draft and surfaces the reason. Posts are never full-auto / never in the run loop.
+ */
+export async function publishPost(
+  deps: PublishDeps,
+  draftId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const drafts = new DraftStore(deps.store)
+  const draft = (await drafts.all()).find((d) => d.id === draftId)
+  if (!draft) return { ok: false, reason: 'not_found' }
+
+  const { postsPerWeek } = await loadContentSettings(deps.store)
+  const weekKey = isoWeekKey(deps.clock.now())
+  const budget = rolloverPostWeek((await deps.store.get<PostWeek>(POST_WEEK_BUDGET_KEY)) ?? null, weekKey)
+  if (remainingPosts(budget, postsPerWeek) <= 0) return { ok: false, reason: 'budget' }
+
+  const res = await deps.publish(draft.text)
+  if (!res?.ok) return { ok: false, reason: res?.reason ?? 'publish_failed' }
+
+  await drafts.remove(draftId)
+  await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))
+  return { ok: true }
 }
