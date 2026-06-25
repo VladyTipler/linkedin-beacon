@@ -33,5 +33,22 @@ few stable, semantic hooks below. Validated read-only against a live authorised 
 | Insertion (validated live ✅) | focus editor → place caret → `document.execCommand('insertText', false, char)` per char. Confirmed read-only on the live editor: text persisted in ProseMirror state. Char-by-char with delays = anti-ban "human typing". |
 | Submit | the enabled `Comment`/`Post`/`Reply` button that appears once the editor has text (confirm exact label in field test) |
 
+## Post composer (share box) — captured live 2026-06-26, read-only
+
+> ⚠️ **The composer lives in a SHADOW DOM, and its editor is Quill (NOT ProseMirror).**
+> Two facts the comment flow does not prepare you for. Both validated live, read-only
+> (typed + cleared + discarded; nothing was ever published).
+
+| What | Selector / rule |
+|------|-----------------|
+| Open composer | click `[aria-label="Start a post"]` in the **light DOM** (top document, feed share box). Opens the sharebox modal. |
+| Shadow host | `#interop-outlet` (also `[data-testid="interop-shadowdom"]`). Its `.shadowRoot` is **open** → everything below is reached via `host.shadowRoot.querySelector(...)`. A plain `document.querySelector` finds NONE of it. |
+| Modal | `shadowRoot` → `[data-test-modal-id="sharebox"]` (`role="dialog"`, class `share-box-v2__modal`) |
+| Editor | `shadowRoot` → `[data-test-ql-editor-contenteditable="true"]` (best, LinkedIn test hook) / `.ql-editor[contenteditable="true"]` / `[aria-label="Text editor for creating content"]` |
+| Editor engine | **Quill** (`class="ql-editor ql-blank"`; `ql-blank` ⇒ empty/placeholder). |
+| Insertion (validated live ✅) | focus editor → caret at end via `shadowRoot.getSelection()` → `document.execCommand('insertText', false, char)` per char. Text appears in the DOM, but **Quill commits its model ASYNCHRONOUSLY** (MutationObserver): right after typing, `ql-blank` is still present and Post is still disabled; after a tick they clear. Human-paced char-by-char (40–160 ms) naturally gives Quill time. |
+| Submit (Post) | `shadowRoot` → `button.share-actions__primary-action` (text `Post`). **`disabled` until Quill registers text** → POLL `!btn.disabled` before clicking; never read synchronously after typing. |
+| Close (no publish) | `shadowRoot` → `button[aria-label="Dismiss"]` → a confirm appears with **`Discard`** / `Save as draft`; click `Discard` to abandon cleanly. |
+
 > Capture method: `agent-browser --cdp 9222` against real Windows Chrome (debug profile),
-> read-only (snapshot/eval only). No like/comment/connect was ever submitted on the account.
+> read-only (snapshot/eval only). No like/comment/connect/post was ever submitted on the account.
