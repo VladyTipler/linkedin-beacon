@@ -18,6 +18,7 @@ import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
 import {
   SCANNING,
   LIKING,
+  COMMENTING,
   GENERATING_IDEAS,
   COLLECTING_IDEAS,
   pauseLabel,
@@ -134,7 +135,11 @@ async function endRun(reason: import('@lib/types').StopReason): Promise<void> {
   await ask({ type: 'AUTOPILOT_ENDED', reason })
 }
 
-async function runAutopilotLoop(modules: { engagement: boolean; content: boolean }): Promise<void> {
+async function runAutopilotLoop(modules: {
+  engagement: boolean
+  content: boolean
+  comments: boolean
+}): Promise<void> {
   if (autopilotRunning) return
   autopilotRunning = true
   actedUrns.clear()
@@ -147,6 +152,7 @@ async function runAutopilotLoop(modules: { engagement: boolean; content: boolean
   // changes mid-run, so the idle label is computed once.
   const wantLike = modules.engagement
   const wantIdeas = modules.content
+  const wantComments = modules.comments
   const idleLabel = wantLike ? SCANNING : COLLECTING_IDEAS
   showActivity(document, idleLabel)
   try {
@@ -202,6 +208,16 @@ async function runAutopilotLoop(modules: { engagement: boolean; content: boolean
           const res = executeLike(document, post.urn)
           await ask({ type: 'AUTOPILOT_ACTED', ok: res.ok })
           if (res.ok) actionsSinceBreak += 1
+          // Comment implies a like (we just liked it). The SW gates relevance +
+          // budget + quality-judge; we only execute what it approves (full-auto).
+          if (res.ok && wantComments) {
+            setActivityLabel(COMMENTING)
+            const c = await ask<{ ok: boolean; text?: string }>({ type: 'COMMENT_ON_POST', post })
+            if (c?.ok && c.text) {
+              await executeComment(document, post.urn, c.text, delay)
+              await sleep(delay.nextMs(8000, 45000)) // pace after a comment too (anti-ban)
+            }
+          }
           const paceMs = delay.nextMs(8000, 45000)
           setActivityLabel(pauseLabel(paceMs))
           await sleep(paceMs)
@@ -297,6 +313,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'GENERATE_DRAFT':
     case 'GENERATE_IDEAS':
     case 'EXTRACT_RUN_IDEAS':
+    case 'COMMENT_ON_POST':
     case 'PONG':
       return false
     default:

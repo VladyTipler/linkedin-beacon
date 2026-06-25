@@ -20,6 +20,7 @@ import { ChromeWindows } from '@/adapters/ChromeWindows'
 import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
 import { engagementLimit } from '@lib/autopilot/engagementLimit'
 import { decideAutopilotStart, runLoopModules } from '@lib/autopilot/startGate'
+import { loadContentSettings } from '@lib/content/settings'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
@@ -100,7 +101,13 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
   // re-grant the budget — the cap is genuinely daily (design-spec §5).
   const prev = existing ? { day: existing.day, ceiling: existing.ceiling, used: existing.used } : null
   const base = engagementLimit(modulesState)
-  const loopModules = runLoopModules(modulesState) // computed once; reused across re-inject retries
+  // Computed once; reused across re-inject retries. Comments ride the like pass
+  // (engagement on) and are opt-in via content settings — off by default.
+  const baseModules = runLoopModules(modulesState)
+  const loopModules = {
+    ...baseModules,
+    comments: baseModules.engagement && (await loadContentSettings(store)).commentsEnabled
+  }
   const budget = resolveDailyBudget(prev, dayKey(), new DailyCeiling({ base }).forDay(autopilotRng))
   const state: AutopilotState = {
     running: true,
@@ -151,7 +158,7 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
 /** Send AUTOPILOT_RUN_LOOP to a tab; true if the content script answered. */
 async function sendRunLoop(
   tabId: number,
-  modules: { engagement: boolean; content: boolean }
+  modules: { engagement: boolean; content: boolean; comments: boolean }
 ): Promise<boolean> {
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'AUTOPILOT_RUN_LOOP', modules })
@@ -261,6 +268,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
         () => content.extractRunIdeas({ store, http: llmHttp, clock }, message.posts),
         GENERATING_IDEAS
       ).then(sendResponse)
+      return true
+
+    case 'COMMENT_ON_POST':
+      void content.commentOnPost({ store, http: llmHttp, clock }, message.post).then(sendResponse)
       return true
 
     case 'LIST_QUARANTINE':

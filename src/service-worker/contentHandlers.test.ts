@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractRunIdeas, generateDraft, generateIdeas } from './contentHandlers'
+import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas } from './contentHandlers'
 import type { KeyValueStore, Clock } from '@lib/ports'
 import type { HttpClient, HttpGet } from '@lib/llm/contracts'
 import type { FeedPost } from '@lib/types'
@@ -130,6 +130,56 @@ describe('extractRunIdeas (LLM boundary)', () => {
     expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({
       stored: 0,
       error: 'no_expertise'
+    })
+  })
+})
+
+const RELEVANT_POST: FeedPost = {
+  urn: 'urn:c',
+  authorName: 'Anna',
+  authorHeadline: 'Technical recruiter',
+  text: 'we are hiring vue engineers'
+}
+const COMMENT_CFG = {
+  'llm:config': { provider: 'openrouter', apiKey: 'sk-1' },
+  'engagement:settings': {
+    config: { level: 'manual' },
+    target: { stack: ['vue'], targetRoles: ['recruiter'], geos: [], watchlistCompanies: [] },
+    expertise: { headline: 'Vue TechLead', stack: ['Vue'] },
+    relevanceThreshold: 0.3
+  },
+  'content:settings': { commentsEnabled: true, commentsPerDay: 5, commentTone: 'expert' }
+}
+const COMMENT_TEXT = 'Sharp, specific take from my own Vue experience here.'
+
+describe('commentOnPost (LLM boundary)', () => {
+  it('generates + judges a comment for a relevant post and records the budget', async () => {
+    const store = memStore({ ...COMMENT_CFG })
+    const res = await commentOnPost({ store, http: fakeHttp(COMMENT_TEXT), clock: fixedClock }, RELEVANT_POST)
+    expect(res.ok).toBe(true)
+    expect(res.text).toContain('Vue')
+    expect(await store.get('comments:budget')).toEqual({ day: '2026-06-25', used: 1 })
+  })
+
+  it('skips when comments are disabled', async () => {
+    const store = memStore({ ...COMMENT_CFG, 'content:settings': { commentsEnabled: false } })
+    expect((await commentOnPost({ store, http: fakeHttp('x'), clock: fixedClock }, RELEVANT_POST)).ok).toBe(false)
+  })
+
+  it('skips an off-target post (not relevant)', async () => {
+    const store = memStore({ ...COMMENT_CFG })
+    const offtopic: FeedPost = { urn: 'o', authorName: 'B', text: 'nice weather today everyone' }
+    expect(await commentOnPost({ store, http: fakeHttp('x'), clock: fixedClock }, offtopic)).toEqual({
+      ok: false,
+      reason: 'not_relevant'
+    })
+  })
+
+  it('skips when the daily comment budget is exhausted', async () => {
+    const store = memStore({ ...COMMENT_CFG, 'comments:budget': { day: '2026-06-25', used: 5 } })
+    expect(await commentOnPost({ store, http: fakeHttp('x'), clock: fixedClock }, RELEVANT_POST)).toEqual({
+      ok: false,
+      reason: 'budget'
     })
   })
 })

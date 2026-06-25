@@ -11,14 +11,26 @@ function memStore(): KeyValueStore {
 }
 
 describe('content settings', () => {
-  it('returns the default prompt when unset', async () => {
+  it('returns the default prompt and comments off by default when unset', async () => {
     const s = await loadContentSettings(memStore())
     expect(s.postPrompt).toBe(DEFAULT_POST_PROMPT)
+    expect(s.commentsEnabled).toBe(false)
+    expect(s.commentsPerDay).toBe(5)
+    expect(s.commentTone).toBe('expert')
   })
 
-  it('round-trips a custom prompt', async () => {
+  it('round-trips custom prompt + comment config', async () => {
     const store = memStore()
-    await saveContentSettings(store, { postPrompt: 'Write like a pirate.' })
-    expect((await loadContentSettings(store)).postPrompt).toBe('Write like a pirate.')
+    await saveContentSettings(store, {
+      postPrompt: 'Write like a pirate.',
+      commentsEnabled: true,
+      commentsPerDay: 3,
+      commentTone: 'friendly'
+    })
+    const s = await loadContentSettings(store)
+    expect(s.postPrompt).toBe('Write like a pirate.')
+    expect(s.commentsEnabled).toBe(true)
+    expect(s.commentsPerDay).toBe(3)
+    expect(s.commentTone).toBe('friendly')
   })
 })

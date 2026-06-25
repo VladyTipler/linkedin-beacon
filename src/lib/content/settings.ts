@@ -1,11 +1,20 @@
 import type { KeyValueStore } from '../ports'
+import type { CommentTone } from '../types'
 
 export const CONTENT_SETTINGS_KEY = 'content:settings'
 
-/** The user's post-generator voice/structure prompt. */
+/** The user's post-generator voice/structure prompt + auto-comment config. */
 export interface ContentSettings {
   postPrompt: string
+  /** Auto-comment during the run (off by default — comments are irreversible). */
+  commentsEnabled: boolean
+  /** Max auto-comments per day (anti-ban + quality over volume). */
+  commentsPerDay: number
+  /** Voice of the generated comment. */
+  commentTone: CommentTone
 }
+
+export const DEFAULT_COMMENTS_PER_DAY = 5
 
 /** Sensible default so generation works before the user customises it. */
 export const DEFAULT_POST_PROMPT = [
@@ -18,7 +27,15 @@ export const DEFAULT_POST_PROMPT = [
 
 export async function loadContentSettings(store: KeyValueStore): Promise<ContentSettings> {
   const raw = await store.get<ContentSettings>(CONTENT_SETTINGS_KEY)
-  return { postPrompt: raw?.postPrompt?.trim() ? raw.postPrompt : DEFAULT_POST_PROMPT }
+  return {
+    postPrompt: raw?.postPrompt?.trim() ? raw.postPrompt : DEFAULT_POST_PROMPT,
+    commentsEnabled: raw?.commentsEnabled === true,
+    commentsPerDay:
+      typeof raw?.commentsPerDay === 'number' && raw.commentsPerDay > 0
+        ? raw.commentsPerDay
+        : DEFAULT_COMMENTS_PER_DAY,
+    commentTone: raw?.commentTone ?? 'expert'
+  }
 }
 
 export async function saveContentSettings(store: KeyValueStore, s: ContentSettings): Promise<void> {

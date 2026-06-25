@@ -8,6 +8,9 @@ import { loadContentSettings } from '@lib/content/settings'
 import { DraftGenerator } from '@lib/content/DraftGenerator'
 import { DraftStore } from '@lib/content/DraftStore'
 import { loadSettings } from '@lib/engagement/settings'
+import { CommentDraftService } from '@lib/engagement/CommentDraftService'
+import { CommentJudge } from '@lib/engagement/CommentJudge'
+import { RelevanceScorer } from '@lib/engagement/RelevanceScorer'
 import { enabledModules } from '@lib/autopilot/startGate'
 import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
 import { IdeaBank } from '@lib/ideas/IdeaBank'
@@ -133,5 +136,64 @@ export async function extractRunIdeas(
     return { stored }
   } catch (e) {
     return { stored: 0, error: e instanceof Error ? e.message : 'llm_failed' }
+  }
+}
+
+const COMMENT_BUDGET_KEY = 'comments:budget'
+/** Comments are narrow + judged → a stricter relevance bar than the broad like filter. */
+const COMMENT_THRESHOLD = 0.5
+const COMMENT_GUARDRAILS = {
+  minConfidence: 0,
+  bannedPhrases: [],
+  quarantineMinutes: 0,
+  lenRange: [12, 280] as [number, number]
+}
+
+export interface CommentDeps {
+  store: KeyValueStore
+  http: LlmHttp
+  clock: Clock
+}
+
+/**
+ * Auto-comment on ONE relevant post during the run (Vlad's full-auto decision):
+ * generate via CommentDraftService → quality-judge (slop never posts) → if ok, return
+ * the text for the content script to executeComment. Gated by: comments enabled, BYOK
+ * key, a STRICTER relevance threshold than likes, and the daily comment budget. Crosses
+ * the real LLM mapper. "Full auto" = auto-post, but a failed judge is dropped, not posted.
+ */
+export async function commentOnPost(
+  deps: CommentDeps,
+  post: FeedPost
+): Promise<{ ok: boolean; text?: string; reason?: string }> {
+  const settings = await loadContentSettings(deps.store)
+  if (!settings.commentsEnabled) return { ok: false, reason: 'disabled' }
+  const cfg = await loadLlmConfig(deps.store)
+  if (!cfg.apiKey.trim()) return { ok: false, reason: 'no_key' }
+  const { expertise, target } = await loadSettings(deps.store)
+  if (!expertise.headline.trim()) return { ok: false, reason: 'no_expertise' }
+  if (!new RelevanceScorer().isRelevant(post, target, COMMENT_THRESHOLD)) {
+    return { ok: false, reason: 'not_relevant' }
+  }
+  const today = deps.clock.now().toISOString().slice(0, 10)
+  const budget = rolloverIdeaDay((await deps.store.get<IdeaDay>(COMMENT_BUDGET_KEY)) ?? null, today)
+  if (remainingIdeas(budget, settings.commentsPerDay) <= 0) return { ok: false, reason: 'budget' }
+
+  const provider = createLlmProvider(
+    { provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model },
+    deps.http
+  )
+  try {
+    const text = await new CommentDraftService(provider).draft({
+      post,
+      expertise,
+      tone: settings.commentTone
+    })
+    const verdict = new CommentJudge().judge(text, COMMENT_GUARDRAILS)
+    if (!verdict.ok) return { ok: false, reason: verdict.reasons.join(',') || 'judged' }
+    await deps.store.set(COMMENT_BUDGET_KEY, recordIdeaDay(budget, 1))
+    return { ok: true, text }
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : 'llm_failed' }
   }
 }

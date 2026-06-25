@@ -271,9 +271,11 @@ export type BeaconMessage =
   /** content → SW: the loop concluded locally; finalize the run with this reason. */
   | { type: 'AUTOPILOT_ENDED'; reason: StopReason }
   /** SW → content: begin the harvest→act loop; flags say which modules to drive. */
-  | { type: 'AUTOPILOT_RUN_LOOP'; modules: { engagement: boolean; content: boolean } }
+  | { type: 'AUTOPILOT_RUN_LOOP'; modules: { engagement: boolean; content: boolean; comments: boolean } }
   /** content → SW: extract ideas from the run buffer; replies { stored, error? }. */
   | { type: 'EXTRACT_RUN_IDEAS'; posts: FeedPost[] }
+  /** content → SW: auto-comment on a relevant post; replies { ok, text?, reason? }. */
+  | { type: 'COMMENT_ON_POST'; post: FeedPost }
   /** SW → sidepanel: live autopilot status (broadcast). */
   | { type: 'AUTOPILOT_STATUS'; status: AutopilotStatus }
   /** SW → sidepanel: a run finished and was recorded (broadcast). */

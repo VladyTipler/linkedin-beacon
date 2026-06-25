@@ -73,6 +73,26 @@ async function onSave() {
       <textarea v-model="content.prompt.value" rows="6" data-testid="post-prompt" />
     </label>
 
+    <div class="sect-lbl">Авто-комментарии в ленте</div>
+    <label class="fld">
+      <span class="k">
+        <input type="checkbox" v-model="content.commentsEnabled.value" data-testid="comments-enabled" />
+        Комментировать релевантные посты сам (full-auto, каждый коммент проходит quality-судью)
+      </span>
+    </label>
+    <label class="fld">
+      <span class="k">Комментариев в день (рек. 3–8)</span>
+      <input type="number" min="1" v-model.number="content.commentsPerDay.value" data-testid="comments-per-day" />
+    </label>
+    <label class="fld">
+      <span class="k">Тон комментария</span>
+      <select v-model="content.commentTone.value" data-testid="comment-tone">
+        <option value="expert">Экспертный</option>
+        <option value="friendly">Дружелюбный</option>
+        <option value="question">Вопрос</option>
+      </select>
+    </label>
+
     <button class="btn primary" data-testid="llm-save" @click="onSave">Сохранить</button>
     <span v-if="saveError" class="v" data-testid="save-error">Не удалось сохранить — попробуй ещё раз</span>
   </section>

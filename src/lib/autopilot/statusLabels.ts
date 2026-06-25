@@ -4,6 +4,7 @@
 
 export const SCANNING = 'Сканирую ленту…'
 export const LIKING = 'Ставлю лайк…'
+export const COMMENTING = 'Пишу комментарий…'
 /** Idle label while a content-only run scrolls to gather enough signal. */
 export const COLLECTING_IDEAS = 'Собираю идеи…'
 /** Shown at the moment the buffer is sent to the LLM for extraction. */
