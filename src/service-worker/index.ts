@@ -19,7 +19,7 @@ import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
 import { ChromeWindows } from '@/adapters/ChromeWindows'
 import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
 import { engagementLimit } from '@lib/autopilot/engagementLimit'
-import { decideAutopilotStart } from '@lib/autopilot/startGate'
+import { decideAutopilotStart, runLoopModules } from '@lib/autopilot/startGate'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
@@ -150,7 +150,8 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
 /** Send AUTOPILOT_RUN_LOOP to a tab; true if the content script answered. */
 async function sendRunLoop(tabId: number): Promise<boolean> {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'AUTOPILOT_RUN_LOOP' })
+    const modules = runLoopModules(await store.get('modules:state'))
+    await chrome.tabs.sendMessage(tabId, { type: 'AUTOPILOT_RUN_LOOP', modules })
     return true
   } catch {
     return false
@@ -248,6 +249,13 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'GENERATE_IDEAS':
       void withPageActivity(
         () => content.generateIdeas({ store, http: llmHttp, harvest: harvestPosts }),
+        GENERATING_IDEAS
+      ).then(sendResponse)
+      return true
+
+    case 'EXTRACT_RUN_IDEAS':
+      void withPageActivity(
+        () => content.extractRunIdeas({ store, http: llmHttp, clock }, message.posts),
         GENERATING_IDEAS
       ).then(sendResponse)
       return true

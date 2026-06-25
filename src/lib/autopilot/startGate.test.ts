@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { enabledModules, decideAutopilotStart } from './startGate'
+import { enabledModules, decideAutopilotStart, runLoopModules } from './startGate'
 import type { ModuleState, AutopilotState } from '../types'
 
 const mod = (over: Partial<ModuleState> = {}): ModuleState => ({
@@ -61,5 +61,15 @@ describe('decideAutopilotStart', () => {
 
   it('reports started when already running, regardless of modules (idempotent)', () => {
     expect(decideAutopilotStart([], running())).toEqual({ started: true })
+  })
+})
+
+describe('runLoopModules', () => {
+  it('flags engagement and content independently from enabled+available', () => {
+    expect(runLoopModules([mod(), mod({ id: 'content' })])).toEqual({ engagement: true, content: true })
+  })
+  it('excludes a disabled or unavailable module', () => {
+    expect(runLoopModules([mod(), mod({ id: 'content', available: false })])).toEqual({ engagement: true, content: false })
+    expect(runLoopModules([mod({ enabled: false })])).toEqual({ engagement: false, content: false })
   })
 })

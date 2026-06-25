@@ -270,8 +270,10 @@ export type BeaconMessage =
   | { type: 'AUTOPILOT_RISK'; marker: RiskMarker }
   /** content → SW: the loop concluded locally; finalize the run with this reason. */
   | { type: 'AUTOPILOT_ENDED'; reason: StopReason }
-  /** SW → content: begin the harvest→act loop in this tab. */
-  | { type: 'AUTOPILOT_RUN_LOOP' }
+  /** SW → content: begin the harvest→act loop; flags say which modules to drive. */
+  | { type: 'AUTOPILOT_RUN_LOOP'; modules: { engagement: boolean; content: boolean } }
+  /** content → SW: extract ideas from the run buffer; replies { stored, error? }. */
+  | { type: 'EXTRACT_RUN_IDEAS'; posts: FeedPost[] }
   /** SW → sidepanel: live autopilot status (broadcast). */
   | { type: 'AUTOPILOT_STATUS'; status: AutopilotStatus }
   /** SW → sidepanel: a run finished and was recorded (broadcast). */

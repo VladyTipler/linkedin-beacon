@@ -12,6 +12,12 @@ export function enabledModules(modulesState: unknown): ModuleState[] {
   )
 }
 
+/** Which runnable modules the loop should drive — flags for the content loop. */
+export function runLoopModules(modulesState: unknown): { engagement: boolean; content: boolean } {
+  const ids = new Set(enabledModules(modulesState).map((m) => m.id))
+  return { engagement: ids.has('engagement'), content: ids.has('content') }
+}
+
 /**
  * Should the autopilot start? Pure decision off the persisted modules roster so
  * the SW side-effects stay off a tested core (the START_AUTOPILOT boundary).
