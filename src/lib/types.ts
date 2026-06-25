@@ -233,10 +233,6 @@ export type BeaconMessage =
   | { type: 'EXECUTE_ACTION'; action: ActionRequest }
   /** SW → content: toggle the "agent is working" pulsing border overlay (+ status label). */
   | { type: 'SET_ACTIVITY'; active: boolean; label?: string }
-  /** sidepanel → SW: run one engagement pass (harvest → score → gate likes). */
-  | { type: 'RUN_ENGAGEMENT' }
-  /** SW → sidepanel: outcome of an engagement run (broadcast). */
-  | { type: 'ENGAGEMENT_RESULT'; summary: EngagementRunSummary }
   /** sidepanel → SW: list quarantined actions; SW replies ActionQueueItem[] via sendResponse. */
   | { type: 'LIST_QUARANTINE' }
   /** sidepanel → SW: cancel a quarantined action within its window. */

@@ -15,17 +15,7 @@ import { LinkedInSsiApiClient } from '@lib/ssi-api/LinkedInSsiApiClient'
 import { RefreshPolicy } from '@lib/refresh/RefreshPolicy'
 import { BackgroundRefreshService, type RefreshResult } from '@lib/refresh/BackgroundRefreshService'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
-import { ActionGate } from '@lib/gate/ActionGate'
 import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
-import { CommentJudge } from '@lib/engagement/CommentJudge'
-import { HumanDelay } from '@lib/engagement/HumanDelay'
-import { LikeFilter } from '@lib/engagement/LikeFilter'
-import {
-  EngagementOrchestrator,
-  type ActionExecutor
-} from '@lib/engagement/EngagementOrchestrator'
-import { EngagementRunner } from '@lib/engagement/EngagementRunner'
-import { loadSettings } from '@lib/engagement/settings'
 import { ChromeWindows } from '@/adapters/ChromeWindows'
 import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
 import { engagementLimit } from '@lib/autopilot/engagementLimit'
@@ -34,7 +24,7 @@ import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
-import { SCANNING, GENERATING_IDEAS } from '@lib/autopilot/statusLabels'
+import { GENERATING_IDEAS } from '@lib/autopilot/statusLabels'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -47,7 +37,6 @@ import type {
 const HOUR_MS = 60 * 60 * 1000
 const REFRESH_INTERVAL_MS = 24 * HOUR_MS
 const REFRESH_ALARM = 'beacon:ssi-refresh'
-const QUARANTINE_ALARM_PREFIX = 'beacon:quarantine:'
 
 const store = new ChromeStorageStore()
 const clock = new SystemClock()
@@ -60,41 +49,11 @@ const refresher = new BackgroundRefreshService({
   clock
 })
 
-// ── Engagement pipeline. Actions execute in the content script via messaging. ──
-const tabExecutor: ActionExecutor = {
-  async execute(action) {
-    const result = await sendToLinkedInTab<{ ok: boolean; reason?: string }>({
-      type: 'EXECUTE_ACTION',
-      action
-    })
-    if (!result?.ok) throw new Error(result?.reason ?? 'action_failed')
-  }
-}
-
 const quarantine = new QuarantineQueue({
   store,
   clock,
   scheduler: new ChromeAlarmScheduler(),
   newId: randomId
-})
-
-const orchestrator = new EngagementOrchestrator({
-  gate: new ActionGate(),
-  judge: new CommentJudge(),
-  quarantine,
-  store,
-  clock,
-  executor: tabExecutor,
-  newId: randomId
-})
-
-// 8–45s random pause between real actions — the anti-ban heartbeat (§5.1).
-const humanDelay = new HumanDelay(new MathRandomRng())
-const runner = new EngagementRunner({
-  harvest: (limit) => harvestPosts(limit),
-  likeFilter: new LikeFilter(),
-  orchestrator,
-  pace: () => sleep(humanDelay.nextMs(8000, 45000))
 })
 
 // ── Autopilot: the SW is the authoritative gatekeeper. The loop runs in the
@@ -237,10 +196,9 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REFRESH_ALARM) {
     void refresher.refreshIfDue().then(handleRefresh)
-  } else if (alarm.name.startsWith(QUARANTINE_ALARM_PREFIX)) {
-    // A quarantined action's cancel window elapsed — send what's due.
-    void orchestrator.releaseDue()
   }
+  // QUARANTINE_ALARM_PREFIX branch removed with the campaign orchestrator.
+  // Phase-1 quarantine is list/cancel only; execution will be re-wired in Phase 2.
 })
 
 // The user closed the autopilot worker window → finalize the run.
@@ -271,10 +229,6 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'FORCE_REFRESH':
       void refresher.refreshNow().then(handleRefresh)
       return false
-
-    case 'RUN_ENGAGEMENT':
-      void withPageActivity(runEngagement, SCANNING).then(sendResponse)
-      return true // async sendResponse — reliable result delivery to the panel
 
     case 'LIST_MODELS':
       void content.listModels(llmHttp, message.provider, message.apiKey).then(sendResponse)
@@ -360,13 +314,6 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
   }
 })
-
-async function runEngagement(): Promise<import('@lib/types').EngagementRunSummary> {
-  const settings = await loadSettings(store)
-  const summary = await runner.run(settings)
-  broadcast({ type: 'ENGAGEMENT_RESULT', summary }) // also notify passive listeners
-  return summary
-}
 
 /**
  * Run a page-touching operation while the LinkedIn tab shows the "agent is

@@ -19,7 +19,7 @@ import { DEMO_LEADS } from './lib/demo'
 const { active, go } = useNavigation()
 const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
 const { modules, toggle, setLimit } = useModules()
-const { summary, quarantined, runCampaign, cancel } = useEngagement()
+const { quarantined, cancel } = useEngagement()
 const { status: autopilotStatus, reports, start: startAutopilot, stop: stopAutopilot } = useAutopilot()
 
 const anyActive = computed(() => modules.value.some((m) => m.available && m.enabled))
@@ -60,8 +60,6 @@ function pauseAll() {
       <SafetyScreen
         v-else
         :quarantined="quarantined"
-        :summary="summary"
-        @run-campaign="runCampaign"
         @pause-all="pauseAll"
         @cancel="cancel"
       />

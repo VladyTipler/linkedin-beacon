@@ -246,8 +246,6 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'FEED_ITEMS':
     case 'REQUEST_REFRESH':
     case 'FORCE_REFRESH':
-    case 'RUN_ENGAGEMENT':
-    case 'ENGAGEMENT_RESULT':
     case 'LIST_QUARANTINE':
     case 'CANCEL_QUARANTINE':
     case 'START_AUTOPILOT':

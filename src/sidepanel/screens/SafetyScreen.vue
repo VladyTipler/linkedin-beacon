@@ -1,18 +1,8 @@
 <script setup lang="ts">
-import type { ActionQueueItem, EngagementRunSummary } from '@lib/types'
+import type { ActionQueueItem } from '@lib/types'
 
-withDefaults(
-  defineProps<{
-    quarantined?: ActionQueueItem[]
-    summary?: EngagementRunSummary | null
-  }>(),
-  { quarantined: () => [], summary: null }
-)
-defineEmits<{
-  runCampaign: []
-  pauseAll: []
-  cancel: [id: string]
-}>()
+withDefaults(defineProps<{ quarantined?: ActionQueueItem[] }>(), { quarantined: () => [] })
+defineEmits<{ pauseAll: []; cancel: [id: string] }>()
 
 const authorOf = (item: ActionQueueItem) => String(item.target.meta?.author ?? 'пост')
 </script>
@@ -48,11 +38,6 @@ const authorOf = (item: ActionQueueItem) => String(item.target.meta?.author ?? '
       </div>
     </template>
 
-    <div v-if="summary" class="banner" style="margin-top:12px" data-testid="run-summary">
-      Прогон: просмотрено <b>{{ summary.scanned }}</b> · релевантных <b>{{ summary.relevant }}</b> · выполнено <b>{{ summary.executed }}</b> · в очереди <b>{{ summary.queued }}</b> · карантин <b>{{ summary.quarantined }}</b>
-    </div>
-
-    <button class="cta" data-testid="run-campaign" @click="$emit('runCampaign')">Запустить сегодняшнюю кампанию</button>
     <button class="ghost" data-testid="pause-all" @click="$emit('pauseAll')">Пауза всех модулей</button>
     <div class="foot">Beacon · V1 standalone<br>SSI Growth Engine</div>
   </section>
