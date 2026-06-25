@@ -1,6 +1,32 @@
-# Beacon — Gotchas (hard-won, 2026-06-24..25)
+# Beacon — Gotchas (hard-won, 2026-06-24..26)
 
 Non-obvious traps discovered live. Each cost real debugging.
+
+## Post composer (Content Layer 2) — SHADOW DOM + Quill (recon 2026-06-26)
+
+- **The composer is NOT in the regular DOM and NOT in an iframe — it's in an OPEN
+  SHADOW ROOT.** Host `#interop-outlet` (`[data-testid="interop-shadowdom"]`). A plain
+  `document.querySelector` finds NOTHING of the modal. Pierce: `host.shadowRoot.querySelector(...)`.
+  First recon wrongly "found" a `.ql-editor` — that's a **DECOY** in a hidden `/preload/`
+  iframe. Always go strictly through `#interop-outlet.shadowRoot`; never global `.ql-editor`.
+- **The composer editor is Quill, NOT ProseMirror** (the comment editor is ProseMirror).
+  `[data-test-ql-editor-contenteditable="true"]` / `.ql-editor`. `execCommand('insertText')`
+  inserts into the DOM, **but Quill commits its model ASYNCHRONOUSLY** (MutationObserver):
+  right after typing, `ql-blank` is still present and the Post button is still `disabled`;
+  after a tick they clear. **Poll `!postBtn.disabled` before clicking — never read it
+  synchronously after typing.** (Trigger to open: `[aria-label="Start a post"]` in the
+  LIGHT dom; close: shadow `[aria-label="Dismiss"]` → confirm `Discard`.)
+- **Held node references go stale across a re-render.** artdeco/Ember may REPLACE the Post
+  button node on the disabled→enabled transition. If you capture `const post = ...` once and
+  keep it, `post.disabled` can read a stale `true` forever → false `post_button_disabled`.
+  **Re-query via `findComposer(root)` on every poll AND at click time.** (Recon hid this
+  because it re-queried each read; the first adapter held the ref — advisor caught it.)
+- **Selection inside a shadow root:** `shadowRoot.getSelection()` (Chrome supports it;
+  fall back to `window.getSelection()`). `execCommand`/selection are DOM ops on the SHARED
+  DOM, so they behave the same in the content-script isolated world as in MAIN world — the
+  only world-specific thing (the page's Quill JS instance) is NOT used by the adapter.
+- Capture method: `agent-browser --cdp 9222`, read-only (typed throwaway → cleared →
+  Discard). Never published during recon.
 
 ## LinkedIn DOM (new hashed-class build)
 

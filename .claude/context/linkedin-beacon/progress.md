@@ -1,9 +1,39 @@
-# Beacon — Progress (as of 2026-06-25)
+# Beacon — Progress (as of 2026-06-26)
 
-`main` is the working branch (user commits directly to main this project). **258 tests
+`main` is the working branch (user commits directly to main this project). **318 tests
 green, `npm run build` clean.** Repo: GitLab `v_sandz/linkedin-beacon`.
 
-## This session (2026-06-25) — beyond content Layer 1
+## This session (2026-06-26) — Content Layer 2 (auto-publish) — code DONE, pending live test
+
+Spec `docs/superpowers/specs/2026-06-26-content-layer-2-design.md`, plan
+`docs/superpowers/plans/2026-06-26-content-layer-2.md`. Raises SSI pillar **brand**.
+6 tasks via executing-plans (inline TDD). **Approve-first = the user clicking «Опубликовать»
+on a draft** — posts are NEVER full-auto / NEVER in the autopilot run (invariant #5); the
+weekly cap is a safety limit on a manual action, NOT a 2nd autopilot budget (one-button
+reconciliation in the spec §2).
+
+- **Live composer recon (read-only, CDP):** the share box is in a SHADOW DOM and the editor
+  is **Quill** (async commit) — see gotchas + `docs/linkedin-dom-anchors.md` "Post composer".
+- **`executeComposerPost`** (`content/domActions.ts`, `a944bb5`): pierce `#interop-outlet.shadowRoot`
+  → open `[aria-label="Start a post"]` → type char-by-char (execCommand) → **poll the
+  re-queried Post button** until enabled (artdeco replaces the node on enable — held refs go
+  stale, advisor-caught) → click → confirm modal closed (12s); any failure → Dismiss→Discard.
+  Reuses `EXECUTE_ACTION` with `type:'post'` (one new message only: `PUBLISH_POST`).
+- **`PostWeekBudget`** (ISO-week, pure) + `postsPerWeek` setting (default 3).
+- **`publishPost`** SW handler (`contentHandlers.ts`): week-gate → drive content → on success
+  remove draft + record week. Boundary-tested with fakes.
+- **UI:** «Опубликовать» button per draft + remaining-week indicator (`ContentScreen`/`useContent`).
+- **Language slice** (`c590cf3`): `contentLanguage` setting (default English — Vlad targets
+  USD-remote) injected into BOTH post (`DraftGenerator`) and comment (`CommentDraftService`)
+  prompts; boundary test asserts it reaches the LLM wire. Settings dropdown + posts/week input.
+- Also: TopBar settings icon → proper gear (`94da246`).
+
+**⏳ NEXT (human-gate, Vlad in Chrome):** the LIVE test — real publish of a throwaway draft
+(test+delete), then verify cap decrements + button disables at 0. The deferred isolated-world
+smoke folds into this (DOM-only risk, re-query fix de-risks the held-ref failure). Then a
+`/ce-simplify-code` pass before push. Commits NOT yet pushed to origin.
+
+## Prior session (2026-06-25) — beyond content Layer 1
 
 - **Activity border** (`66c3a02`/`6358cbb`, pushed): pulsing lime overlay on the
   LinkedIn page while the agent works (`SET_ACTIVITY`, ref-counted) + a **status
