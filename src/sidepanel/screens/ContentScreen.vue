@@ -16,7 +16,9 @@ onMounted(async () => {
 const ERR: Record<string, string> = {
   no_key: 'Задай LLM-ключ в настройках (⚙).',
   no_expertise: 'Заполни профиль экспертизы в настройках (⚙).',
-  no_feed: 'Открой вкладку ленты LinkedIn.'
+  no_feed: 'Открой вкладку ленты LinkedIn.',
+  ideas_not_json:
+    'Модель вернула ответ не в том формате. Выбери модель посильнее (⚙) — например openai/gpt-4o-mini или google/gemini-2.5-flash — и попробуй снова.'
 }
 
 async function copy(text: string) {

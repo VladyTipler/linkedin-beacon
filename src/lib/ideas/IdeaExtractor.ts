@@ -22,13 +22,15 @@ export class IdeaExtractor {
       'Ground EACH idea in ONE specific post. Return ONLY a JSON array of',
       '[{"topic": string, "angle": string, "sourceIndex": number, "claim": string, "quote": string}].',
       'sourceIndex = the 1-based number of the post that sparked it. claim = its point/tension worth a take.',
-      'quote = a short (<140 char) snippet from that post. No prose outside the JSON.'
+      'quote = a short (<140 char) snippet from that post.',
+      'CRITICAL: your ENTIRE reply must be the raw JSON array — it MUST start with "[" and end',
+      'with "]". No prose, no explanation, no markdown, no code fences before or after.'
     ].join(' ')
 
     const user = [
       'Feed posts (signal only):',
       ...posts.map((p, i) => `${i + 1}. ${p.excerpt}`),
-      'Produce 3–6 ideas as the JSON array.'
+      'Reply with ONLY the JSON array of 3–6 ideas. Start your reply with "[".'
     ].join('\n')
 
     const completion = await this.provider.complete({
@@ -36,7 +38,7 @@ export class IdeaExtractor {
         { role: 'system', content: system },
         { role: 'user', content: user }
       ],
-      temperature: 0.8,
+      temperature: 0.4,
       maxTokens: 600
     })
     return parseIdeas(completion.text, posts)
@@ -58,10 +60,10 @@ export function parseIdeas(raw: string, posts: FeedItem[]): Idea[] {
   try {
     parsed = JSON.parse(json)
   } catch {
-    throw new Error('IdeaExtractor: model response was not valid JSON')
+    throw new Error('ideas_not_json')
   }
   if (!Array.isArray(parsed)) {
-    throw new Error('IdeaExtractor: expected a JSON array of ideas')
+    throw new Error('ideas_not_json')
   }
   return parsed
     .filter(
@@ -94,7 +96,7 @@ function extractJsonArray(raw: string): string {
   const start = body.indexOf('[')
   const end = body.lastIndexOf(']')
   if (start === -1 || end === -1 || end < start) {
-    throw new Error('IdeaExtractor: no JSON array found in response')
+    throw new Error('ideas_not_json')
   }
   return body.slice(start, end + 1)
 }

@@ -101,4 +101,10 @@ describe('parseIdeas spark grounding', () => {
     const raw = JSON.stringify([{ topic: '', angle: 'A', claim: 'C' }, { topic: 'T', angle: 'A2' }])
     expect(parseIdeas(raw, posts).map((i) => i.angle)).toEqual(['A2'])
   })
+
+  it('throws an actionable code when the model returns prose (no JSON array)', () => {
+    expect(() => parseIdeas('Sure! Here are some ideas you could write about.', posts)).toThrow(
+      'ideas_not_json'
+    )
+  })
 })
