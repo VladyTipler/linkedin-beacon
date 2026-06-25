@@ -28,6 +28,7 @@ import { EngagementRunner } from '@lib/engagement/EngagementRunner'
 import { loadSettings } from '@lib/engagement/settings'
 import { ChromeWindows } from '@/adapters/ChromeWindows'
 import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
+import { engagementLimit } from '@lib/autopilot/engagementLimit'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
@@ -103,7 +104,6 @@ const autopilotRng = new MathRandomRng()
 const reportsStore = new RunReportStore(store)
 const llmHttp = new FetchHttpClient()
 const gatekeeper = new AutopilotGatekeeper({ burst: new BurstGuard(), risk: new RiskAssessor() })
-const dailyCeiling = new DailyCeiling()
 const windows = new ChromeWindows()
 let sessionRisk: RiskMarker[] = []
 
@@ -134,7 +134,8 @@ async function startAutopilot(host: AutopilotHost): Promise<void> {
   // Carry over today's ceiling AND used so re-running in the same day does NOT
   // re-grant the budget — the cap is genuinely daily (design-spec §5).
   const prev = existing ? { day: existing.day, ceiling: existing.ceiling, used: existing.used } : null
-  const budget = resolveDailyBudget(prev, dayKey(), dailyCeiling.forDay(autopilotRng))
+  const base = engagementLimit(await store.get('modules:state'))
+  const budget = resolveDailyBudget(prev, dayKey(), new DailyCeiling({ base }).forDay(autopilotRng))
   const state: AutopilotState = {
     running: true,
     host,

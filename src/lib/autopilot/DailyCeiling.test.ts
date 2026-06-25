@@ -28,3 +28,12 @@ describe('DailyCeiling', () => {
     expect(ceiling.forDay(rng(0), 0)).toBeGreaterThanOrEqual(1)
   })
 })
+
+describe('DailyCeiling base from config', () => {
+  it('centres the jittered ceiling on the configured base', () => {
+    const c = new DailyCeiling({ base: 35, jitter: 10 })
+    expect(c.forDay(rng(0.5))).toBe(35) // centre
+    expect(c.forDay(rng(0))).toBe(25)   // base - jitter
+    expect(c.forDay(rng(1))).toBe(45)   // base + jitter
+  })
+})
