@@ -1,5 +1,6 @@
 import type { KeyValueStore } from '../ports'
 import type { CommentTone } from '../types'
+import { DEFAULT_POSTS_PER_WEEK } from './PostWeekBudget'
 
 export const CONTENT_SETTINGS_KEY = 'content:settings'
 
@@ -12,6 +13,8 @@ export interface ContentSettings {
   commentsPerDay: number
   /** Voice of the generated comment. */
   commentTone: CommentTone
+  /** Weekly publish cap — a safety limit on the manual approve-first publish (anti-ban). */
+  postsPerWeek: number
 }
 
 export const DEFAULT_COMMENTS_PER_DAY = 5
@@ -34,7 +37,11 @@ export async function loadContentSettings(store: KeyValueStore): Promise<Content
       typeof raw?.commentsPerDay === 'number' && raw.commentsPerDay > 0
         ? raw.commentsPerDay
         : DEFAULT_COMMENTS_PER_DAY,
-    commentTone: raw?.commentTone ?? 'expert'
+    commentTone: raw?.commentTone ?? 'expert',
+    postsPerWeek:
+      typeof raw?.postsPerWeek === 'number' && raw.postsPerWeek > 0
+        ? raw.postsPerWeek
+        : DEFAULT_POSTS_PER_WEEK
   }
 }
 
