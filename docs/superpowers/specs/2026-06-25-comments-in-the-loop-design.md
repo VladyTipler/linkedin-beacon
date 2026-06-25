@@ -1,9 +1,19 @@
-# Comments-in-the-Loop — Design Spec (DRAFT — needs Vlad's review)
+# Comments-in-the-Loop — Design Spec
 
-**Date:** 2026-06-25 (written autonomously while Vlad was away)
-**Status:** DRAFT. **Not approved. Not started.** Conservative defaults proposed; the
-open questions in §8 are genuine product/safety forks I should NOT decide solo because
-**comments are irreversible public actions on Vlad's real account.** Read §8 first.
+**Date:** 2026-06-25
+**Status:** APPROVED direction (Vlad: "комменты — полностью автоматизировать; не такой
+критичный момент, но SSI должен поднимать"). Implementing autonomously. One UI-placement
+item still needs his confirmation (§8 Q5 — the demo has no standalone comments card).
+
+## 0. Vlad's decision (2026-06-25)
+
+**Full-auto comments** — no manual approval queue. Implemented SAFELY as **`auto_guardrails`
+with `quarantineMinutes: 0`**: a generated comment is **always quality-judged**
+(`CommentJudge`: length / banned phrases / no-slop) and, if it passes, **posts immediately
+with no human step**; if it fails, it's dropped (never posted). This is "full auto" that still
+protects the brand the feature exists to grow. Honest `full_auto` (skip the judge) and a
+non-zero cancel window remain opt-in for later. Module **disabled by default**; conservative
+comments/day + anti-ban pacing + the RiskAssessor kill-switch all still apply.
 
 ## 1. Problem & scope
 
@@ -79,13 +89,18 @@ Approved/elapsed comments → SW tells content to executeComment(urn, text)
 - **Approval surface** — pending/quarantined comments visible in the panel (Safety/Inbox screen)
   with approve/cancel, before anything sends.
 
-## 6. Conservative defaults I'd propose (Vlad overrides in §8)
+## 6. Resolved defaults (Vlad's full-auto decision + sensible, tunable values)
 
-- Module **disabled** by default; automation level **manual** (queue for approval).
-- Comments/day: **3** (well under likes; anti-ban + quality over volume).
-- Tone: **expert**. Candidate set: top **3–5** relevance posts per run that also pass a higher
-  relevance threshold than likes.
-- Comment also implies a like on the same post (commenting without liking looks odd).
+- Comments **disabled by default**; when enabled, level = `auto_guardrails` + `quarantineMinutes: 0`
+  (auto-post judged comments, no human step) — per §0.
+- **Comments/day: 5** (well under likes; anti-ban + quality over volume). Tunable.
+- **Tone: expert** (a Settings control, like the post-prompt).
+- **Candidate set:** the top relevance posts per run that pass a STRICTER threshold than likes
+  (comments are narrow + judged); small per-run cap. Reuse `RelevanceScorer`.
+- **Comment implies a like** on the same post (commenting without liking looks unnatural).
+- **Config location (interim):** comment toggle + comments/day + tone live in the **Settings
+  screen** next to the BYOK LLM key (comments need it), NOT a new «Модули» card — the demo has
+  no comments card, and the эталон is authoritative (§8 Q5 to confirm).
 
 ## 7. Testing (TDD, boundary rule)
 
@@ -96,25 +111,23 @@ Approved/elapsed comments → SW tells content to executeComment(urn, text)
 - Round-trip: enqueue → due() → markSent execution path.
 - The DOM `executeComment` is verified by build + live CDP (Vlad), not unit.
 
-## 8. OPEN QUESTIONS FOR VLAD (decide before implementation — these are yours, not mine)
+## 8. Questions — status after Vlad's answer
 
-1. **Default approval model (THE decision):** comments default to **manual review-queue**
-   (you approve each before it sends — safest, more friction) OR **guardrails-quarantine**
-   (auto-sends after a cancel window unless you cancel — less friction, more risk)? I propose
-   manual. Full-auto stays an explicit opt-in either way.
-2. **Candidate selection:** which posts get a comment — top-N by relevance? a higher threshold
-   than likes? recruiter/ICP-authored only? How narrow?
-3. **Comments/day cap** (anti-ban + quality). I propose 3. Your number?
-4. **Tone:** fixed default (expert/friendly/question) or a per-run/per-module setting?
-5. **Module shape:** separate «Комментарии» module card, or a second control under the existing
-   «Вовлечённость» card (likes + comments together, since both engage the feed)?
-6. **Approval surface:** where do pending/quarantined comments live for review — the Safety
-   screen (next to quarantine), the Inbox, or a new one?
-7. **Like+comment coupling:** comment also likes the same post (proposed), or comment-only?
+1. ✅ **Approval model:** DECIDED — full-auto (= guardrails@0min, judged). §0.
+2. ✅ **Candidate selection:** top relevance posts above a stricter-than-likes threshold, small
+   per-run cap (defaulted; tunable later).
+3. ✅ **Comments/day:** default 5 (tunable).
+4. ✅ **Tone:** expert default, a Settings control.
+5. ⚠️ **STILL NEEDS VLAD — UI placement:** comment config goes in **Settings** for now (no demo
+   «Комментарии» card; эталон authoritative). Confirm, or fold a comments control into the
+   «Вовлечённость» «Модули» card (would need the demo/эталон updated first).
+6. ✅ **Surface:** with full-auto there's no approval queue; posted comments are logged in the
+   run report (reuse `RunReport`).
+7. ✅ **Like+comment coupling:** comment also likes the same post.
 
-## 9. Why this stopped at a spec (not implemented)
+## 9. Implementation note
 
-Comments POST PUBLICLY on your real LinkedIn — irreversible. Brainstorming a risky feature and
-shipping its posting behavior solo would violate the project's safety-first / human-in-the-loop
-rule. The code is well-scoped (the cubes exist), so once you answer §8 this is a fast
-spec→plan→TDD execution like ideas-in-the-loop. **Awaiting your review of §8.**
+The cubes exist; this is a wiring + Settings-config + TDD job like ideas-in-the-loop. The only
+unresolved item (Q5) is cosmetic placement and doesn't block the core (which is config-location-
+agnostic). Auto-posting only fires when Vlad enables comments (off by default) + has a key +
+runs — so building it is safe; live verification is his field-test.
