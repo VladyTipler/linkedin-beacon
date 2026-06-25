@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import TopBar from './components/TopBar.vue'
 import BottomNav from './components/BottomNav.vue'
 import DashScreen from './screens/DashScreen.vue'
@@ -29,9 +28,6 @@ const {
   stop: stopAutopilot
 } = useAutopilot()
 
-// Same "runnable module" predicate the SW gate uses (SSOT) — drives the TopBar pulse.
-const anyActive = computed(() => enabledModules(modules.value).length > 0)
-
 function pauseAll() {
   enabledModules(modules.value).forEach((m) => toggle(m.id))
 }
@@ -39,7 +35,7 @@ function pauseAll() {
 
 <template>
   <div class="app">
-    <TopBar :active="anyActive" @open-settings="go('v-settings')" />
+    <TopBar :active="autopilotStatus?.running ?? false" @open-settings="go('v-settings')" />
     <main class="body">
       <DashScreen
         v-if="active === 'v-dash'"
