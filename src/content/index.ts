@@ -13,7 +13,7 @@ import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
-import { executeComment, executeLike } from './domActions'
+import { executeComment, executeLike, executeComposerPost } from './domActions'
 import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
 import {
   SCANNING,
@@ -327,6 +327,9 @@ async function runAction(message: { action: import('@lib/types').ActionRequest }
   if (action.type === 'like') return executeLike(document, urn)
   if (action.type === 'comment') {
     return executeComment(document, urn, action.payload?.comment ?? '', delay)
+  }
+  if (action.type === 'post') {
+    return executeComposerPost(document, action.payload?.post ?? '', delay)
   }
   return { ok: false, reason: `unsupported_action:${action.type}` }
 }

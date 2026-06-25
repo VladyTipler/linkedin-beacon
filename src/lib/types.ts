@@ -67,7 +67,7 @@ export interface ActionTarget {
 export interface ActionRequest {
   type: ActionType
   target: ActionTarget
-  payload?: { note?: string; comment?: string }
+  payload?: { note?: string; comment?: string; post?: string }
 }
 
 export type ActionStatus =

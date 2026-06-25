@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { executeLike } from './domActions'
+import { executeLike, findComposer } from './domActions'
 
 // Same real anchors as FeedReader: post root [componentkey] + reaction button.
 const FIXTURE = `
@@ -41,5 +41,46 @@ describe('executeLike', () => {
 
   it('reports when the post is not on the page', () => {
     expect(executeLike(root, 'POST_ZZZ')).toEqual({ ok: false, reason: 'post_not_found' })
+  })
+})
+
+// Build the real composer shape: an OPEN shadow root on #interop-outlet holding the
+// sharebox modal, Quill editor and Post button — plus a DECOY .ql-editor in the light
+// DOM (the /preload copy) that the adapter must ignore. (Live recon 2026-06-26.)
+function mountComposer(): Document {
+  document.body.innerHTML = `
+    <div id="decoy"><div class="ql-editor" data-test-ql-editor-contenteditable="true">decoy</div></div>
+    <div id="interop-outlet" data-testid="interop-shadowdom"></div>`
+  const host = document.querySelector('#interop-outlet') as HTMLElement
+  const sr = host.attachShadow({ mode: 'open' })
+  sr.innerHTML = `
+    <div data-test-modal-id="sharebox" role="dialog">
+      <div class="ql-editor ql-blank" role="textbox"
+           data-test-ql-editor-contenteditable="true"
+           aria-label="Text editor for creating content"></div>
+      <button class="share-actions__primary-action artdeco-button" disabled>Post</button>
+      <button aria-label="Dismiss">x</button>
+    </div>`
+  return document
+}
+
+describe('findComposer', () => {
+  it('locates the editor + Post button inside the #interop-outlet shadow root', () => {
+    const handle = findComposer(mountComposer())
+    expect(handle).not.toBeNull()
+    expect(handle!.editor.getAttribute('aria-label')).toBe('Text editor for creating content')
+    expect(handle!.post.textContent).toBe('Post')
+  })
+
+  it('ignores the decoy .ql-editor outside the shadow host', () => {
+    const handle = findComposer(mountComposer())
+    expect(handle!.editor.classList.contains('ql-blank')).toBe(true)
+    expect(handle!.editor.textContent).toBe('')
+  })
+
+  it('returns null when the sharebox modal is not open', () => {
+    document.body.innerHTML = `<div id="interop-outlet"></div>`
+    ;(document.querySelector('#interop-outlet') as HTMLElement).attachShadow({ mode: 'open' })
+    expect(findComposer(document)).toBeNull()
   })
 })
