@@ -42,6 +42,9 @@ async function copy(text: string) {
       <div v-for="(idea, i) in ideas" :key="i" class="note" :data-testid="`idea-${i}`">
         <div class="lbl">{{ idea.topic }}</div>
         {{ idea.angle }}
+        <div v-if="idea.spark" class="lbl" style="margin-top:8px;opacity:.75" :data-testid="`spark-${i}`">
+          ↳ повод: {{ idea.spark.claim }}<span v-if="idea.spark.source"> · {{ idea.spark.source.author }}</span>
+        </div>
         <div class="row">
           <button class="btn" :data-testid="`to-draft-${i}`" @click="toDraft(idea)">В черновик</button>
           <button class="btn" @click="removeIdea(idea)">Удалить</button>

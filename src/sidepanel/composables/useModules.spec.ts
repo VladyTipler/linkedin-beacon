@@ -23,7 +23,7 @@ describe('useModules', () => {
     expect(eng.dailyLimit).toBe(35)
     expect(eng.available).toBe(true)
     expect(d.find((m) => m.id === 'smart_connect')!.available).toBe(false)
-    expect(d.find((m) => m.id === 'content')!.available).toBe(false)
+    expect(d.find((m) => m.id === 'content')!.available).toBe(true)
   })
 
   it('setLimit updates the module limit and persists a plain array', async () => {
@@ -44,5 +44,12 @@ describe('useModules', () => {
     await flushPromises()
     const sc = m.modules.value.find((x) => x.id === 'smart_connect')!
     expect(sc.available).toBe(false)
+  })
+
+  it('ships content as a real module with an ideas/day limit', () => {
+    const c = defaultModules().find((m) => m.id === 'content')!
+    expect(c.available).toBe(true)
+    expect(c.enabled).toBe(false)
+    expect(c.dailyLimit).toBe(5)
   })
 })

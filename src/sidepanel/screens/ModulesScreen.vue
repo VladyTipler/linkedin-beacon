@@ -60,20 +60,19 @@ const byId = (modules: ModuleState[], id: ModuleId) => modules.find((m) => m.id 
 
     <ModuleCard
       :module="byId(modules, 'content')"
-      title="Контент-автопилот"
-      desc="2–3 поста в неделю из идей ленты · AI-черновик + ручной аппрув"
-      limit-label="Постов/неделю"
-      recommended="рек. 2–3"
+      title="Контент — идеи из ленты"
+      desc="Пока автопилот листает ленту, собирает идеи для постов с привязкой к реальному поводу · черновик по клику"
+      limit-label="Идей/день"
+      recommended="рек. 3–6"
       @toggle="$emit('toggle', 'content')"
       @set-limit="(n) => $emit('setLimit', 'content', n)"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none"><path d="M5 3h10l4 4v14H5z" stroke="#c4ff4d" stroke-width="1.8" stroke-linejoin="round" /><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round" /></svg>
       </template>
-      <div class="mod-stats">
-        <div class="stat"><div class="n lime">2</div><div class="l">в очереди</div></div>
-        <div class="stat"><div class="n">пн / чт</div><div class="l">расписание</div></div>
-        <div class="stat"><div class="n blue">+0.8</div><div class="l">к SSI / пост</div></div>
+      <div class="note" style="border-style:dashed">
+        <div class="lbl">Как работает</div>
+        Включи модуль и запусти автопилот на Dash — идеи появятся во вкладке «Контент». Публикация постов — отдельно, позже.
       </div>
     </ModuleCard>
 
