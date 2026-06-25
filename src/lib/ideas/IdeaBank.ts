@@ -1,5 +1,6 @@
 import type { KeyValueStore } from '../ports'
 import type { Idea } from '../types'
+import { asArray } from '../engagement/settings'
 
 /** Storage key for the persisted idea bank. */
 export const IDEA_BANK_KEY = 'ideas:bank'
@@ -26,7 +27,7 @@ export class IdeaBank {
   }
 
   async all(): Promise<Idea[]> {
-    return (await this.store.get<Idea[]>(IDEA_BANK_KEY)) ?? []
+    return asArray<Idea>(await this.store.get<Idea[]>(IDEA_BANK_KEY))
   }
 
   async remove(idea: Idea): Promise<void> {

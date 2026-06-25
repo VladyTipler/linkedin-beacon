@@ -11,6 +11,7 @@ import { loadSettings } from '@lib/engagement/settings'
 import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
 import { IdeaBank } from '@lib/ideas/IdeaBank'
 import { feedPostToFeedItem } from '@lib/ideas/feedItem'
+import { ideasPerDayLimit, rolloverIdeaDay, recordIdeaDay, remainingIdeas, IDEA_BUDGET_KEY, type IdeaDay } from '@lib/ideas/IdeaDayBudget'
 import type { HttpClient, HttpGet, LlmProviderId } from '@lib/llm/contracts'
 import type { LlmModel } from '@lib/llm/models'
 import type { Clock, KeyValueStore } from '@lib/ports'
@@ -86,5 +87,46 @@ export async function generateIdeas(deps: IdeaDeps): Promise<{ ideas: Idea[]; er
     return { ideas: await bank.all() }
   } catch (e) {
     return { ideas: [], error: e instanceof Error ? e.message : 'llm_failed' }
+  }
+}
+
+export interface RunIdeaDeps {
+  store: KeyValueStore
+  http: LlmHttp
+  clock: Clock
+}
+
+/**
+ * Extract ideas from a buffer the autopilot loop already harvested (no re-scroll),
+ * capped by the day-keyed ideas/day budget. Crosses the real LLM mapper. Returns how
+ * many NEW ideas were banked (dedup-aware) so a failed/duplicate extraction costs no budget.
+ */
+export async function extractRunIdeas(
+  deps: RunIdeaDeps,
+  posts: FeedPost[]
+): Promise<{ stored: number; error?: string }> {
+  if (!posts.length) return { stored: 0, error: 'no_feed' }
+  const cfg = await loadLlmConfig(deps.store)
+  if (!cfg.apiKey.trim()) return { stored: 0, error: 'no_key' }
+  const { expertise } = await loadSettings(deps.store)
+  if (!expertise.headline.trim()) return { stored: 0, error: 'no_expertise' }
+
+  const limit = ideasPerDayLimit(await deps.store.get('modules:state'))
+  const today = deps.clock.now().toISOString().slice(0, 10)
+  const budget = rolloverIdeaDay((await deps.store.get<IdeaDay>(IDEA_BUDGET_KEY)) ?? null, today)
+  const allowance = remainingIdeas(budget, limit)
+  if (allowance <= 0) return { stored: 0 }
+
+  const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, deps.http)
+  const bank = new IdeaBank(deps.store)
+  try {
+    const before = (await bank.all()).length
+    const ideas = await new IdeaExtractor(provider).extract(posts.map(feedPostToFeedItem), expertise)
+    await bank.add(ideas.slice(0, allowance))
+    const stored = (await bank.all()).length - before
+    await deps.store.set(IDEA_BUDGET_KEY, recordIdeaDay(budget, stored))
+    return { stored }
+  } catch (e) {
+    return { stored: 0, error: e instanceof Error ? e.message : 'llm_failed' }
   }
 }

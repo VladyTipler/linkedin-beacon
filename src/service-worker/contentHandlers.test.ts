@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateDraft, generateIdeas } from './contentHandlers'
+import { extractRunIdeas, generateDraft, generateIdeas } from './contentHandlers'
 import type { KeyValueStore, Clock } from '@lib/ports'
 import type { HttpClient, HttpGet } from '@lib/llm/contracts'
 import type { FeedPost } from '@lib/types'
@@ -84,5 +84,36 @@ describe('generateIdeas', () => {
     expect(res.ideas).toContainEqual({ topic: 'tRPC vs REST', angle: 'type-safety from Vue' })
     // persisted to the bank
     expect(await store.get('ideas:bank')).toEqual([{ topic: 'tRPC vs REST', angle: 'type-safety from Vue' }])
+  })
+})
+
+const CONTENT_MODS = {
+  'modules:state': [{ id: 'content', enabled: true, available: true, automationLevel: 'manual', dailyLimit: 5 }]
+}
+const SPARK_JSON = JSON.stringify([
+  { topic: 'Architecture', angle: 'Pragmatism', sourceIndex: 1, claim: 'Speed over purity', quote: 'ship fast' }
+])
+
+describe('extractRunIdeas (LLM boundary)', () => {
+  it('banks sparked ideas from the supplied buffer and records the day budget', async () => {
+    const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
+    const res = await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)
+    expect(res.stored).toBe(1)
+    const bank = (await store.get('ideas:bank')) as any[]
+    expect(bank[0].spark.source).toEqual({ author: 'A', id: 'urn:1' })
+    expect(await store.get('ideas:budget')).toEqual({ day: '2026-06-25', used: 1 })
+  })
+
+  it('errors no_key without calling the model when the key is empty', async () => {
+    const store = memStore({ ...CONTENT_MODS })
+    expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({
+      stored: 0,
+      error: 'no_key'
+    })
+  })
+
+  it('skips extraction silently when the daily budget is exhausted', async () => {
+    const store = memStore({ ...CONFIGURED, ...CONTENT_MODS, 'ideas:budget': { day: '2026-06-25', used: 5 } })
+    expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({ stored: 0 })
   })
 })
