@@ -33,3 +33,24 @@ describe('DraftGenerator', () => {
     expect(joined).toContain('MY_CUSTOM_PROMPT')
   })
 })
+
+describe('DraftGenerator spark grounding', () => {
+  it('feeds the spark claim/quote into the prompt when present', async () => {
+    const provider = new FakeProvider('x')
+    const sparked: Idea = {
+      topic: 'T', angle: 'A',
+      spark: { claim: 'Speed over purity', quote: 'ship fast', source: { author: 'Anna', id: 'urn:a' } }
+    }
+    await new DraftGenerator(provider).generate(sparked, expertise, 'be punchy')
+    const joined = provider.last!.messages.map((m) => m.content).join('\n')
+    expect(joined).toContain('Speed over purity')
+    expect(joined).toContain('ship fast')
+    expect(joined).toMatch(/do NOT paraphrase|do not echo/i)
+  })
+
+  it('omits spark wording when the idea has no spark', async () => {
+    const provider = new FakeProvider('x')
+    await new DraftGenerator(provider).generate(idea, expertise, 'be punchy') // existing `idea` has no spark
+    expect(provider.last!.messages.map((m) => m.content).join('\n')).not.toMatch(/sparked by/i)
+  })
+})
