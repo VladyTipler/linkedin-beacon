@@ -42,7 +42,10 @@ function pauseAll() {
         :total="total"
         :is-real="isReal"
         :refreshing="refreshing"
+        :autopilot-running="autopilotStatus?.running ?? false"
         @refresh="refresh"
+        @start-autopilot="startAutopilot"
+        @stop-autopilot="stopAutopilot"
       />
       <ModulesScreen
         v-else-if="active === 'v-auto'"
@@ -58,12 +61,9 @@ function pauseAll() {
         v-else
         :quarantined="quarantined"
         :summary="summary"
-        :autopilot-running="autopilotStatus?.running ?? false"
         @run-campaign="runCampaign"
         @pause-all="pauseAll"
         @cancel="cancel"
-        @start-autopilot="startAutopilot"
-        @stop-autopilot="stopAutopilot"
       />
     </main>
     <BottomNav :active="active" @go="go" />

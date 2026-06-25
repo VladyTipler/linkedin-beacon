@@ -11,8 +11,13 @@ const props = defineProps<{
   total: number
   isReal: boolean
   refreshing: boolean
+  autopilotRunning?: boolean
 }>()
-defineEmits<{ refresh: [] }>()
+defineEmits<{
+  refresh: []
+  startAutopilot: [host: 'tab' | 'window']
+  stopAutopilot: []
+}>()
 
 const chip = computed(() => {
   const parts: string[] = []
@@ -44,6 +49,19 @@ const chip = computed(() => {
     <button class="ghost" data-testid="refresh-ssi" :disabled="refreshing" @click="$emit('refresh')">
       {{ refreshing ? 'Считываю /sales/ssi…' : 'Обновить SSI со страницы' }}
     </button>
+
+    <div class="sect-lbl">Автопилот</div>
+    <div v-if="autopilotRunning" class="banner" style="margin-bottom:10px;border-color:rgba(196,255,77,.3)" data-testid="ap-running">
+      ● Автопилот работает… <span style="color:var(--mut)">статус — на ленте</span>
+    </div>
+    <div v-else class="banner" style="margin-bottom:10px">
+      🪟 Лайкает ленту до дневного бюджета сам. Запусти в этой вкладке или в <b>окне-воркере</b> (на второй монитор — фоновые вкладки троттлятся).
+    </div>
+    <div v-if="!autopilotRunning" class="lvl" style="margin-bottom:10px">
+      <button data-testid="ap-tab" @click="$emit('startAutopilot', 'tab')">В этой вкладке</button>
+      <button data-testid="ap-window" @click="$emit('startAutopilot', 'window')">В окне-воркере</button>
+    </div>
+    <button v-else class="ghost" data-testid="ap-stop" @click="$emit('stopAutopilot')">Стоп автопилота</button>
 
     <div class="sect-lbl">Эффект на этой неделе</div>
     <div class="mod" style="margin-bottom:0">
