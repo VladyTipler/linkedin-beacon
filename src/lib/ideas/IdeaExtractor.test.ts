@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { IdeaExtractor } from './IdeaExtractor'
+import { IdeaExtractor, parseIdeas } from './IdeaExtractor'
 import type { LlmProvider, LlmRequest } from '@lib/llm/contracts'
 import type { ExpertiseProfile, FeedItem } from '@lib/types'
 
@@ -70,5 +70,35 @@ describe('IdeaExtractor', () => {
   it('throws when the response is not parseable as ideas', async () => {
     const { provider } = fakeProvider('the model rambled without any JSON')
     await expect(new IdeaExtractor(provider).extract(posts, expertise)).rejects.toThrow()
+  })
+})
+
+describe('parseIdeas spark grounding', () => {
+  it('maps sourceIndex (1-based) to provenance + keeps claim/quote', () => {
+    const raw = JSON.stringify([
+      { topic: 'Architecture', angle: 'Pragmatism', sourceIndex: 1, claim: 'Speed over purity', quote: 'ship fast' }
+    ])
+    const [idea] = parseIdeas(raw, posts)
+    expect(idea.spark).toEqual({
+      claim: 'Speed over purity',
+      quote: 'ship fast',
+      source: { author: 'Dev A', id: '1' }
+    })
+  })
+
+  it('keeps the idea but omits spark when claim is missing', () => {
+    const [idea] = parseIdeas(JSON.stringify([{ topic: 'T', angle: 'A', sourceIndex: 2 }]), posts)
+    expect(idea).toEqual({ topic: 'T', angle: 'A' })
+    expect(idea.spark).toBeUndefined()
+  })
+
+  it('builds spark without source when sourceIndex is out of range', () => {
+    const [idea] = parseIdeas(JSON.stringify([{ topic: 'T', angle: 'A', claim: 'C', quote: 'Q', sourceIndex: 9 }]), posts)
+    expect(idea.spark).toEqual({ claim: 'C', quote: 'Q' })
+  })
+
+  it('still drops entries missing topic or angle', () => {
+    const raw = JSON.stringify([{ topic: '', angle: 'A', claim: 'C' }, { topic: 'T', angle: 'A2' }])
+    expect(parseIdeas(raw, posts).map((i) => i.angle)).toEqual(['A2'])
   })
 })

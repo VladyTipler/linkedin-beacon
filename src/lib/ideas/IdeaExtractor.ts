@@ -1,5 +1,5 @@
 import type { LlmProvider } from '../llm/contracts'
-import type { ExpertiseProfile, FeedItem, Idea } from '../types'
+import type { ExpertiseProfile, FeedItem, Idea, IdeaSpark } from '../types'
 
 /**
  * Turns harvested feed posts into a bank of content ideas (design-spec §4.3.1).
@@ -19,7 +19,10 @@ export class IdeaExtractor {
       'The feed posts below are a SIGNAL of which topics resonate now — NOT examples to imitate.',
       'Do not copy, summarise or paraphrase the posts. Echoing the feed is AI-slop and is forbidden.',
       "Cross each resonant topic with the user's own expertise to produce an original angle.",
-      'Return ONLY a JSON array: [{"topic": string, "angle": string}]. No prose.'
+      'Ground EACH idea in ONE specific post. Return ONLY a JSON array of',
+      '[{"topic": string, "angle": string, "sourceIndex": number, "claim": string, "quote": string}].',
+      'sourceIndex = the 1-based number of the post that sparked it. claim = its point/tension worth a take.',
+      'quote = a short (<140 char) snippet from that post. No prose outside the JSON.'
     ].join(' ')
 
     const user = [
@@ -34,14 +37,22 @@ export class IdeaExtractor {
         { role: 'user', content: user }
       ],
       temperature: 0.8,
-      maxTokens: 500
+      maxTokens: 600
     })
-    return parseIdeas(completion.text)
+    return parseIdeas(completion.text, posts)
   }
 }
 
-/** Tolerantly parse an ideas JSON array from a model response (handles ``` fences). */
-export function parseIdeas(raw: string): Idea[] {
+interface RawIdea {
+  topic: unknown
+  angle: unknown
+  sourceIndex?: unknown
+  claim?: unknown
+  quote?: unknown
+}
+
+/** Tolerantly parse ideas, grounding each in its source post (spark). Handles ``` fences. */
+export function parseIdeas(raw: string, posts: FeedItem[]): Idea[] {
   const json = extractJsonArray(raw)
   let parsed: unknown
   try {
@@ -54,15 +65,27 @@ export function parseIdeas(raw: string): Idea[] {
   }
   return parsed
     .filter(
-      (e): e is Idea =>
+      (e): e is RawIdea =>
         typeof e === 'object' &&
         e !== null &&
-        typeof (e as Idea).topic === 'string' &&
-        (e as Idea).topic.length > 0 &&
-        typeof (e as Idea).angle === 'string' &&
-        (e as Idea).angle.length > 0
+        typeof (e as RawIdea).topic === 'string' &&
+        ((e as RawIdea).topic as string).length > 0 &&
+        typeof (e as RawIdea).angle === 'string' &&
+        ((e as RawIdea).angle as string).length > 0
     )
-    .map((e) => ({ topic: e.topic, angle: e.angle }))
+    .map((e) => {
+      const idea: Idea = { topic: e.topic as string, angle: e.angle as string }
+      if (typeof e.claim === 'string' && e.claim.length > 0) {
+        const quote = typeof e.quote === 'string' ? e.quote : ''
+        const i = typeof e.sourceIndex === 'number' ? e.sourceIndex - 1 : -1
+        const spark: IdeaSpark =
+          i >= 0 && i < posts.length
+            ? { claim: e.claim, quote, source: { author: posts[i].author, id: posts[i].id } }
+            : { claim: e.claim, quote }
+        idea.spark = spark
+      }
+      return idea
+    })
 }
 
 function extractJsonArray(raw: string): string {

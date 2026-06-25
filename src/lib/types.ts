@@ -187,6 +187,15 @@ export interface ExpertiseProfile {
 /** Comment tone preset (design-spec §4.1). */
 export type CommentTone = 'expert' | 'friendly' | 'question'
 
+export interface IdeaSpark {
+  /** The specific point/tension in the source post worth a take. */
+  claim: string
+  /** A short snippet from the source as evidence (may be empty). */
+  quote: string
+  /** Provenance: which feed post sparked it (absent if the model gave a bad index). */
+  source?: { author: string; id: string }
+}
+
 /**
  * A content idea: a topic the feed shows is resonating, crossed with the user's
  * own angle (design-spec §4.3.1). NOT a copy of any post — that would be AI-slop.
@@ -194,6 +203,8 @@ export type CommentTone = 'expert' | 'friendly' | 'question'
 export interface Idea {
   topic: string
   angle: string
+  /** Optional grounding in a real resonating post — the anti-slop anchor. */
+  spark?: IdeaSpark
 }
 
 /** A generated post draft (design-spec §4.3). Not published until Layer 2. */
