@@ -1,8 +1,28 @@
 # Beacon — Progress (as of 2026-06-25)
 
-`main` is the working branch (user commits directly to main this project). **239 tests
-green, `npm run build` clean.** Repo: GitLab `v_sandz/linkedin-beacon`. Note: this
-session's commits are LOCAL (not yet pushed to origin).
+`main` is the working branch (user commits directly to main this project). **251 tests
+green, `npm run build` clean.** Repo: GitLab `v_sandz/linkedin-beacon`.
+
+## This session (2026-06-25) — beyond content Layer 1
+
+- **Activity border** (`66c3a02`/`6358cbb`, pushed): pulsing lime overlay on the
+  LinkedIn page while the agent works (`SET_ACTIVITY`, ref-counted) + a **status
+  pill** (Сканирую…/Пауза Xс/Перерыв N мин/Ставлю лайк…). **Phantom-running fix**:
+  START re-injects an orphaned content script (crxjs loader is async → poll until
+  ready) instead of leaving a fake "running". All verified LIVE via CDP.
+- **Diagnosed the "autopilot looks frozen" report (live, CDP):** it WORKS — likes
+  land; "frozen" = anti-ban pacing (8–45s) + human breaks (1–3 min) + background-tab
+  throttling, with no feedback. The status pill is the fix.
+- **Autopilot launch moved to Dash** (`0c12e92`, pushed) — superseded by the
+  consolidation below (launch stays on Dash, config moves to «Модули»).
+- **⭐ Automation consolidation — DESIGNED, NOT YET EXECUTED.** Spec `7e68ad0` + plan
+  `6af495f` (LOCAL, unpushed): one button (Dash) + per-module limits in «Модули»,
+  remove the campaign + automation-level UI, single budget (likes/day = ceiling base
+  ± jitter). 3 TDD tasks A→B→C. **This is the one-button principle now in the
+  architecture overview — all future module phases follow it.** Next action: execute
+  this plan (subagent-driven).
+
+## Done & live-verified (on Vlad's real authorized LinkedIn account)
 
 ## Done & live-verified (on Vlad's real authorized LinkedIn account)
 
