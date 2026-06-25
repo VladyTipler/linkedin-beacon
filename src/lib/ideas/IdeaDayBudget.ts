@@ -1,5 +1,4 @@
-import type { ModuleState } from '../types'
-import { asArray } from '../engagement/settings'
+import { moduleLimit } from '../engagement/settings'
 
 /** Persisted day-keyed ideas/day counter (mirrors the autopilot daily budget). */
 export interface IdeaDay {
@@ -10,11 +9,9 @@ export interface IdeaDay {
 export const IDEA_BUDGET_KEY = 'ideas:budget'
 export const DEFAULT_IDEAS_PER_DAY = 5
 
-/** The content module's ideas/day limit (its dailyLimit); guards the array-as-object shape. */
+/** The content module's ideas/day limit (via the shared moduleLimit reader). */
 export function ideasPerDayLimit(modulesState: unknown): number {
-  const m = asArray<ModuleState>(modulesState).find((x) => x?.id === 'content')
-  const n = m?.dailyLimit
-  return typeof n === 'number' && n > 0 ? n : DEFAULT_IDEAS_PER_DAY
+  return moduleLimit(modulesState, 'content', DEFAULT_IDEAS_PER_DAY)
 }
 
 /** Same-day carry-over (don't re-grant); a new day resets used to 0. Pure. */

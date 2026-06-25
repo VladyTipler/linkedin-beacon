@@ -1,5 +1,5 @@
 import type { KeyValueStore } from '../ports'
-import type { ExpertiseProfile, ModuleState, TargetProfile } from '../types'
+import type { ExpertiseProfile, ModuleId, ModuleState, TargetProfile } from '../types'
 import type { EngagementConfig } from './EngagementOrchestrator'
 
 export const SETTINGS_KEY = 'engagement:settings'
@@ -51,6 +51,16 @@ export function asArray<T>(value: unknown): T[] {
   if (Array.isArray(value)) return value as T[]
   if (value !== null && typeof value === 'object') return Object.values(value) as T[]
   return []
+}
+
+/**
+ * A module's per-day budget (its `dailyLimit`) from the persisted roster, with a
+ * fallback when missing or zero. SSOT for reading a module limit (likes/day,
+ * ideas/day, …). Guards the array-as-object shape.
+ */
+export function moduleLimit(modulesState: unknown, id: ModuleId, fallback: number): number {
+  const n = asArray<ModuleState>(modulesState).find((x) => x?.id === id)?.dailyLimit
+  return typeof n === 'number' && n > 0 ? n : fallback
 }
 
 export async function saveSettings(store: KeyValueStore, settings: EngagementSettings): Promise<void> {

@@ -26,12 +26,11 @@ export class DraftGenerator {
       `My angle: ${idea.angle}`,
       ...(idea.spark
         ? [
-            '',
             'This idea was sparked by a real post resonating now:',
             `- Their point: ${idea.spark.claim}`,
-            idea.spark.quote ? `- They wrote: "${idea.spark.quote}"` : '',
+            ...(idea.spark.quote ? [`- They wrote: "${idea.spark.quote}"`] : []),
             'Respond to / extend that point from YOUR experience. Do NOT paraphrase or echo their wording.'
-          ].filter(Boolean)
+          ]
         : []),
       '',
       'Author the post following these instructions:',

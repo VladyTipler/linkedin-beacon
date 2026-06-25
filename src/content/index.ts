@@ -15,7 +15,14 @@ import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike } from './domActions'
 import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
-import { SCANNING, LIKING, GENERATING_IDEAS, pauseLabel, breakLabel } from '@lib/autopilot/statusLabels'
+import {
+  SCANNING,
+  LIKING,
+  GENERATING_IDEAS,
+  COLLECTING_IDEAS,
+  pauseLabel,
+  breakLabel
+} from '@lib/autopilot/statusLabels'
 import { assertNever, type BeaconMessage, type FeedItem } from '@lib/types'
 
 const parser = createSsiParser(new SystemClock())
@@ -102,8 +109,6 @@ const IDEA_FLOOR = 8 // minimum buffer to bother extracting at run end
 let autopilotRunning = false
 let actionsSinceBreak = 0
 const actedUrns = new Set<string>()
-let wantLike = true
-let wantIdeas = false
 
 /** Cheap per-action risk probe (design-spec §5.4). Detection only — SW judges. */
 function detectRisk(): RiskMarker | null {
@@ -129,7 +134,7 @@ async function endRun(reason: import('@lib/types').StopReason): Promise<void> {
   await ask({ type: 'AUTOPILOT_ENDED', reason })
 }
 
-async function runAutopilotLoop(): Promise<void> {
+async function runAutopilotLoop(modules: { engagement: boolean; content: boolean }): Promise<void> {
   if (autopilotRunning) return
   autopilotRunning = true
   actedUrns.clear()
@@ -137,13 +142,19 @@ async function runAutopilotLoop(): Promise<void> {
   let emptyHarvests = 0
   let extractedThisRun = false
   const runBuffer = new FeedAccumulator()
-  const idleLabel = () => (wantLike ? SCANNING : GENERATING_IDEAS)
-  showActivity(document, idleLabel())
+  // Flags are captured per-run (locals, not ambient module state) so a second
+  // RUN_LOOP message can't mutate a running loop's behaviour. wantLike never
+  // changes mid-run, so the idle label is computed once.
+  const wantLike = modules.engagement
+  const wantIdeas = modules.content
+  const idleLabel = wantLike ? SCANNING : COLLECTING_IDEAS
+  showActivity(document, idleLabel)
   try {
     while (autopilotRunning) {
-      setActivityLabel(idleLabel())
+      setActivityLabel(idleLabel)
       const posts = await harvestByScrolling(25)
-      if (wantIdeas) runBuffer.add(posts)
+      // Stop feeding the buffer once we've extracted — nothing reads it after.
+      if (wantIdeas && !extractedThisRun) runBuffer.add(posts)
 
       // One grounded extraction per run, as soon as there's enough signal.
       if (wantIdeas && !extractedThisRun && runBuffer.size() >= IDEA_TARGET) {
@@ -231,9 +242,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'AUTOPILOT_RUN_LOOP':
-      wantLike = message.modules.engagement
-      wantIdeas = message.modules.content
-      void runAutopilotLoop()
+      void runAutopilotLoop(message.modules)
       sendResponse({ ok: true })
       return false
 

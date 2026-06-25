@@ -4,6 +4,9 @@
 
 export const SCANNING = 'Сканирую ленту…'
 export const LIKING = 'Ставлю лайк…'
+/** Idle label while a content-only run scrolls to gather enough signal. */
+export const COLLECTING_IDEAS = 'Собираю идеи…'
+/** Shown at the moment the buffer is sent to the LLM for extraction. */
 export const GENERATING_IDEAS = 'Генерирую идеи…'
 
 /** "Пауза 22с" — the anti-ban gap before the next action. */

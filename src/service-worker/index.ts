@@ -100,6 +100,7 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
   // re-grant the budget — the cap is genuinely daily (design-spec §5).
   const prev = existing ? { day: existing.day, ceiling: existing.ceiling, used: existing.used } : null
   const base = engagementLimit(modulesState)
+  const loopModules = runLoopModules(modulesState) // computed once; reused across re-inject retries
   const budget = resolveDailyBudget(prev, dayKey(), new DailyCeiling({ base }).forDay(autopilotRng))
   const state: AutopilotState = {
     running: true,
@@ -123,11 +124,11 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
   // re-inject the onMessage listener isn't up immediately — poll until it answers.
   const startLoop = async (): Promise<boolean> => {
     if (!tabId) return false
-    if (await sendRunLoop(tabId)) return true
+    if (await sendRunLoop(tabId, loopModules)) return true
     if (!(await reinjectContentScript(tabId))) return false
     for (let i = 0; i < 10; i++) {
       await sleep(500)
-      if (await sendRunLoop(tabId)) return true
+      if (await sendRunLoop(tabId, loopModules)) return true
     }
     return false
   }
@@ -148,9 +149,11 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
 }
 
 /** Send AUTOPILOT_RUN_LOOP to a tab; true if the content script answered. */
-async function sendRunLoop(tabId: number): Promise<boolean> {
+async function sendRunLoop(
+  tabId: number,
+  modules: { engagement: boolean; content: boolean }
+): Promise<boolean> {
   try {
-    const modules = runLoopModules(await store.get('modules:state'))
     await chrome.tabs.sendMessage(tabId, { type: 'AUTOPILOT_RUN_LOOP', modules })
     return true
   } catch {
