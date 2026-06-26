@@ -14,6 +14,7 @@ import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
+import { executeProfileView } from './profileView'
 import { harvestPeople, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel, countdownActivity } from './activityOverlay'
 import {
@@ -314,6 +315,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'EXECUTE_ACTION':
       void runAction(message).then(sendResponse)
+      return true // async sendResponse
+
+    case 'DWELL_PROFILE':
+      void executeProfileView(document, delay).then(sendResponse)
       return true // async sendResponse
 
     case 'PING':

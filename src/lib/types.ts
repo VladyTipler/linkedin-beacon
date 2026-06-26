@@ -320,6 +320,8 @@ export type BeaconMessage =
   | { type: 'GENERATE_IDEAS' }
   /** SW → content: harvest connect candidates from the current page; replies PersonCandidate[]. */
   | { type: 'HARVEST_PEOPLE' }
+  /** SW → content: human-dwell on the current (already-navigated) profile; replies ActionResult. */
+  | { type: 'DWELL_PROFILE' }
   | { type: 'PING' }
   | { type: 'PONG' }
 
