@@ -5,7 +5,7 @@ import { asArray } from '@lib/engagement/settings'
 import { selectCandidates } from '@lib/connect/selectCandidates'
 import {
   VIEW_DAY_BUDGET_KEY, VIEW_SEEN_KEY, rolloverViewDay, recordViewDay,
-  remainingDailyViews, viewsPerDay, viewRunCap
+  remainingDailyViews, viewRunCap, DEFAULT_VIEWS_PER_DAY
 } from '@lib/views/ViewDayBudget'
 import { VIEW_HISTORY_KEY, appendViewHistory, type ViewRecord } from '@lib/views/ViewHistory'
 
@@ -35,7 +35,7 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
   const mod = asArray<ModuleState>(modulesState).find((m) => m?.id === 'profile_views')
   if (!mod?.enabled) return { executed: 0, skipped: 0, reason: 'disabled' }
 
-  const dailyLimit = viewsPerDay(modulesState)
+  const dailyLimit = typeof mod.dailyLimit === 'number' && mod.dailyLimit > 0 ? mod.dailyLimit : DEFAULT_VIEWS_PER_DAY
   const day = rolloverViewDay(await deps.store.get(VIEW_DAY_BUDGET_KEY), dayKey(deps.clock))
   const remaining = remainingDailyViews(day, dailyLimit)
   const cap = viewRunCap(remaining, dailyLimit, deps.rng)
@@ -61,9 +61,12 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
   }
 
   if (records.length) {
-    await deps.store.set(VIEW_HISTORY_KEY, appendViewHistory(await deps.store.get(VIEW_HISTORY_KEY), records))
-    await deps.store.set(VIEW_SEEN_KEY, [...seen].slice(-5000))
-    await deps.store.set(VIEW_DAY_BUDGET_KEY, recordViewDay(day, records.length))
+    const existingHistory = await deps.store.get(VIEW_HISTORY_KEY)
+    await Promise.all([
+      deps.store.set(VIEW_HISTORY_KEY, appendViewHistory(existingHistory, records)),
+      deps.store.set(VIEW_SEEN_KEY, [...seen].slice(-5000)),
+      deps.store.set(VIEW_DAY_BUDGET_KEY, recordViewDay(day, records.length))
+    ])
   }
   return { executed: records.length, skipped: selected.length - records.length }
 }

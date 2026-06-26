@@ -24,7 +24,7 @@ export function useProfileAudit() {
 
   const refresh = async () => {
     loading.value = true
-    // Task 11 replaces this DEMO with a real REQUEST_PROFILE_AUDIT round-trip.
+    // DEMO until the real profile reader lands (hash-free /voyager/api/me + DOM fallback).
     const snap = DEMO
     audit.value = auditProfile(snap)
     loading.value = false
