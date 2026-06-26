@@ -1,152 +1,39 @@
-# Beacon — Progress (as of 2026-06-26)
+# Beacon — Progress (as of 2026-06-26, late)
 
-`main` is the working branch (user commits directly to main this project). **318 tests
-green, `npm run build` clean.** Repo: GitLab `v_sandz/linkedin-beacon`.
+`main` is the working branch (Vlad commits directly to main — built-in memory `direct-to-main`).
+**354 tests green, `npm run build` clean.** ⚠️ **23 commits in LOCAL `main` NOT pushed to origin**
+(c45553a..87fec0b) — Smart Connect + ideas fix. Vlad pushes himself; offer/confirm before pushing.
 
-## This session (2026-06-26) — Content Layer 2 (auto-publish) — code DONE, pending live test
+## This session (2026-06-26) — Smart Connect (SSI people+relationships) — SHIPPED & live-verified
+Full detail in `smart-connect.md`. Built via brainstorm→spec→plan→subagent-driven TDD (11 tasks),
+then a long live-debug round that fixed why connects "entered /search/ and snapped back":
+- ROOT bugs fixed: navigation race (PING raced the dying /feed script → channel closed → empty harvest);
+  people-search renders ~3s late + **pagination not infinite scroll**; `targetRegions` array-as-object;
+  activity overlay dies on each nav; run report omitted connects; daily-cap gap.
+- Added: multi-region geoUrn targeting (US/Canada/UAE/Europe/Asia, verified live), day-keyed cap,
+  connect history (who+when) on Reports.
+- **Vlad confirmed connects send live.** Couldn't fully self-verify end-to-end — I throttled my own
+  debug session by hammering LinkedIn search (→ empty results to me); Vlad's manual session works.
 
-Spec `docs/superpowers/specs/2026-06-26-content-layer-2-design.md`, plan
-`docs/superpowers/plans/2026-06-26-content-layer-2.md`. Raises SSI pillar **brand**.
-6 tasks via executing-plans (inline TDD). **Approve-first = the user clicking «Опубликовать»
-on a draft** — posts are NEVER full-auto / NEVER in the autopilot run (invariant #5); the
-weekly cap is a safety limit on a manual action, NOT a 2nd autopilot budget (one-button
-reconciliation in the spec §2).
+## Also fixed this session
+- **Ideas bug (`bf69521`):** `IdeaExtractor maxTokens:600` starved gemini-3.5-flash (reasoning model) →
+  empty content → 0 ideas. Dropped the cap. ⚠️ Vlad reports ideas STILL empty after → a SECOND cause
+  remains (debug next session).
 
-- **Live composer recon (read-only, CDP):** the share box is in a SHADOW DOM and the editor
-  is **Quill** (async commit) — see gotchas + `docs/linkedin-dom-anchors.md` "Post composer".
-- **`executeComposerPost`** (`content/domActions.ts`, `a944bb5`): pierce `#interop-outlet.shadowRoot`
-  → open `[aria-label="Start a post"]` → type char-by-char (execCommand) → **poll the
-  re-queried Post button** until enabled (artdeco replaces the node on enable — held refs go
-  stale, advisor-caught) → click → confirm modal closed (12s); any failure → Dismiss→Discard.
-  Reuses `EXECUTE_ACTION` with `type:'post'` (one new message only: `PUBLISH_POST`).
-- **`PostWeekBudget`** (ISO-week, pure) + `postsPerWeek` setting (default 3).
-- **`publishPost`** SW handler (`contentHandlers.ts`): week-gate → drive content → on success
-  remove draft + record week. Boundary-tested with fakes.
-- **UI:** «Опубликовать» button per draft + remaining-week indicator (`ContentScreen`/`useContent`).
-- **Language slice** (`c590cf3`): `contentLanguage` setting (default English — Vlad targets
-  USD-remote) injected into BOTH post (`DraftGenerator`) and comment (`CommentDraftService`)
-  prompts; boundary test asserts it reaches the LLM wire. Settings dropdown + posts/week input.
-- Also: TopBar settings icon → proper gear (`94da246`).
+## NEXT TASK — "Content Pipeline v2" (Vlad's direction, approved; brainstorm next session)
+1. **Fix ideas generation** (still empty on Content tab; surface the swallowed in-loop extraction error).
+2. **Draft «Одобрить для публикации» button** → mark approved.
+3. **Auto-publish bot:** publishes approved drafts on configured **weekdays only** (no time — whenever
+   the bot runs that day), as a step in «Запустить», gated by `postsPerWeek`. Changes invariant #5's
+   mechanism (human still approves each post; mechanical publish automated). Spec→plan→TDD.
 
-**✅ LIVE-VERIFIED (2026-06-26, CDP on Vlad's account):** the adapter published a REAL post
-end-to-end from the content-script isolated world ("Post successful", verified, then deleted —
-account clean, no test posts). The full SW→content→adapter→post chain returns `{ok:true}` in
-~6 s when the feed tab isn't throttled. Apparent "hangs" during testing were the LinkedIn tab
-being OS-occluded/throttled in headless WSL Chrome (Vlad's own hypothesis) — a test artifact,
-not a product bug; in production the docked panel sits next to the genuinely-foreground tab.
-See gotchas "Live-testing the publish via CDP". Re-query Post-button fix kept (defensive;
-artdeco didn't replace the node in this build — `sameNode:true`).
+## Prior shipped (live-verified on Vlad's account) — see git + architecture-overview
+Phase 1 SSI · engagement (broad likes + auto-scroll, autonomous) · comments full-auto (judged, OFF by
+default) · ideas-in-the-loop · Content Layer 2 (auto-publish via composer shadow-DOM/Quill) · content
+language · automation consolidation (ONE-BUTTON: per-module limit, single «Запустить»).
 
-**⏳ NEXT:** `/ce-simplify-code` pass before push; commits NOT yet pushed to origin (still local
-`main`). Optional UI polish: surface the «Опубликовать» disabled-at-0 cap in a manual panel test.
-
-## Prior session (2026-06-25) — beyond content Layer 1
-
-- **Activity border** (`66c3a02`/`6358cbb`, pushed): pulsing lime overlay on the
-  LinkedIn page while the agent works (`SET_ACTIVITY`, ref-counted) + a **status
-  pill** (Сканирую…/Пауза Xс/Перерыв N мин/Ставлю лайк…). **Phantom-running fix**:
-  START re-injects an orphaned content script (crxjs loader is async → poll until
-  ready) instead of leaving a fake "running". All verified LIVE via CDP.
-- **Diagnosed the "autopilot looks frozen" report (live, CDP):** it WORKS — likes
-  land; "frozen" = anti-ban pacing (8–45s) + human breaks (1–3 min) + background-tab
-  throttling, with no feedback. The status pill is the fix.
-- **Autopilot launch moved to Dash** (`0c12e92`, pushed) — superseded by the
-  consolidation below (launch stays on Dash, config moves to «Модули»).
-- **⭐ Automation consolidation — DONE & live-verified (CDP).** Spec
-  `2026-06-25-automation-consolidation-design.md`, plan `…-automation-consolidation.md`.
-  3 TDD tasks (A `d70eb84`+fix `2589704`; B `8440fd0`; C `f9192e6`) + final opus review
-  + fix `1642586`. Delivered: «Модули» = per-module limit input (likes/day, рек. 30–40)
-  replacing the automation-level selector; smart_connect/content → «Скоро»
-  (`available:false`, pinned on merge so an old `available:true` can't resurrect them);
-  the engagement limit is the `DailyCeiling` **base** (verified live: dailyLimit 100 →
-  ceiling 102 = base ± jitter); the one-shot «Запустить кампанию» (`RUN_ENGAGEMENT`) +
-  its budget counter removed → `autopilot:state` is the SINGLE budget. **This is the
-  one-button principle (architecture overview) — all future module phases follow it.**
-  - **FOLLOW-UP #1 (next phase, important):** `startAutopilot` reads the engagement
-    *limit* but NOT its `enabled` toggle — disabling engagement in «Модули» and pressing
-    launch still likes. The one-button promise is "run ENABLED modules"; wire the enable
-    check (and ideally a "no modules enabled" hint). Pre-existing, flagged by final review.
-
-## Done & live-verified (on Vlad's real authorized LinkedIn account)
-
-- **Phase 1 (SSI):** internal-API SSI + DOM fallback, background refresh, sidebar 4
-  screens 1:1 with demo, LLM layer (OpenRouter + Gemini behind a factory).
-- **Engagement increment 1 — broad likes + auto-scroll:** one click → scroll-harvest
-  a batch → `LikeFilter` (broad, junk only) → gate → `executeLike` → 8–45s pacing →
-  daily budget → summary via sendResponse. Live: real likes landed on DOM.
-- **Autonomous mode:** one button → continuous loop → likes to a daily ceiling →
-  BurstGuard + human breaks + RiskAssessor kill-switch. Reports tab + Start/Stop.
-
-## Done & reviewed — pending Vlad's Chrome field-test (Content module Layer 1, 2026-06-25)
-
-Spec `docs/superpowers/specs/2026-06-25-content-module-layer-1-design.md`, plan
-`docs/superpowers/plans/2026-06-25-content-module-layer-1.md`. 14 tasks via
-subagent-driven-development (impl + task-review + fixes each), final whole-branch
-review on opus (verdict: no Critical), then a polish commit. Slice = **idea →
-readable post draft** (auto-publish is Layer 2, out of scope).
-
-- **BYOK LLM config** (`src/lib/llm/config.ts`, key `llm:config`, storage.local only):
-  user picks provider (openrouter/gemini) + pastes their own key + picks a model.
-- **Model catalog** (`src/lib/llm/models.ts` + `LlmProvider.listModels()` on both
-  providers via a new `HttpGet` port, composition not HttpClient-widening). OpenRouter
-  list is keyless/public; Gemini list needs the key + filters `generateContent`. On any
-  fetch failure → curated `FALLBACK_MODELS`. Searchable dropdown in Settings.
-- **Settings screen** (`v-settings`, ⚙ in TopBar): LLM section · Expertise (headline/
-  stack/bio, edits the `expertise` sub-object of `engagement:settings` via no-clobber
-  RMW `applyExpertiseForm`) · post-generator prompt (`content:settings`, ships
-  `DEFAULT_POST_PROMPT`). `onSave` = `Promise.allSettled` + a `save-error` indicator.
-- **Content tab** (`v-content`, 6th nav) with **Идеи | Черновики** sub-tabs
-  (`useContent`): generate ideas from the live feed, per-idea «В черновик», drafts
-  with edit/copy/regenerate/delete.
-- **DraftGenerator** (`content/DraftGenerator.ts`, behind LlmProvider) + **DraftStore**
-  (`content:drafts`, asArray-guarded). **IdeaBank.remove** added.
-- **SW orchestration extracted to `src/service-worker/contentHandlers.ts`** (deps
-  injected → unit-testable; keeps `index.ts` from growing further). 3 new messages
-  only: `LIST_MODELS`, `GENERATE_IDEAS`, `GENERATE_DRAFT`. List/delete done directly
-  from the panel via `chrome.storage.local` (useModules precedent) — no round-trip.
-  **Boundary tests cross the real OpenRouter mapper** (fake HttpClient returns the
-  real `{choices:[{message:{content}}]}` shape) for both generateIdeas & generateDraft.
-- **Manifest:** host_permissions += `openrouter.ai`, `generativelanguage.googleapis.com`
-  (only non-LinkedIn hosts; required for BYOK). LLM fetch runs in the SW.
-
-**Field-test checklist (Vlad, in Chrome):** ⚙ → enter a real OpenRouter/Gemini key →
-«Загрузить модели» → **CHECK THE COUNT**: the dropdown must show *many* models
-(OpenRouter ~hundreds, Gemini ~dozens). If you see only ~4, the live fetch/parse
-SILENTLY FAILED and you're looking at `FALLBACK_MODELS` — not a real success. → fill
-Expertise → open the LinkedIn feed → Контент/Идеи → «Сгенерировать идеи» (real ideas
-appear) → «В черновик» → Черновики (readable post) → edit/copy. **Run all the way
-through a real generate** — that's the only place a bad key actually surfaces (HTTP 401
-banner); "Модели загружены" alone proves nothing. Sanity-check UI against demo tokens.
-
-⚠️ **Contract-test debt (CLAUDE.md rule not yet fully satisfied):** the OpenRouter/Gemini
-`/models` JSON shapes in `models.test.ts` (`OPENROUTER_RAW`/`GEMINI_RAW`) are HAND-WRITTEN
-assumptions, not captured from a real call — the boundary tests cross the mapper, not the
-wire. If the live model count looks wrong, capture the real `/models` JSON during the
-field-test and add a contract-snapshot test against it.
-
-## Known limitations (honest — flagged, not silent)
-
-- **keyValid indicator is structurally always-green** (accepted tradeoff, Vlad's call):
-  `listModels` returns a non-empty fallback on failure and OpenRouter's list is keyless,
-  so "Модели загружены" shows for any key. Real key-invalidity surfaces at generation
-  time (the error banner shows the provider's HTTP error, e.g. 401). A true validity
-  signal would need `listModels` to return `{models, fromFallback}` — deferred.
-- **Autopilot budget pool still separate** from the manual "Run campaign" pool
-  (`autopilot:state.used` vs `engagement:budget:like`). Combined daily volume not unified.
-- **No live-verification yet** of the content pipeline end-to-end (needs Vlad's key + feed).
-- `service-worker/index.ts` is ~385 lines (>300 strict rule) — pre-existing router debt;
-  new content logic was extracted to `contentHandlers.ts` to avoid adding to it.
-
-## Not built yet (future increments)
-
-- **Content Layer 2:** auto-publish via a composer DOM adapter (the irreversible part,
-  §5.5). Approve-first; full-auto for posts is a later opt-in.
-- **Smart Connect** (recruiter connect + Note) — DOM adapters not built (Todoist Фаза 3).
-- **Usage telemetry:** anonymous install-UUID heartbeat → control.kanev.space (opt-out).
-- Unify the two budget pools (above).
-
-## Todoist phase mapping (numbering differs from spec!)
-
-"Фаза 2 — Модуль вовлечённости (лента)" = engagement = DONE & closed. Smart Connect =
-Фаза 3; content autopilot = Фаза 4. Engagement-v2 (broad likes), autonomous mode, and
-this content Layer 1 came from Vlad's mid-session redirections, not the original tree.
+## Known limitations / debt
+- `service-worker/index.ts` + `content/index.ts` > 300-line rule (pre-existing router debt).
+- `design-reference.html` smart_connect card diverged (old Note/fake-stats) — sync or update spec.
+- Comments OFF by default (Vlad noticed only likes ran — expected; revisit after content v2).
+- Deferred SDD minors in `.superpowers/sdd/progress.md` (test assertions; OK-to-defer per final review).
