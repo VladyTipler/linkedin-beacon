@@ -104,6 +104,12 @@ request/response: `panelBus.request` + SW `sendResponse` (broadcasts can be miss
 3. `automationLevel` per-module, default **manual**. Lives in `modules:state` (SSOT) —
    `loadSettings` derives `config.level` from it.
 4. Feed feeds the FIRST idea step (signal), never the last (echo = AI-slop).
-5. Likes broad (cheap/reversible); comments narrow + judged; posts approve-first (never full-auto by default).
+5. Likes broad (cheap/reversible); comments narrow + judged; posts **approve-first**.
+   *Content Pipeline v2 shift (2026-06-26):* the human still approves every post by hand
+   (explicit «Одобрить» → `Draft.approved`), so approve-first holds — but the **mechanical
+   publish** of an already-approved draft is now an automated step inside «Запустить»
+   (`publishApprovedThen`), gated by `publishDays` (default Пн/Ср/Пт) + weekly `postsPerWeek`,
+   **one post per run**. Old wording "posts never in a run" is superseded: only *publishing*
+   of human-approved drafts runs; nothing auto-approves.
 6. LLM behind `LlmProvider` port; keys via backend proxy (infra task), never in the extension.
 7. UI 1:1 with the demo.
