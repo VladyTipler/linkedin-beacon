@@ -423,11 +423,20 @@ async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefin
   }
 }
 
-/** Navigate the LinkedIn tab to a URL and wait until its content script answers PING. */
+/**
+ * Navigate the LinkedIn tab and wait until the NEW page is actually loaded + its content
+ * script answers. Waiting for PING alone races: during the transition the OLD page's
+ * content script answers immediately, so a harvest sent then hits a context that's about
+ * to be destroyed → "message channel closed" → empty harvest. So gate on the tab being
+ * `status:'complete'` on the target URL FIRST, then confirm the (new) content script pings.
+ */
 async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
   await chrome.tabs.update(tabId, { url })
-  for (let i = 0; i < 20; i++) {
+  const target = url.split('?')[0]
+  for (let i = 0; i < 30; i++) {
     await sleep(500)
+    const tab = await chrome.tabs.get(tabId).catch(() => null)
+    if (!tab || tab.status !== 'complete' || !(tab.url ?? '').startsWith(target)) continue
     const pong = await chrome.tabs.sendMessage(tabId, { type: 'PING' }).catch(() => null)
     if (pong) return
   }
