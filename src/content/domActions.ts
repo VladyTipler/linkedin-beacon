@@ -199,3 +199,47 @@ async function waitForValue<T>(find: () => T | null, timeoutMs: number): Promise
   }
   return null
 }
+
+// ── Smart Connect: people-search invite. Connect control is an <a>; the invite
+// modal renders ASYNC in the #interop-outlet shadow root (same host as composer).
+// See docs/linkedin-dom-anchors.md "Smart Connect". ──
+const SEND_NO_NOTE = 'button[aria-label="Send without a note"]'
+const INVITE_DISMISS = 'button[aria-label="Dismiss"]'
+
+/** The live invite-modal's "Send without a note" button (re-queried each poll). */
+function findSendNoNote(root: ParentNode): HTMLButtonElement | null {
+  const shadow = (root.querySelector(SHADOW_HOST) as HTMLElement | null)?.shadowRoot ?? null
+  return shadow?.querySelector<HTMLButtonElement>(SEND_NO_NOTE) ?? null
+}
+
+/**
+ * Send a bare connection request to a harvested candidate: click the Connect `<a>`
+ * (located by member id), wait for the shadow invite modal, click "Send without a
+ * note", confirm it closed. On failure → Dismiss. Edge — the real send is exercised
+ * live, not in jsdom.
+ */
+export async function executeConnect(
+  root: Document,
+  candidate: { memberId: string; name: string },
+  delay: HumanDelay
+): Promise<ActionResult> {
+  const anchor = root.querySelector<HTMLElement>(
+    `a[componentkey*="member:${candidate.memberId}_connect"]`
+  )
+  if (!anchor) return { ok: false, reason: 'connect_anchor_not_found' }
+  anchor.click()
+
+  const send = await waitForValue(() => findSendNoNote(root), 6000)
+  if (!send) {
+    ;(root.querySelector(SHADOW_HOST) as HTMLElement | null)?.shadowRoot
+      ?.querySelector<HTMLElement>(INVITE_DISMISS)
+      ?.click()
+    return { ok: false, reason: 'send_button_not_found' }
+  }
+  await sleep(delay.nextMs(300, 900)) // brief human pause before sending
+  send.click()
+
+  const closed = await waitForCond(() => findSendNoNote(root) === null, 6000)
+  if (!closed) return { ok: false, reason: 'modal_did_not_close' }
+  return { ok: true }
+}
