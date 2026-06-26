@@ -49,6 +49,10 @@ Design/plan for the consolidation: `docs/superpowers/{specs,plans}/2026-06-25-au
 - **Live LinkedIn DOM anchors:** `docs/linkedin-dom-anchors.md` (validated against the
   real authorized feed — selectors below).
 - **Backlog (parked ideas):** `docs/backlog.md`.
+- **Versioning policy (HOLD ON CONTROL each session):** `docs/versioning.md` + `CHANGELOG.md`.
+  Version SSOT = `package.json` (manifest reads `pkg.version`). Now `0.5.0`. Pre-1.0: new
+  live-verified feature = MINOR `0.x.0`; fix/UX/refactor = PATCH. 1.0.0 = all Todoist done, no
+  stubs/hardcode, gotchas handled, E2E green. Bump is part of the feature-completion ritual.
 
 ## Stack
 
