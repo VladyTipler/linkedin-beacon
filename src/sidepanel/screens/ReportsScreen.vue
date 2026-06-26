@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import type { RunReport, ModuleId } from '@lib/types'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { CONNECT_HISTORY_KEY, type ConnectRecord } from '@lib/connect/ConnectHistory'
+import { VIEW_HISTORY_KEY, type ViewRecord } from '@lib/views/ViewHistory'
 import { asArray } from '@lib/engagement/settings'
 import { panelBus } from '../lib/panelBus'
 
@@ -19,9 +20,12 @@ const moduleExecuted = (r: RunReport, id: ModuleId) => r.modules.find((m) => m.i
 
 // Detailed connect history (who was added + when) — read straight from storage.
 const connects = ref<ConnectRecord[]>([])
+const views = ref<ViewRecord[]>([])
 onMounted(async () => {
   if (!panelBus.available()) return
-  connects.value = asArray<ConnectRecord>(await new ChromeStorageStore().get(CONNECT_HISTORY_KEY))
+  const store = new ChromeStorageStore()
+  connects.value = asArray<ConnectRecord>(await store.get(CONNECT_HISTORY_KEY))
+  views.value = asArray<ViewRecord>(await store.get(VIEW_HISTORY_KEY))
 })
 </script>
 
@@ -37,7 +41,8 @@ onMounted(async () => {
         {{ REASON[r.stopReason] }}
       </div>
       Лайки: <b>{{ moduleExecuted(r, 'engagement') }}</b> ·
-      Коннекты: <b>{{ moduleExecuted(r, 'smart_connect') }}</b>
+      Коннекты: <b>{{ moduleExecuted(r, 'smart_connect') }}</b> ·
+      Просмотры: <b>{{ moduleExecuted(r, 'profile_views') }}</b>
     </div>
 
     <div class="sect-lbl">Добавленные контакты · {{ connects.length }}</div>
@@ -46,6 +51,14 @@ onMounted(async () => {
       <div class="lbl">{{ fmt(c.sentAt) }}</div>
       <a :href="c.profileUrl" target="_blank" rel="noopener"><b>{{ c.name }}</b></a>
       <template v-if="c.headline"> — {{ c.headline }}</template>
+    </div>
+
+    <div class="sect-lbl">Просмотренные профили · {{ views.length }}</div>
+    <p v-if="!views.length" class="banner">Пока никого не смотрели.</p>
+    <div v-for="v in views" :key="v.memberId + v.viewedAt" class="note" data-testid="view-record">
+      <div class="lbl">{{ fmt(v.viewedAt) }}</div>
+      <a :href="v.profileUrl" target="_blank" rel="noopener"><b>{{ v.name }}</b></a>
+      <template v-if="v.headline"> — {{ v.headline }}</template>
     </div>
   </section>
 </template>

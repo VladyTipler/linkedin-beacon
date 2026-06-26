@@ -111,6 +111,23 @@ function toggleRegion(r: string) {
     </ModuleCard>
 
     <ModuleCard
+      :module="byId(modules, 'profile_views')"
+      title="Просмотр профилей — People"
+      desc="Заходит на профили целевой ЦА из поиска (растит пиллар «Нужные люди»). Самое безопасное действие."
+      limit-label="Профилей/день"
+      recommended="рек. ~40"
+      @toggle="$emit('toggle', 'profile_views')"
+      @set-limit="(n) => $emit('setLimit', 'profile_views', n)"
+    >
+      <template #icon>👀</template>
+      <div class="note" style="border-style:dashed">
+        <div class="lbl">Как работает</div>
+        Использует таргет Smart Connect («Кого искать» + регионы). Просмотр — read-only, без инвайта.
+        Потолок SSI на free-аккаунте ~75 (Sales Navigator не нужен).
+      </div>
+    </ModuleCard>
+
+    <ModuleCard
       :module="byId(modules, 'content')"
       title="Контент — идеи из ленты"
       desc="Пока автопилот листает ленту, собирает идеи для постов с привязкой к реальному поводу · черновик по клику"
