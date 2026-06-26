@@ -1,15 +1,43 @@
-# Beacon — Progress (as of 2026-06-26, night)
+# Beacon — Progress (as of 2026-06-27, night)
 
-`main` = working branch (direct-to-main). **All pushed to origin (HEAD `8618b6b`).**
-**~390 tests green, `npm run build` clean.** MVP считается готовым (Vlad): чтение SSI + 3 рабочих
-модуля в одной кнопке, live-проверены на его аккаунте.
+`main` = working branch (direct-to-main). **All pushed to origin (HEAD `1923fb6`). Version `0.6.0`.**
+**~393 tests green, `npm run build` clean.** MVP готов; pull-side просмотры профилей ЗАШИПЛЕНЫ.
 
-## NORTH STAR (sharpened this session)
+## NORTH STAR
 **Главная задача Beacon = поднимать SSI на МАКСИМУМ** (pull > push). SSI = 4 пиллара ×25.
 Маппинг пиллар→модуль в `src/lib/ssi/weeklyGoal.ts`: insights→engagement, brand→content,
-people→smart_connect, relationships→smart_connect.
+**people→profile_views** (research-fix: People = просмотры/searches, НЕ коннекты), relationships→smart_connect.
+Версионирование на контроле: `docs/versioning.md` (фича=minor бамп в ритуале завершения).
 
-## This session (2026-06-26) — Content Pipeline v2 SHIPPED + live-verified + UX pass
+## This session (2026-06-27) — SSI PULL SIDE: Profile Views SHIPPED + Audit screen (reader deferred) → v0.6.0
+Research-FIRST (4 web-агента → LinkedIn Help a105145/a594698): подтверждено — исходящие просмотры профилей
+растят People-пиллар; входящие просмотры = МИФ; Sales Navigator НЕ множитель (потолок free ~75). Research +
+spec + plan в `docs/{research,superpowers/specs,superpowers/plans}/2026-06-26-ssi-pull*`.
+- **⭐ Просмотр профилей (Feature A) — ПОЛНОСТЬЮ, live-verifiable:** модуль `profile_views` (default 40/день),
+  шаг `runViewsThen` в «Запустить» ПЕРЕД connects, переиспользует таргет Smart Connect (SSOT), тот же анти-бан
+  гейт (day-cap+jitter+human pace+seen-set dedup+ready-gate+overlay re-assert). Gate на viewsEnabled +
+  empty-keywords guard (advisor). Карточка + Reports split + список. Core: `src/lib/views/` (ViewDayBudget,
+  ViewHistory) + `viewHandlers.ts` (boundary-tested) + `executeProfileView` dwell + `DWELL_PROFILE` msg.
+- **Аудит профиля (Feature B) — экран + чистая логика, НА ДЕМО (ридер отложен):** `auditProfile()` official
+  All-Star 7 (hard, гейтят %) + best-practice (soft, честно НЕ official). Экран + навигация готовы, но
+  **вход с Dash скрыт `AUDIT_ENTRY_ENABLED=false`** — наивный live-ридер давал ложные «у тебя нет X»
+  (lazy-load + hashed-классы). API-recon: профильный метод = voyager graphql `voyagerIdentityDashProfiles.<hash>`,
+  но хеш ротируется + секции = отдельные lazy-вызовы → нет стабильного одного endpoint. См. built-in memory
+  `profile-reader-false-negatives`.
+- Прочее: idea-bank newest-first (Vlad ask), `auto_apply` выпилен, бэклог Todoist почищен (50→25: убраны
+  бэкенд-прокси/окно-воркер/human-mouse/Easy-Apply/монетизация/Note-эпик), версия 0.1.0→0.5.0→0.6.0.
+- Final whole-branch review (opus): Ready to merge, no Critical/Important; fixed seen-set slice(-5000).
+
+## NEXT TASK — Profile Audit REAL reader (Brand pillar, honest)
+Todoist ⭐ переформулирован. Сделать реальное чтение профиля для аудита:
+1. Источник: voyager API (`voyagerIdentityDashProfiles`, обработать ротацию хеша + lazy section-вызовы) ИЛИ
+   DOM `/in/me/` scroll-to-load + точные селекторы текущего билда. Recon решит, где present-never-absent.
+2. **Честное unknown-состояние:** `ProfileSnapshot` сейчас всё bool/number — добавить «не смог проверить»
+   (tri-state или `unreadable: string[]`), НЕ показывать ложное «нет X». Boundary-тест на реальной форме.
+3. PII-sanitize любой fixture (no urn/contact/csrf). Включить `AUDIT_ENTRY_ENABLED`, wire `loading` ref.
+Затем: live-smoke просмотров (Vlad, foreground-вкладка) — заходит на N профилей, Reports показывает, day-cap держит.
+
+## Prior session (2026-06-26) — Content Pipeline v2 SHIPPED + live-verified + UX pass
 Built via brainstorm→spec→plan→subagent-TDD (12 tasks), then a long live-debug + UX round.
 Spec/plan: `docs/superpowers/{specs,plans}/2026-06-26-content-pipeline-v2*`.
 - **Ideas bug FIXED (root cause confirmed by LIVE STORAGE DUMP, NOT budget):** in-loop extraction
@@ -32,19 +60,13 @@ Spec/plan: `docs/superpowers/{specs,plans}/2026-06-26-content-pipeline-v2*`.
   removed worker-window option (always current tab). Live countdown on the on-page pill («Пауза 11с→…»,
   «Перерыв m:ss»). Dash autopilot copy now describes the full cycle across all enabled modules.
 
-## NEXT TASK (Vlad's direction — next session, research-FIRST)
-Goal = push SSI higher via the PULL side (the current gap). Build research-backed:
-1. **SSI research (web, REAL facts):** what actually moves each of the 4 pillars; validate "do profile
-   VIEWS affect SSI?" + Sales Navigator reality. Separate confirmed from myth.
-2. **⭐ Profile audit (Brand):** read profile → completeness checklist (criteria grounded in the research,
-   NOT invented) → what to fix.
-3. **⭐ Profile-views step (People + pull):** visit N target profiles/day from search ("вы смотрели профиль"
-   → inbound). Same anti-ban gate as Smart Connect. Only if research confirms SSI impact.
-(Todoist actualized: 18 shipped tasks closed, 5 SSI-max added — incl. these + reply-to-commenters + Note-string fix.)
-
 ## Known limitations / debt
-- `service-worker/index.ts` (~518) + `content/index.ts` (~387) > 300-line rule (pre-existing router debt;
-  suggested extract `runSteps.ts`). Worker-window SW path now unused (UI removed) — can be deleted.
+- `service-worker/index.ts` (~566, +views wiring) + `content/index.ts` > 300-line rule (pre-existing router
+  debt; spec-anticipated extract `runSteps.ts` is OVERDUE — do as a dedicated refactor). Worker-window SW path
+  unused (UI removed) — can be deleted.
+- Profile Audit на ДЕМО-данных, вход скрыт (`AUDIT_ENTRY_ENABLED`) — реальный ридер = NEXT TASK.
+- Combined-load watch: при обоих включённых модулях views+connects харвестят один people-search → больше
+  search-страниц (потолок free commercial-use). Оба default off, деградация = пустой поиск (не бан).
 - `weeklyGoal.ts` relationships lever says «персональный Note» but Smart Connect ships BARE invites — stale
   string (honesty fix queued in Todoist).
 - Inbox screen still demo (real inbound = pull-loop, queued). No SSI history charts yet.
