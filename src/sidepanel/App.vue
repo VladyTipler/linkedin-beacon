@@ -8,6 +8,7 @@ import SafetyScreen from './screens/SafetyScreen.vue'
 import ReportsScreen from './screens/ReportsScreen.vue'
 import SettingsScreen from './screens/SettingsScreen.vue'
 import ContentScreen from './screens/ContentScreen.vue'
+import ProfileAuditScreen from './screens/ProfileAuditScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
@@ -37,8 +38,9 @@ function pauseAll() {
   <div class="app">
     <TopBar :active="autopilotStatus?.running ?? false" @open-settings="go('v-settings')" />
     <main class="body">
+      <ProfileAuditScreen v-if="active === 'v-profile'" @back="go('v-dash')" />
       <DashScreen
-        v-if="active === 'v-dash'"
+        v-else-if="active === 'v-dash'"
         :snapshot="snapshot"
         :pillars="pillars"
         :total="total"
@@ -49,6 +51,7 @@ function pauseAll() {
         @refresh="refresh"
         @start-autopilot="startAutopilot"
         @stop-autopilot="stopAutopilot"
+        @open-audit="go('v-profile')"
       />
       <ModulesScreen
         v-else-if="active === 'v-auto'"

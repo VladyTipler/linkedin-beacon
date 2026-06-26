@@ -19,6 +19,7 @@ const emit = defineEmits<{
   refresh: []
   startAutopilot: []
   stopAutopilot: []
+  openAudit: []
 }>()
 
 // One launch button that flips Запустить ↔ Остановить. `pending` gives the click an
@@ -93,6 +94,8 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
     >
       ⚠ {{ startHint }}
     </div>
+
+    <button class="ghost" data-testid="open-audit" @click="$emit('openAudit')">📋 Аудит профиля</button>
 
     <div class="sect-lbl">Цель недели</div>
     <div v-if="goal" class="banner" data-testid="weekly-goal">

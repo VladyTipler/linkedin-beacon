@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export type ViewId = 'v-dash' | 'v-auto' | 'v-inbox' | 'v-set' | 'v-reports' | 'v-content' | 'v-settings'
+export type ViewId = 'v-dash' | 'v-auto' | 'v-inbox' | 'v-set' | 'v-reports' | 'v-content' | 'v-settings' | 'v-profile'
 
 export interface NavItem {
   id: ViewId
