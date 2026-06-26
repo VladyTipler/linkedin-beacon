@@ -62,7 +62,7 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
 
   if (records.length) {
     await deps.store.set(VIEW_HISTORY_KEY, appendViewHistory(await deps.store.get(VIEW_HISTORY_KEY), records))
-    await deps.store.set(VIEW_SEEN_KEY, [...seen].slice(0, 5000))
+    await deps.store.set(VIEW_SEEN_KEY, [...seen].slice(-5000))
     await deps.store.set(VIEW_DAY_BUDGET_KEY, recordViewDay(day, records.length))
   }
   return { executed: records.length, skipped: selected.length - records.length }

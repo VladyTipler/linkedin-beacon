@@ -61,4 +61,13 @@ describe('runViewStep', () => {
     const res = await runViewStep(baseDeps(store))
     expect(res.executed).toBe(1) // only 1 left today
   })
+
+  it('persists NOTHING when every dwell fails (persist-only-on-success)', async () => {
+    const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] })
+    const res = await runViewStep({ ...baseDeps(store), dwell: async () => ({ ok: false }) })
+    expect(res).toMatchObject({ executed: 0, skipped: 2 })
+    expect(store.data[VIEW_HISTORY_KEY]).toBeUndefined()
+    expect(store.data[VIEW_DAY_BUDGET_KEY]).toBeUndefined()
+    expect(store.data[VIEW_SEEN_KEY]).toBeUndefined()
+  })
 })
