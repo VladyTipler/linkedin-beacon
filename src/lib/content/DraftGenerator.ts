@@ -48,8 +48,10 @@ export class DraftGenerator {
         { role: 'system', content: system },
         { role: 'user', content: user }
       ],
-      temperature: 0.8,
-      maxTokens: 800
+      // No maxTokens cap: reasoning models (e.g. gemini-3.5-flash) spend the output
+      // budget on reasoning BEFORE the post, so a cap (was 800) truncates the post
+      // mid-sentence. Matches IdeaExtractor. A LinkedIn post is self-limiting via the prompt.
+      temperature: 0.8
     })
     return completion.text.trim()
   }

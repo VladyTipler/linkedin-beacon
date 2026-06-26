@@ -1,6 +1,7 @@
 import type { KeyValueStore } from '../ports'
 import type { CommentTone } from '../types'
 import { DEFAULT_POSTS_PER_WEEK } from './PostWeekBudget'
+import { DEFAULT_POST_PROMPT } from './defaultPostPrompt'
 import { asArray } from '../engagement/settings'
 
 export const CONTENT_SETTINGS_KEY = 'content:settings'
@@ -41,14 +42,8 @@ export function languageName(code: string): string {
   return LANG_NAMES[code] ?? 'English'
 }
 
-/** Sensible default so generation works before the user customises it. */
-export const DEFAULT_POST_PROMPT = [
-  'Write a single LinkedIn post in my voice.',
-  'Open with a concrete hook (no "I am excited to share").',
-  'Body: one specific insight from my own experience — not generic advice.',
-  'Keep it under 1300 characters, short paragraphs, no hashtag spam (0–3 max).',
-  'No emojis-as-bullets. End with a question or a takeaway, not a CTA to like/follow.'
-].join(' ')
+// The default post prompt is long content → kept in its own file; re-exported for consumers.
+export { DEFAULT_POST_PROMPT }
 
 export async function loadContentSettings(store: KeyValueStore): Promise<ContentSettings> {
   const raw = await store.get<ContentSettings>(CONTENT_SETTINGS_KEY)

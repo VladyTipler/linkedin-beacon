@@ -33,6 +33,16 @@ describe('DraftGenerator', () => {
     expect(joined).toContain('MY_CUSTOM_PROMPT')
     expect(joined).toContain('English')
   })
+
+  it('does not starve reasoning models with a tiny output cap (was 800 → post truncated mid-sentence)', async () => {
+    // Same failure family as the ideas bug: a reasoning model (gemini-3.5-flash) spends the
+    // output budget on a reasoning phase BEFORE the post text, so an 800-token cap leaves only
+    // a sentence or two → the post comes back cut off mid-word. Omit the cap (or keep ≥2000).
+    const provider = new FakeProvider('x')
+    await new DraftGenerator(provider).generate(idea, expertise, 'be punchy', 'English')
+    const cap = provider.last!.maxTokens
+    expect(cap === undefined || cap >= 2000).toBe(true)
+  })
 })
 
 describe('DraftGenerator spark grounding', () => {
