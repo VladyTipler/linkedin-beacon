@@ -127,8 +127,7 @@ async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader
   return acc.items().slice(0, target)
 }
 
-const IDEA_TARGET = 25 // unique posts buffered before the one-per-run extraction
-const IDEA_FLOOR = 8 // minimum buffer to bother extracting at run end
+const IDEA_TARGET = 25 // unique posts buffered before the one-per-run mid-run extraction
 
 // ── Autopilot loop: the continuous engagement run lives here (survives SW
 // eviction while this tab is open). SW is the authoritative gatekeeper. ──
@@ -266,8 +265,10 @@ async function runAutopilotLoop(modules: {
       }
     }
   } finally {
-    // Catch-up: extract from a smaller buffer if the run ended before the target.
-    if (wantIdeas && !extractedThisRun && runBuffer.size() >= IDEA_FLOOR) {
+    // Catch-up: ALWAYS attempt one extraction at run end if we never did mid-run —
+    // even a small buffer is worth banking, and it guarantees ideas:lastRun is written
+    // every content-enabled run (so a 0-result run is visible on the Content tab, not silent).
+    if (wantIdeas && !extractedThisRun) {
       await ask({ type: 'EXTRACT_RUN_IDEAS', posts: runBuffer.items() })
     }
     autopilotRunning = false
