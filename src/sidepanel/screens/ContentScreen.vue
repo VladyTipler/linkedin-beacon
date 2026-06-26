@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { useContent } from '../composables/useContent'
 
 const {
-  tab, ideas, drafts, generating, error, postsLeft, lastRun,
+  tab, ideas, drafts, generating, drafting, approving, savedDraft, error, postsLeft, lastRun,
   loadIdeas, generateIdeas, removeIdea, toDraft, loadLastRun,
   loadDrafts, removeDraft, updateDraft, approveDraft, loadPostBudget
 } = useContent()
@@ -34,8 +34,13 @@ const ERR: Record<string, string> = {
     'Модель вернула ответ не в том формате. Выбери модель посильнее (⚙) — например openai/gpt-4o-mini или google/gemini-2.5-flash — и попробуй снова.'
 }
 
-async function copy(text: string) {
-  try { await navigator.clipboard.writeText(text) } catch { /* clipboard blocked */ }
+// Transient per-draft copy feedback so the click lands "Скопировано ✓" on its own button.
+const copyState = ref<{ id: string; ok: boolean } | null>(null)
+async function copy(id: string, text: string) {
+  let ok = true
+  try { await navigator.clipboard.writeText(text) } catch { ok = false }
+  copyState.value = { id, ok }
+  setTimeout(() => { if (copyState.value?.id === id) copyState.value = null }, 1600)
 }
 </script>
 
@@ -62,7 +67,10 @@ async function copy(text: string) {
           ↳ повод: {{ idea.spark.claim }}<span v-if="idea.spark.source"> · {{ idea.spark.source.author }}</span>
         </div>
         <div class="row">
-          <button class="btn" :data-testid="`to-draft-${i}`" @click="toDraft(idea)">В черновик</button>
+          <button class="btn" :data-testid="`to-draft-${i}`" :disabled="drafting === `idea-${i}`"
+                  @click="toDraft(idea, `idea-${i}`)">
+            {{ drafting === `idea-${i}` ? 'Генерирую…' : 'В черновик' }}
+          </button>
           <button class="btn" @click="removeIdea(idea)">Удалить</button>
         </div>
       </div>
@@ -77,14 +85,24 @@ async function copy(text: string) {
       <div v-for="d in drafts" :key="d.id" class="note" :data-testid="`draft-${d.id}`">
         <div class="lbl">{{ d.ideaTopic }}</div>
         <textarea :value="d.text" rows="6" @change="updateDraft(d.id, ($event.target as HTMLTextAreaElement).value)" />
+        <span v-if="savedDraft === d.id" class="v ok" :data-testid="`draft-saved-${d.id}`">сохранено ✓</span>
         <div class="row">
           <span v-if="d.approved" class="lbl" :data-testid="`approved-badge-${d.id}`" style="color: var(--lime)">Одобрено ✓</span>
-          <button v-if="!d.approved" class="btn primary" :data-testid="`approve-${d.id}`" @click="approveDraft(d.id, true)">
-            Одобрить
+          <button v-if="!d.approved" class="btn primary" :data-testid="`approve-${d.id}`"
+                  :disabled="approving === d.id" @click="approveDraft(d.id, true)">
+            {{ approving === d.id ? 'Одобряю…' : 'Одобрить' }}
           </button>
-          <button v-else class="btn" :data-testid="`unapprove-${d.id}`" @click="approveDraft(d.id, false)">Отозвать</button>
-          <button class="btn" data-testid="copy" @click="copy(d.text)">Копировать</button>
-          <button class="btn" @click="toDraft({ topic: d.ideaTopic, angle: d.ideaAngle })">Перегенерировать</button>
+          <button v-else class="btn" :data-testid="`unapprove-${d.id}`"
+                  :disabled="approving === d.id" @click="approveDraft(d.id, false)">
+            {{ approving === d.id ? 'Отзываю…' : 'Отозвать' }}
+          </button>
+          <button class="btn" :data-testid="`copy-${d.id}`" @click="copy(d.id, d.text)">
+            {{ copyState?.id === d.id ? (copyState.ok ? 'Скопировано ✓' : 'Не вышло') : 'Копировать' }}
+          </button>
+          <button class="btn" :disabled="drafting === `draft-${d.id}`"
+                  @click="toDraft({ topic: d.ideaTopic, angle: d.ideaAngle }, `draft-${d.id}`)">
+            {{ drafting === `draft-${d.id}` ? 'Генерирую…' : 'Перегенерировать' }}
+          </button>
           <button class="btn" @click="removeDraft(d.id)">Удалить</button>
         </div>
       </div>

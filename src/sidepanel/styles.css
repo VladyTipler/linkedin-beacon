@@ -125,8 +125,13 @@ body{min-height:100vh;display:flex;justify-content:center;padding:0;background:r
 .fld{display:flex;flex-direction:column;gap:6px;margin:10px 0}
 .fld .k{font-size:11px;color:var(--mut)}
 .fld input,.fld select,.fld textarea{background:#0e1422;border:1px solid var(--line);border-radius:9px;color:#fff;padding:9px 11px;font:inherit}
-.btn{background:#141c2e;border:1px solid var(--line);border-radius:9px;color:#fff;padding:9px 13px;cursor:pointer}
+.btn{background:#141c2e;border:1px solid var(--line);border-radius:9px;color:#fff;padding:9px 13px;cursor:pointer;transition:filter .12s ease,transform .06s ease,opacity .12s ease}
+.btn:hover:not(:disabled){filter:brightness(1.18)}
+.btn:active:not(:disabled){transform:translateY(1px);filter:brightness(.95)}
+.btn:disabled{opacity:.5;cursor:default}
 .btn.primary{background:var(--lime,#c4ff4d);color:#0a0e17;border:none;font-weight:600}
+.btn.launch{width:100%;padding:12px 13px;font-size:13px;font-weight:600}
+.btn.stop{background:#241218;border:1px solid rgba(255,107,107,.45);color:#ff9b9b}
 .gear{margin-left:8px;background:none;border:none;color:var(--mut);cursor:pointer;width:24px;height:24px}
 .subtabs{display:flex;gap:8px;margin-bottom:12px}
 .subtabs button{flex:1;padding:8px;border:1px solid var(--line);border-radius:9px;background:#0e1422;color:var(--mut);cursor:pointer}

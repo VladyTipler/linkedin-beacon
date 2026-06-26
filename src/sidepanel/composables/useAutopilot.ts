@@ -16,7 +16,9 @@ export function useAutopilot() {
   }
   // The SW gates the launch on enabled modules; surface its "no enabled modules"
   // verdict instead of pre-deciding here (the SW is the source of truth).
-  const start = async (host: AutopilotHost) => {
+  // Always launch in the current tab now (the worker-window option was removed — the user
+  // prepares their own window/monitor). `host` defaults to 'tab'.
+  const start = async (host: AutopilotHost = 'tab') => {
     startHint.value = null
     const res = await panelBus.request<StartAutopilotResult>({ type: 'START_AUTOPILOT', host })
     if (res && !res.started && res.reason === 'no-modules') {

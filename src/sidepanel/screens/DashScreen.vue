@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { SsiSnapshot } from '@lib/types'
 import type { PillarView } from '../lib/ssiView'
 import { weeklyGoal } from '@lib/ssi/weeklyGoal'
@@ -15,11 +15,22 @@ const props = defineProps<{
   autopilotRunning?: boolean
   startHint?: string | null
 }>()
-defineEmits<{
+const emit = defineEmits<{
   refresh: []
-  startAutopilot: [host: 'tab' | 'window']
+  startAutopilot: []
   stopAutopilot: []
 }>()
+
+// One launch button that flips Запустить ↔ Остановить. `pending` gives the click an
+// immediate state until the SW status (autopilotRunning) catches up.
+const pending = ref(false)
+watch(() => props.autopilotRunning, () => { pending.value = false })
+function onLaunch() {
+  if (pending.value) return
+  pending.value = true
+  if (props.autopilotRunning) emit('stopAutopilot')
+  else emit('startAutopilot')
+}
 
 const chip = computed(() => {
   const parts: string[] = []
@@ -60,21 +71,28 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
       ● Автопилот работает… <span style="color:var(--mut)">статус — на ленте</span>
     </div>
     <div v-else class="banner" style="margin-bottom:10px">
-      🪟 Лайкает ленту до дневного бюджета сам. Запусти в этой вкладке или в <b>окне-воркере</b> (на второй монитор — фоновые вкладки троттлятся).
+      Лайкает ленту до дневного бюджета сам — в этой вкладке. Держи вкладку LinkedIn активной (фоновые троттлятся); можно вынести её на второй монитор.
     </div>
-    <div v-if="!autopilotRunning" class="lvl" style="margin-bottom:10px">
-      <button data-testid="ap-tab" @click="$emit('startAutopilot', 'tab')">В этой вкладке</button>
-      <button data-testid="ap-window" @click="$emit('startAutopilot', 'window')">В окне-воркере</button>
-    </div>
+
+    <button
+      :class="autopilotRunning ? 'btn stop launch' : 'btn primary launch'"
+      data-testid="ap-launch"
+      :disabled="pending"
+      @click="onLaunch"
+    >
+      {{ pending
+        ? (autopilotRunning ? 'Останавливаю…' : 'Запускаю…')
+        : (autopilotRunning ? 'Остановить' : 'Запустить') }}
+    </button>
+
     <div
       v-if="!autopilotRunning && startHint"
       class="banner"
-      style="margin-bottom:10px;border-color:rgba(255,176,32,.35)"
+      style="margin-top:10px;border-color:rgba(255,176,32,.35)"
       data-testid="ap-no-modules"
     >
       ⚠ {{ startHint }}
     </div>
-    <button v-else class="ghost" data-testid="ap-stop" @click="$emit('stopAutopilot')">Стоп автопилота</button>
 
     <div class="sect-lbl">Цель недели</div>
     <div v-if="goal" class="banner" data-testid="weekly-goal">

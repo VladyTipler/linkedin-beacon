@@ -24,6 +24,11 @@ export function useContent() {
   const ideas = ref<Idea[]>([])
   const draftList = ref<Draft[]>([])
   const generating = ref(false)
+  // Per-action pending keys so feedback lands on the CLICKED button, not a shared flag:
+  // drafting = the to-draft/regenerate button key currently generating; approving = the draft id.
+  const drafting = ref<string | null>(null)
+  const approving = ref<string | null>(null)
+  const savedDraft = ref<string | null>(null)
   const error = ref<string | null>(null)
   const postsLeft = ref(0)
   const lastRun = ref<IdeasLastRun | null>(null)
@@ -57,11 +62,11 @@ export function useContent() {
     draftList.value = [...all].sort((a, b) => Number(b.approved ?? false) - Number(a.approved ?? false))
   }
 
-  async function toDraft(idea: Idea) {
-    generating.value = true
+  async function toDraft(idea: Idea, key: string) {
+    drafting.value = key
     error.value = null
     const res = await panelBus.request<{ draft: Draft | null; error?: string }>({ type: 'GENERATE_DRAFT', idea })
-    generating.value = false
+    drafting.value = null
     if (res?.error) error.value = res.error
     await loadDrafts()
     if (res?.draft) tab.value = 'drafts'
@@ -73,13 +78,17 @@ export function useContent() {
   }
 
   async function approveDraft(id: string, approved: boolean) {
+    approving.value = id
     await drafts.setApproved(id, approved)
     await loadDrafts()
+    approving.value = null
   }
 
   async function updateDraft(id: string, text: string) {
     await drafts.update(id, text)
     await loadDrafts()
+    savedDraft.value = id
+    setTimeout(() => { if (savedDraft.value === id) savedDraft.value = null }, 1600)
   }
 
   /** Remaining publishes this ISO-week, against the configured weekly cap. */
@@ -93,7 +102,7 @@ export function useContent() {
   }
 
   return {
-    tab, ideas, drafts: draftList, generating, error, postsLeft, lastRun,
+    tab, ideas, drafts: draftList, generating, drafting, approving, savedDraft, error, postsLeft, lastRun,
     loadIdeas, generateIdeas, removeIdea, loadLastRun,
     loadDrafts, toDraft, removeDraft, updateDraft, approveDraft, loadPostBudget
   }
