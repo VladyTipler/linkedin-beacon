@@ -240,8 +240,10 @@ export interface Draft {
  */
 export interface IdeasLastRun {
   at: string
-  reason: 'ok' | 'no_feed' | 'disabled' | 'no_key' | 'no_expertise' | 'budget_exhausted' | 'error'
+  reason: 'ok' | 'no_feed' | 'thin_feed' | 'disabled' | 'no_key' | 'no_expertise' | 'budget_exhausted' | 'error'
   stored: number
+  /** Buffered posts seen this run (set on thin_feed so the UI can show how close it was). */
+  posts?: number
   budget?: { used: number; limit: number }
   error?: string
 }

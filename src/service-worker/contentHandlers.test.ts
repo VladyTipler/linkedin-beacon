@@ -34,6 +34,15 @@ const CONFIGURED = {
 const fixedClock: Clock = { now: () => new Date('2026-06-25T00:00:00.000Z') }
 
 const posts: FeedPost[] = [{ urn: 'urn:1', authorName: 'A', text: 'hiring vue devs' }]
+// ≥ MIN_IDEA_BUFFER (5) so extraction proceeds; SPARK_JSON sourceIndex is 1-based → maps to
+// bufferPosts[0], so keep author 'A'/urn:1 first for the spark assertion.
+const bufferPosts: FeedPost[] = [
+  { urn: 'urn:1', authorName: 'A', text: 'hiring vue devs' },
+  { urn: 'urn:2', authorName: 'B', text: 'post 2' },
+  { urn: 'urn:3', authorName: 'C', text: 'post 3' },
+  { urn: 'urn:4', authorName: 'D', text: 'post 4' },
+  { urn: 'urn:5', authorName: 'E', text: 'post 5' }
+]
 
 describe('generateDraft', () => {
   it('errors no_key when the key is empty', async () => {
@@ -100,7 +109,7 @@ const SPARK_JSON = JSON.stringify([
 describe('extractRunIdeas (LLM boundary)', () => {
   it('banks sparked ideas from the supplied buffer and records the day budget', async () => {
     const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
-    const res = await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)
+    const res = await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, bufferPosts)
     expect(res.stored).toBe(1)
     const bank = (await store.get('ideas:bank')) as any[]
     expect(bank[0].spark.source).toEqual({ author: 'A', id: 'urn:1' })
@@ -115,9 +124,19 @@ describe('extractRunIdeas (LLM boundary)', () => {
     })
   })
 
-  it('skips extraction silently when the daily budget is exhausted', async () => {
+  it('skips extraction (stored:0) when the daily budget is exhausted', async () => {
     const store = memStore({ ...CONFIGURED, ...CONTENT_MODS, 'ideas:budget': { day: '2026-06-25', used: 5 } })
-    expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)).toEqual({ stored: 0 })
+    expect(await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, bufferPosts)).toEqual({ stored: 0 })
+  })
+
+  it('records ideas:lastRun=thin_feed (no LLM call) when the buffer is below MIN_IDEA_BUFFER', async () => {
+    const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
+    const res = await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts) // 1 post < 5
+    expect(res).toEqual({ stored: 0 })
+    const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
+    expect(last.reason).toBe('thin_feed')
+    expect(last.posts).toBe(1)
+    expect(await store.get('ideas:bank')).toBeNull() // anti-slop: nothing banked from a thin buffer
   })
 
   it('returns stored:0 (no extraction) when the content module is disabled', async () => {
@@ -138,7 +157,7 @@ describe('extractRunIdeas (LLM boundary)', () => {
 
   it('records ideas:lastRun=ok with the stored count + budget on success', async () => {
     const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
-    await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)
+    await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, bufferPosts)
     const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
     expect(last.reason).toBe('ok')
     expect(last.stored).toBe(1)
@@ -148,7 +167,7 @@ describe('extractRunIdeas (LLM boundary)', () => {
 
   it('records ideas:lastRun=budget_exhausted (with counts) instead of a silent skip', async () => {
     const store = memStore({ ...CONFIGURED, ...CONTENT_MODS, 'ideas:budget': { day: '2026-06-25', used: 5 } })
-    await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)
+    await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, bufferPosts)
     const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
     expect(last.reason).toBe('budget_exhausted')
     expect(last.budget).toEqual({ used: 5, limit: 5 })
@@ -157,7 +176,7 @@ describe('extractRunIdeas (LLM boundary)', () => {
 
   it('records ideas:lastRun=error with the provider/parse message when extraction throws', async () => {
     const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
-    await extractRunIdeas({ store, http: fakeHttp('sorry, here are some ideas as prose'), clock: fixedClock }, posts)
+    await extractRunIdeas({ store, http: fakeHttp('sorry, here are some ideas as prose'), clock: fixedClock }, bufferPosts)
     const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
     expect(last.reason).toBe('error')
     expect(typeof last.error).toBe('string')

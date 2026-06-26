@@ -107,6 +107,8 @@ export interface RunIdeaDeps {
 
 /** Storage key for the most recent in-loop extraction diagnostic (surfaced on the Content tab). */
 export const IDEAS_LAST_RUN_KEY = 'ideas:lastRun'
+/** Minimum buffered posts to spend an LLM call on (anti-slop: a thin feed makes weak ideas). */
+export const MIN_IDEA_BUFFER = 5
 
 /**
  * Extract ideas from a buffer the autopilot loop already harvested (no re-scroll),
@@ -141,6 +143,12 @@ export async function extractRunIdeas(
   if (!expertise.headline.trim()) {
     await writeLast({ reason: 'no_expertise', stored: 0 })
     return { stored: 0, error: 'no_expertise' }
+  }
+  // Anti-slop (invariant #4): don't spend an LLM call on a thin buffer — but still
+  // RECORD the run so the Content tab shows "too few posts" instead of going silent.
+  if (posts.length < MIN_IDEA_BUFFER) {
+    await writeLast({ reason: 'thin_feed', stored: 0, posts: posts.length })
+    return { stored: 0 }
   }
 
   const limit = ideasPerDayLimit(modulesState)
