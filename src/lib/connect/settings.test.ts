@@ -16,16 +16,16 @@ describe('connect settings', () => {
     expect(defaultConnectKeywords({ headline: '', stack: [] })).toBe('recruiter')
   })
 
-  it('loads stored keywords; empty store returns empty string (SW fills the default)', async () => {
+  it('loads stored keywords; empty store → empty keywords + default region US', async () => {
     const empty = fakeStore()
-    expect(await loadConnectSettings(empty)).toEqual({ searchKeywords: '' })
+    expect(await loadConnectSettings(empty)).toEqual({ searchKeywords: '', targetRegions: ['US'] })
     const s = fakeStore({ [CONNECT_SETTINGS_KEY]: { searchKeywords: 'devops recruiter' } })
-    expect(await loadConnectSettings(s)).toEqual({ searchKeywords: 'devops recruiter' })
+    expect(await loadConnectSettings(s)).toEqual({ searchKeywords: 'devops recruiter', targetRegions: ['US'] })
   })
 
-  it('round-trips via save', async () => {
+  it('round-trips keywords + regions via save', async () => {
     const s = fakeStore()
-    await saveConnectSettings(s, { searchKeywords: 'qa hiring' })
-    expect(await loadConnectSettings(s)).toEqual({ searchKeywords: 'qa hiring' })
+    await saveConnectSettings(s, { searchKeywords: 'qa hiring', targetRegions: ['Europe', 'Asia'] })
+    expect(await loadConnectSettings(s)).toEqual({ searchKeywords: 'qa hiring', targetRegions: ['Europe', 'Asia'] })
   })
 })

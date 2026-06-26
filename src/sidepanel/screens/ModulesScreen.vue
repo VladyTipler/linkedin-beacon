@@ -5,7 +5,8 @@ import ModuleCard from '../components/ModuleCard.vue'
 import EngagementSettingsForm from '../components/EngagementSettingsForm.vue'
 import { useEngagementStats } from '../composables/useEngagementStats'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
-import { loadConnectSettings, saveConnectSettings, defaultConnectKeywords } from '@lib/connect/settings'
+import { loadConnectSettings, saveConnectSettings, defaultConnectKeywords, DEFAULT_TARGET_REGIONS } from '@lib/connect/settings'
+import { REGION_KEYS } from '@lib/connect/regions'
 import { loadSettings } from '@lib/engagement/settings'
 import { panelBus } from '../lib/panelBus'
 
@@ -21,16 +22,30 @@ const barWidth = computed(() =>
 )
 
 const connectKeywords = ref('')
+const connectRegions = ref<string[]>([...DEFAULT_TARGET_REGIONS])
+const REGION_LABEL: Record<string, string> = {
+  US: '🇺🇸 США', Canada: '🇨🇦 Канада', UAE: '🇦🇪 ОАЭ', Europe: '🇪🇺 Европа', Asia: '🌏 Азия'
+}
+const regionLabel = (r: string) => REGION_LABEL[r] ?? r
 const store = new ChromeStorageStore()
 onMounted(async () => {
   if (!panelBus.available()) return
   const s = await loadConnectSettings(store)
+  connectRegions.value = s.targetRegions
   if (s.searchKeywords.trim()) { connectKeywords.value = s.searchKeywords; return }
   const { expertise } = await loadSettings(store)
   connectKeywords.value = defaultConnectKeywords(expertise)
 })
-function saveKeywords() {
-  if (panelBus.available()) void saveConnectSettings(store, { searchKeywords: connectKeywords.value })
+function saveConnect() {
+  if (panelBus.available()) {
+    void saveConnectSettings(store, { searchKeywords: connectKeywords.value, targetRegions: connectRegions.value })
+  }
+}
+function toggleRegion(r: string) {
+  const i = connectRegions.value.indexOf(r)
+  if (i >= 0) connectRegions.value.splice(i, 1)
+  else connectRegions.value.push(r)
+  saveConnect()
 }
 </script>
 
@@ -62,28 +77,31 @@ function saveKeywords() {
     <ModuleCard
       :module="byId(modules, 'smart_connect')"
       title="Smart Connect — рекрутёры"
-      desc="Таргет по роли/гео/стеку + персональный Note к каждому"
+      desc="Поиск рекрутёров и ЦА по ключевым словам в выбранных регионах · обычный коннект-запрос"
       limit-label="Коннектов/неделю"
-      recommended="рек. 60–80"
+      recommended="рек. ~100"
       @toggle="$emit('toggle', 'smart_connect')"
       @set-limit="(n) => $emit('setLimit', 'smart_connect', n)"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="#c4ff4d" stroke-width="1.8" /><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round" /><path d="M18 7v6M21 10h-6" stroke="#c4ff4d" stroke-width="1.8" stroke-linecap="round" /></svg>
       </template>
-      <div class="mod-stats">
-        <div class="stat"><div class="n blue">12</div><div class="l">запросов сегодня</div></div>
-        <div class="stat"><div class="n lime">41%</div><div class="l">принято</div></div>
-        <div class="stat"><div class="n">186</div><div class="l">в воронке</div></div>
+      <div class="note" style="border-style:dashed">
+        <div class="lbl">Как работает</div>
+        Задай «Кого искать» и регионы, запусти автопилот на Dash — бот находит людей и шлёт коннект-запросы в безопасном недельном/дневном лимите. Без персональной ноты (обычный инвайт).
       </div>
-      <div class="note">
-        <div class="lbl">AI-сгенерированный Note · рекрутёр</div>
-        Привет, <b>Anna</b>! Вижу, ты нанимаешь Senior Frontend в <b>finance-tech</b>. 11 лет на Vue/TS, последний год строю AI-native инструменты. Буду рад быть на связи 🙌
-      </div>
-      <div class="limitbar"><div class="lh"><span>Connect-запросы · неделя</span><span class="mono">38/80</span></div><div class="track"><div class="fill" style="width:47%;background:linear-gradient(90deg,#4d9fff,#3a7fd0)"></div></div></div>
       <label class="fld">
         <span class="k">Кого искать</span>
-        <input v-model="connectKeywords" @change="saveKeywords" placeholder="frontend recruiter" />
+        <input v-model="connectKeywords" @change="saveConnect" placeholder="frontend recruiter" />
+      </label>
+      <label class="fld">
+        <span class="k">Регионы</span>
+        <div class="regions">
+          <label v-for="r in REGION_KEYS" :key="r" class="region-chip" :class="{ on: connectRegions.includes(r) }">
+            <input type="checkbox" :checked="connectRegions.includes(r)" @change="toggleRegion(r)" />
+            <span>{{ regionLabel(r) }}</span>
+          </label>
+        </div>
       </label>
     </ModuleCard>
 
@@ -121,3 +139,33 @@ function saveKeywords() {
     </ModuleCard>
   </section>
 </template>
+
+<style scoped>
+.regions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.region-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.75;
+  transition: all 0.12s ease;
+}
+.region-chip.on {
+  border-color: #4d9fff;
+  background: rgba(77, 159, 255, 0.14);
+  opacity: 1;
+}
+.region-chip input {
+  display: none;
+}
+</style>

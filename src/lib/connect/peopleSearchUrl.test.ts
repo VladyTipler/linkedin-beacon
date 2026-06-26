@@ -11,4 +11,14 @@ describe('peopleSearchUrl', () => {
   it('trims surrounding whitespace', () => {
     expect(peopleSearchUrl('  recruiter  ')).toContain('keywords=recruiter')
   })
+
+  it('appends an OR-ed geoUrn filter when regions are given', () => {
+    expect(peopleSearchUrl('recruiter', ['103644278', '101174742'])).toBe(
+      'https://www.linkedin.com/search/results/people/?keywords=recruiter&geoUrn=%5B%22103644278%22%2C%22101174742%22%5D&origin=FACETED_SEARCH'
+    )
+  })
+
+  it('omits geoUrn when no regions are given', () => {
+    expect(peopleSearchUrl('recruiter')).not.toContain('geoUrn')
+  })
 })

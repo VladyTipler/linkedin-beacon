@@ -4,6 +4,7 @@ import type { PersonCandidate } from '@lib/types'
 import { asArray } from '@lib/engagement/settings'
 import { enabledModules } from '@lib/autopilot/startGate'
 import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
+import { geoUrnsForRegions } from '@lib/connect/regions'
 import { loadConnectSettings } from '@lib/connect/settings'
 import { selectCandidates } from '@lib/connect/selectCandidates'
 import {
@@ -57,10 +58,10 @@ export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResu
   const cap = connectRunCap(weeklyRemaining, dailyRemaining, perWeek, deps.rng)
   if (cap <= 0) return { executed: 0, skipped: 0 }
 
-  const { searchKeywords } = await loadConnectSettings(deps.store)
+  const { searchKeywords, targetRegions } = await loadConnectSettings(deps.store)
   if (!searchKeywords.trim()) return { executed: 0, skipped: 0, reason: 'no_keywords' }
 
-  await deps.navigate(peopleSearchUrl(searchKeywords))
+  await deps.navigate(peopleSearchUrl(searchKeywords, geoUrnsForRegions(targetRegions)))
   const harvested = await deps.harvest()
   const sent = new Set(asArray<string>(await deps.store.get<string[]>(CONNECT_SENT_KEY)))
   const chosen = selectCandidates(harvested, sent, cap)

@@ -26,7 +26,8 @@ describe('runConnectStep', () => {
   it('navigates, harvests, connects fresh candidates, records week + sent-set', async () => {
     const d = deps()
     const res = await runConnectStep(d)
-    expect(d.navigate).toHaveBeenCalledWith('https://www.linkedin.com/search/results/people/?keywords=frontend%20recruiter')
+    // default region US → geoUrn appended (settings has no targetRegions → defaults to ['US'])
+    expect(d.navigate).toHaveBeenCalledWith('https://www.linkedin.com/search/results/people/?keywords=frontend%20recruiter&geoUrn=%5B%22103644278%22%5D&origin=FACETED_SEARCH')
     expect(d.connect).toHaveBeenCalledTimes(2)
     expect(res.executed).toBe(2)
     expect(d._m.get(CONNECT_WEEK_BUDGET_KEY)).toMatchObject({ used: 2 })
