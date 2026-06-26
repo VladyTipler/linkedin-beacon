@@ -144,7 +144,11 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
   const connectEnabled = enabledModules(modulesState).some((m) => m.id === 'smart_connect')
   const launch = async () => {
     if (tabId && connectEnabled) {
-      await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
+      try {
+        await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
+      } catch {
+        // Connect step threw (tab gone, storage error, etc.) — fall through to the engagement loop.
+      }
     }
     if (await startLoop()) return
     // Couldn't reach the page — roll back so the UI doesn't show a phantom "running".
