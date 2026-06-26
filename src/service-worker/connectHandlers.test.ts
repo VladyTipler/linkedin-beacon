@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runConnectStep } from './connectHandlers'
-import { CONNECT_WEEK_BUDGET_KEY } from '@lib/connect/ConnectWeekBudget'
+import { CONNECT_WEEK_BUDGET_KEY, CONNECT_DAY_BUDGET_KEY } from '@lib/connect/ConnectWeekBudget'
 import { CONNECT_SENT_KEY } from './connectHandlers'
 import type { PersonCandidate } from '@lib/types'
 
@@ -30,7 +30,17 @@ describe('runConnectStep', () => {
     expect(d.connect).toHaveBeenCalledTimes(2)
     expect(res.executed).toBe(2)
     expect(d._m.get(CONNECT_WEEK_BUDGET_KEY)).toMatchObject({ used: 2 })
+    expect(d._m.get(CONNECT_DAY_BUDGET_KEY)).toMatchObject({ used: 2 })
     expect(d._m.get(CONNECT_SENT_KEY)).toEqual(['1', '2'])
+  })
+
+  it('returns early when the daily cap is reached (even if the week has room)', async () => {
+    const d = deps()
+    // dailyConnectCap(100) = 14 → seed today at the cap so the day is exhausted.
+    d._m.set(CONNECT_DAY_BUDGET_KEY, { day: '2026-06-26', used: 14 })
+    const res = await runConnectStep(d)
+    expect(res.executed).toBe(0)
+    expect(d.harvest).not.toHaveBeenCalled()
   })
 
   it('skips already-sent candidates across runs', async () => {
