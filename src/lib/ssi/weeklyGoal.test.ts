@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { weeklyGoal } from './weeklyGoal'
+import { weeklyGoal, PILLAR_LEVER } from './weeklyGoal'
 import type { SsiPillar } from '../types'
 
 const pillars = (scores: Partial<Record<SsiPillar['key'], number>>): SsiPillar[] => [
@@ -17,10 +17,10 @@ describe('weeklyGoal', () => {
     expect(g.module).toBe('smart_connect')
   })
 
-  it('maps insights → engagement, brand → content', () => {
+  it('maps insights → engagement, brand → content, people → profile_views', () => {
     expect(weeklyGoal(pillars({ insights: 9 }))!.module).toBe('engagement')
     expect(weeklyGoal(pillars({ brand: 8 }))!.module).toBe('content')
-    expect(weeklyGoal(pillars({ people: 10 }))!.module).toBe('smart_connect')
+    expect(weeklyGoal(pillars({ people: 10 }))!.module).toBe('profile_views')
   })
 
   it('proposes a reachable next milestone (capped at 25)', () => {
@@ -31,5 +31,20 @@ describe('weeklyGoal', () => {
 
   it('returns null when there are no pillars', () => {
     expect(weeklyGoal([])).toBeNull()
+  })
+
+  it('maps People pillar to the profile_views lever (research: views, not connects)', () => {
+    const pillars = [
+      { key: 'people', label: 'Нужные люди', score: 10 },
+      { key: 'brand', label: 'Бренд', score: 20 },
+      { key: 'insights', label: 'Инсайты', score: 20 },
+      { key: 'relationships', label: 'Связи', score: 20 }
+    ] as const
+    const goal = weeklyGoal([...pillars])!
+    expect(goal.module).toBe('profile_views')
+  })
+
+  it('relationships lever no longer claims a personal Note (bare invites ship)', () => {
+    expect(PILLAR_LEVER.relationships.how).not.toMatch(/Note/i)
   })
 })

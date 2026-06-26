@@ -14,11 +14,11 @@ export interface WeeklyGoal {
 }
 
 /** Which Beacon module raises each SSI pillar (the lever map). */
-const PILLAR_LEVER: Record<SsiPillarKey, { module: ModuleId; how: string }> = {
+export const PILLAR_LEVER: Record<SsiPillarKey, { module: ModuleId; how: string }> = {
   insights: { module: 'engagement', how: 'усилит вовлечённость — умные лайки и комментарии в ленте' },
   brand: { module: 'content', how: 'поднимет бренд — посты из идей твоей ленты' },
-  people: { module: 'smart_connect', how: 'найдёт нужных людей — коннекты рекрутёрам и ЦА' },
-  relationships: { module: 'smart_connect', how: 'построит связи — коннекты с персональным Note' }
+  people: { module: 'profile_views', how: 'найдёт нужных людей — заходит на профили целевой ЦА' },
+  relationships: { module: 'smart_connect', how: 'построит связи — коннекты рекрутёрам и ЦА' }
 }
 
 /**
