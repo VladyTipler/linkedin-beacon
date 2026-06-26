@@ -48,7 +48,18 @@ export async function publishApprovedDrafts(
 
   await deps.prepare()
   const res = await deps.publish(draft.text)
-  if (!res?.ok) return { published: 0, reason: res?.reason ?? 'publish_failed' }
+  // UNCERTAIN (undefined): the message channel closed (SW eviction / nav churn) AFTER the
+  // post may already have gone live. Treating this like a clean failure would leave the draft
+  // approved + the week un-recorded → the next publish-day run re-posts the SAME text =
+  // duplicate PUBLIC post + an under-counted cap. So be conservative: un-approve the draft
+  // (no blind re-publish; it survives for the human to reconcile against their real feed) and
+  // consume the week. Distinct from an explicit {ok:false} where the post genuinely never sent.
+  if (res === undefined) {
+    await drafts.setApproved(draft.id, false)
+    await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))
+    return { published: 1, reason: 'uncertain' }
+  }
+  if (!res.ok) return { published: 0, reason: res.reason ?? 'publish_failed' }
 
   await drafts.remove(draft.id)
   await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))

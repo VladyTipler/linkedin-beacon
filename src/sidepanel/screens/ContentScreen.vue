@@ -20,6 +20,7 @@ const lastRunText = computed(() => {
   if (r.reason === 'error') return `Ошибка автосбора в прогоне: ${r.error} (${t})`
   if (r.reason === 'no_feed') return `Автосбор: лента пуста на момент прогона (${t})`
   if (r.reason === 'thin_feed') return `Маловато постов для идей в этом прогоне (${r.posts}) — соберётся в следующем (${t})`
+  if (r.reason === 'disabled') return `Контент-модуль был выключен в этом прогоне (${t})`
   return `${ERR[r.reason] ?? `Автосбор: ${r.reason}`} (${t})`
 })
 

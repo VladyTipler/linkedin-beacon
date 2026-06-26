@@ -350,6 +350,18 @@ describe('publishApprovedDrafts', () => {
     expect(r).toEqual({ published: 0, reason: 'post_button_disabled' })
     expect((await new DraftStore(store).all()).length).toBe(1)
   })
+
+  it('on an UNCERTAIN (undefined) publish response: un-approves the draft + records the week (no blind re-publish)', async () => {
+    // undefined = channel closed (SW eviction/nav) AFTER the post may already be live.
+    // Must NOT leave the draft auto-eligible → next run would duplicate a public post.
+    const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [approvedDraft] })
+    const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => undefined })
+    expect(r).toEqual({ published: 1, reason: 'uncertain' })
+    const all = await new DraftStore(store).all()
+    expect(all.length).toBe(1)                                    // kept (not lost — human reconciles)
+    expect(all[0].approved).toBe(false)                           // un-approved → not auto-eligible next run
+    expect((await store.get('posts:budget') as any).used).toBe(1) // week consumed (conservative on the cap)
+  })
 })
 
 describe('content language reaches the LLM wire', () => {

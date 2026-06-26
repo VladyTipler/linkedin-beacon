@@ -492,6 +492,11 @@ async function runConnectsThen(tabId: number, afterUrl: string): Promise<number>
  * weekly cap has room. `prepare` (navigate to feed + ready-gate + activity) runs ONLY
  * when about to publish — same nav race as Smart Connect, so reuse navigateLinkedInTab's
  * status:complete + url gate, never a bare ping. Returns posts published (0 or 1).
+ *
+ * Invariant #2 waiver (deliberate, matches `runConnectsThen`): this step runs BEFORE the
+ * engagement loop, so it does NOT pass through the run-time gate (RiskAssessor / BurstGuard /
+ * quarantine / AUTOPILOT_MAY_ACT). The substitute gate for this irreversible public action is:
+ * an explicit per-post human «Одобрить» + publishDays + the weekly postsPerWeek cap + one/run.
  */
 async function publishApprovedThen(tabId: number): Promise<number> {
   const res = await content.publishApprovedDrafts({

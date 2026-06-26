@@ -101,6 +101,11 @@ request/response: `panelBus.request` + SW `sendResponse` (broadcasts can be miss
 
 1. Read metrics via internal API; **actions (like/comment) via DOM** human-like (anti-ban).
 2. **Every action through the gate** (automationLevel + budget + quarantine) from commit 1.
+   *Waiver (deliberate):* the two pre-loop run steps — `runConnectsThen` (Smart Connect) and
+   `publishApprovedThen` (auto-publish) — run before the engagement loop and DON'T pass the
+   run-time gate. Their substitute gates: connects = weekly+daily cap + sent-set + human pace;
+   posts = explicit per-post «Одобрить» + publishDays + weekly cap + one/run. On an uncertain
+   publish (channel closed), the draft is un-approved + the week consumed → never auto-re-posts.
 3. `automationLevel` per-module, default **manual**. Lives in `modules:state` (SSOT) —
    `loadSettings` derives `config.level` from it.
 4. Feed feeds the FIRST idea step (signal), never the last (echo = AI-slop).
