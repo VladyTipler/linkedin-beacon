@@ -145,7 +145,9 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
   const launch = async () => {
     if (tabId && connectEnabled) {
       try {
-        await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
+        const executed = await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
+        const s = await autopilotState()
+        if (s) { s.connectsExecuted = executed; await saveAutopilot(s) }
       } catch {
         // Connect step threw (tab gone, storage error, etc.) — fall through to the engagement loop.
       }
@@ -184,13 +186,17 @@ async function stopAutopilot(reason: StopReason): Promise<void> {
   s.running = false
   await saveAutopilot(s)
   if (s.tabId) chrome.tabs.sendMessage(s.tabId, { type: 'STOP_AUTOPILOT' }).catch(() => {})
+  const modules: RunReport['modules'] = [{ id: 'engagement', executed: s.used, skipped: 0, failed: 0 }]
+  if (s.connectsExecuted) {
+    modules.push({ id: 'smart_connect', executed: s.connectsExecuted, skipped: 0, failed: 0 })
+  }
   const report: RunReport = {
     id: randomId(),
     startedAt: s.startedAt,
     endedAt: clock.now().toISOString(),
     host: s.host,
     stopReason: reason,
-    modules: [{ id: 'engagement', executed: s.used, skipped: 0, failed: 0 }]
+    modules
   }
   await reportsStore.add(report)
   broadcast({ type: 'AUTOPILOT_REPORT', report })
@@ -427,11 +433,11 @@ async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
   }
 }
 
-/** Run the Smart Connect step against `tabId`, then return the tab to the feed. */
-async function runConnectsThen(tabId: number, afterUrl: string): Promise<void> {
+/** Run the Smart Connect step against `tabId`, return the tab to the feed, report count sent. */
+async function runConnectsThen(tabId: number, afterUrl: string): Promise<number> {
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
-  await runConnectStep({
+  const res = await runConnectStep({
     store, clock, rng,
     navigate: (url) => navigateLinkedInTab(tabId, url),
     harvest: async () =>
@@ -446,6 +452,7 @@ async function runConnectsThen(tabId: number, afterUrl: string): Promise<void> {
     pace: () => sleep(pacer.nextMs(8000, 30000))
   })
   await navigateLinkedInTab(tabId, afterUrl)
+  return res.executed
 }
 
 async function reinjectContentScript(tabId: number): Promise<boolean> {

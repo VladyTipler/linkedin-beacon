@@ -129,6 +129,8 @@ export interface AutopilotState {
   actionsSinceBreak: number
   manualStop: boolean
   startedAt: string
+  /** Connects sent by the Smart Connect step of this run (for the run report). */
+  connectsExecuted?: number
 }
 
 export interface AutopilotStatus {
