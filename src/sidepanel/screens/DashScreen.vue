@@ -22,6 +22,11 @@ const emit = defineEmits<{
   openAudit: []
 }>()
 
+// Profile Audit ships on DEMO data only — the real profile reader (voyager API / DOM,
+// with an honest "couldn't check" state) is a focused follow-up. Hide the entry until
+// it lands so no half-feature is exposed. Flip to true when the real reader ships.
+const AUDIT_ENTRY_ENABLED = false
+
 // One launch button that flips Запустить ↔ Остановить. `pending` gives the click an
 // immediate state until the SW status (autopilotRunning) catches up.
 const pending = ref(false)
@@ -95,7 +100,7 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
       ⚠ {{ startHint }}
     </div>
 
-    <button class="ghost" data-testid="open-audit" @click="$emit('openAudit')">📋 Аудит профиля</button>
+    <button v-if="AUDIT_ENTRY_ENABLED" class="ghost" data-testid="open-audit" @click="$emit('openAudit')">📋 Аудит профиля</button>
 
     <div class="sect-lbl">Цель недели</div>
     <div v-if="goal" class="banner" data-testid="weekly-goal">
