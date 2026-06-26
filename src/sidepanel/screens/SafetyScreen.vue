@@ -1,10 +1,32 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { ActionQueueItem } from '@lib/types'
 
 withDefaults(defineProps<{ quarantined?: ActionQueueItem[] }>(), { quarantined: () => [] })
-defineEmits<{ pauseAll: []; cancel: [id: string] }>()
+const emit = defineEmits<{ pauseAll: []; cancel: [id: string] }>()
 
 const authorOf = (item: ActionQueueItem) => String(item.target.meta?.author ?? 'пост')
+
+// A cancelled item disappears from the list on success; show pending until then, with a
+// fallback clear in case the cancel fails and the row stays.
+const cancelling = ref<Set<string>>(new Set())
+function onCancel(id: string) {
+  if (cancelling.value.has(id)) return
+  cancelling.value = new Set(cancelling.value).add(id)
+  emit('cancel', id)
+  setTimeout(() => {
+    const next = new Set(cancelling.value)
+    next.delete(id)
+    cancelling.value = next
+  }, 2500)
+}
+
+const paused = ref(false)
+function onPauseAll() {
+  emit('pauseAll')
+  paused.value = true
+  setTimeout(() => { paused.value = false }, 1800)
+}
 </script>
 
 <template>
@@ -34,11 +56,15 @@ const authorOf = (item: ActionQueueItem) => String(item.target.meta?.author ?? '
       >
         <div class="lbl">{{ item.type === 'comment' ? 'Коммент' : item.type }} · {{ authorOf(item) }} · уйдёт {{ new Date(item.scheduledFor ?? '').toLocaleTimeString() }}</div>
         {{ item.payload?.comment ?? '' }}
-        <button class="ghost" style="margin-top:8px" :data-testid="`cancel-${item.id}`" @click="$emit('cancel', item.id)">Отменить</button>
+        <button class="ghost" style="margin-top:8px" :data-testid="`cancel-${item.id}`"
+                :disabled="cancelling.has(item.id)" @click="onCancel(item.id)">
+          {{ cancelling.has(item.id) ? 'Отменяю…' : 'Отменить' }}
+        </button>
       </div>
     </template>
 
-    <button class="ghost" data-testid="pause-all" @click="$emit('pauseAll')">Пауза всех модулей</button>
+    <button class="ghost" data-testid="pause-all" @click="onPauseAll">Пауза всех модулей</button>
+    <span v-if="paused" class="v ok" data-testid="paused-ok" style="margin-left:8px">Все модули на паузе ✓</span>
     <div class="foot">Beacon · V1 standalone<br>SSI Growth Engine</div>
   </section>
 </template>

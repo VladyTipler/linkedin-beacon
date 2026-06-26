@@ -119,7 +119,10 @@ body{min-height:100vh;display:flex;justify-content:center;padding:0;background:r
 .nav button.on{color:var(--lime)}
 
 .cta{display:block;width:100%;margin-top:18px;background:linear-gradient(135deg,var(--lime),var(--lime-dim));color:#0a0e17;border:0;border-radius:14px;padding:15px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:-.01em}
-.ghost{display:block;width:100%;margin-top:10px;background:none;border:1px solid var(--line);color:var(--mut);border-radius:14px;padding:13px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.ghost{display:block;width:100%;margin-top:10px;background:none;border:1px solid var(--line);color:var(--mut);border-radius:14px;padding:13px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:border-color .12s ease,color .12s ease,transform .06s ease,opacity .12s ease}
+.ghost:hover:not(:disabled){border-color:var(--mut);color:var(--txt)}
+.ghost:active:not(:disabled){transform:translateY(1px)}
+.ghost:disabled{opacity:.5;cursor:default}
 .foot{text-align:center;font-size:10px;color:var(--dim);margin-top:20px;line-height:1.6}
 
 .fld{display:flex;flex-direction:column;gap:6px;margin:10px 0}

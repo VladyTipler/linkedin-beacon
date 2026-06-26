@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { ModuleState } from '@lib/types'
 
 defineProps<{
@@ -9,7 +10,15 @@ defineProps<{
   limitLabel?: string
   recommended?: string
 }>()
-defineEmits<{ toggle: []; setLimit: [n: number] }>()
+const emit = defineEmits<{ toggle: []; setLimit: [n: number] }>()
+
+// Persist is reliable + synchronous, so confirm optimistically right on change.
+const savedLimit = ref(false)
+function onLimit(e: Event) {
+  emit('setLimit', Number((e.target as HTMLInputElement).value))
+  savedLimit.value = true
+  setTimeout(() => { savedLimit.value = false }, 1500)
+}
 </script>
 
 <template>
@@ -33,14 +42,17 @@ defineEmits<{ toggle: []; setLimit: [n: number] }>()
     <slot />
 
     <label v-if="limitLabel" class="fld" style="margin-top:10px">
-      <span class="k">{{ limitLabel }} <span style="color:var(--mut)">{{ recommended }}</span></span>
+      <span class="k">
+        {{ limitLabel }} <span style="color:var(--mut)">{{ recommended }}</span>
+        <span v-if="savedLimit" class="v ok" :data-testid="`limit-saved-${module.id}`">сохранено ✓</span>
+      </span>
       <input
         type="number"
         min="1"
         :value="module.dailyLimit"
         :disabled="!module.available"
         :data-testid="`limit-${module.id}`"
-        @change="$emit('setLimit', Number(($event.target as HTMLInputElement).value))"
+        @change="onLimit"
       />
     </label>
   </div>

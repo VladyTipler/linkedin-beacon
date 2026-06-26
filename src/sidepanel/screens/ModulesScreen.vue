@@ -36,11 +36,14 @@ onMounted(async () => {
   const { expertise } = await loadSettings(store)
   connectKeywords.value = defaultConnectKeywords(expertise)
 })
+const connectSaved = ref(false)
 function saveConnect() {
   // Persist a PLAIN array — chrome.storage serialises a Vue reactive array as an
   // array-like object {0:..,1:..}, which reads back non-array (regions then dropped).
   if (panelBus.available()) {
     void saveConnectSettings(store, { searchKeywords: connectKeywords.value, targetRegions: [...connectRegions.value] })
+    connectSaved.value = true
+    setTimeout(() => { connectSaved.value = false }, 1500)
   }
 }
 function toggleRegion(r: string) {
@@ -93,11 +96,11 @@ function toggleRegion(r: string) {
         Задай «Кого искать» и регионы, запусти автопилот на Dash — бот находит людей и шлёт коннект-запросы в безопасном недельном/дневном лимите. Без персональной ноты (обычный инвайт).
       </div>
       <label class="fld">
-        <span class="k">Кого искать</span>
+        <span class="k">Кого искать <span v-if="connectSaved" class="v ok" data-testid="connect-saved">сохранено ✓</span></span>
         <input v-model="connectKeywords" @change="saveConnect" placeholder="frontend recruiter" />
       </label>
       <label class="fld">
-        <span class="k">Регионы</span>
+        <span class="k">Регионы <span v-if="connectSaved" class="v ok">сохранено ✓</span></span>
         <div class="regions">
           <label v-for="r in REGION_KEYS" :key="r" class="region-chip" :class="{ on: connectRegions.includes(r) }">
             <input type="checkbox" :checked="connectRegions.includes(r)" @change="toggleRegion(r)" />

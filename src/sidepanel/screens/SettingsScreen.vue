@@ -35,11 +35,17 @@ function togglePubDay(n: number) {
 }
 
 const saveError = ref(false)
+const saving = ref(false)
+const saved = ref(false)
 
 async function onSave() {
+  saving.value = true
   saveError.value = false
   const results = await Promise.allSettled([save(), exp.save(), content.save()])
-  saveError.value = results.some((r) => r.status === 'rejected')
+  saving.value = false
+  const ok = !results.some((r) => r.status === 'rejected')
+  saveError.value = !ok
+  if (ok) { saved.value = true; setTimeout(() => { saved.value = false }, 1800) }
 }
 </script>
 
@@ -141,7 +147,10 @@ async function onSave() {
       </select>
     </label>
 
-    <button class="btn primary" data-testid="llm-save" @click="onSave">Сохранить</button>
+    <button class="btn primary" data-testid="llm-save" :disabled="saving" @click="onSave">
+      {{ saving ? 'Сохраняю…' : 'Сохранить' }}
+    </button>
+    <span v-if="saved" class="v ok" data-testid="save-ok">Сохранено ✓</span>
     <span v-if="saveError" class="v" data-testid="save-error">Не удалось сохранить — попробуй ещё раз</span>
   </section>
 </template>
