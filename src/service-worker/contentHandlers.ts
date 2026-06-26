@@ -15,6 +15,7 @@ import {
   POST_WEEK_BUDGET_KEY,
   type PostWeek
 } from '@lib/content/PostWeekBudget'
+import { shouldPublishToday, pickOldestApproved } from '@lib/content/publishPolicy'
 import { loadSettings } from '@lib/engagement/settings'
 import { CommentDraftService } from '@lib/engagement/CommentDraftService'
 import { CommentJudge } from '@lib/engagement/CommentJudge'
@@ -210,6 +211,44 @@ export async function commentOnPost(
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : 'llm_failed' }
   }
+}
+
+export interface PublishApprovedDeps {
+  store: KeyValueStore
+  clock: Clock
+  prepare: () => Promise<void>
+  publish: (text: string) => Promise<{ ok: boolean; reason?: string } | undefined>
+}
+
+/** Auto-publish step: publish ONE oldest approved draft if today∈publishDays AND weekly cap left. */
+export async function publishApprovedDrafts(
+  deps: PublishApprovedDeps
+): Promise<{ published: number; reason?: string }> {
+  const modulesState = await deps.store.get('modules:state')
+  if (!enabledModules(modulesState).some((m) => m.id === 'content')) return { published: 0, reason: 'disabled' }
+
+  const { publishDays, postsPerWeek } = await loadContentSettings(deps.store)
+  const now = deps.clock.now()
+  const budget = rolloverPostWeek((await deps.store.get<PostWeek>(POST_WEEK_BUDGET_KEY)) ?? null, isoWeekKey(now))
+  const drafts = new DraftStore(deps.store)
+  const all = await drafts.all()
+  const draft = pickOldestApproved(all)
+
+  const ok = shouldPublishToday({
+    weekday: now.getDay(),
+    publishDays,
+    remainingPosts: remainingPosts(budget, postsPerWeek),
+    hasApproved: draft !== null
+  })
+  if (!ok || !draft) return { published: 0 }
+
+  await deps.prepare()
+  const res = await deps.publish(draft.text)
+  if (!res?.ok) return { published: 0, reason: res?.reason ?? 'publish_failed' }
+
+  await drafts.remove(draft.id)
+  await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))
+  return { published: 1 }
 }
 
 export interface PublishDeps {

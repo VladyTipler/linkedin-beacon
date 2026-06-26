@@ -29,10 +29,11 @@ export const DEFAULT_PUBLISH_DAYS = [1, 3, 5] // Mon, Wed, Fri (Date.getDay: 0=S
 const LANG_NAMES: Record<string, string> = { en: 'English', ru: 'Russian' }
 
 function sanitiseDays(raw: unknown): number[] {
+  if (raw == null) return DEFAULT_PUBLISH_DAYS
   const days = asArray<number>(raw)
     .map((n) => Number(n))
     .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
-  return days.length ? [...new Set(days)].sort((a, b) => a - b) : DEFAULT_PUBLISH_DAYS
+  return [...new Set(days)].sort((a, b) => a - b)
 }
 
 /** Human-readable language name for prompt injection (defaults to English). */

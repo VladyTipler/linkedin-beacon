@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas, publishPost } from './contentHandlers'
+import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas, publishPost, publishApprovedDrafts } from './contentHandlers'
 import type { KeyValueStore, Clock } from '@lib/ports'
+import { DraftStore } from '@lib/content/DraftStore'
+import { isoWeekKey } from '@lib/content/PostWeekBudget'
 import type { HttpClient, HttpGet } from '@lib/llm/contracts'
 import type { Draft, FeedPost } from '@lib/types'
 
@@ -254,6 +256,53 @@ function capturingHttp(text = 'A specific, real take from my own Vue experience 
     }
   }
 }
+
+const allDays = { 'content:settings': { publishDays: [0,1,2,3,4,5,6], postsPerWeek: 3 } }
+const approvedDraft = { id: 'a', ideaTopic: 't', ideaAngle: 'g', text: 'hello', createdAt: '2026-06-01T00:00:00Z', approved: true }
+const clock = { now: () => new Date('2026-06-26T10:00:00Z') }
+
+describe('publishApprovedDrafts', () => {
+  it('publishes the oldest approved draft, consumes it, records the week', async () => {
+    const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [approvedDraft] })
+    let prepared = false
+    const r = await publishApprovedDrafts({
+      store, clock,
+      prepare: async () => { prepared = true },
+      publish: async () => ({ ok: true })
+    })
+    expect(r.published).toBe(1)
+    expect(prepared).toBe(true)
+    expect(await new DraftStore(store).all()).toEqual([])                 // consumed
+    expect((await store.get('posts:budget') as any).used).toBe(1)        // week recorded
+  })
+
+  it('does NOT publish (or prepare) when today is not a publish day', async () => {
+    const store = memStore({ ...CONTENT_MODS, 'content:settings': { publishDays: [], postsPerWeek: 3 }, 'content:drafts': [approvedDraft] })
+    let prepared = false
+    const r = await publishApprovedDrafts({ store, clock, prepare: async () => { prepared = true }, publish: async () => ({ ok: true }) })
+    expect(r.published).toBe(0); expect(prepared).toBe(false)
+    expect((await new DraftStore(store).all()).length).toBe(1)           // kept
+  })
+
+  it('skips when there is no approved draft', async () => {
+    const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [{ ...approvedDraft, approved: false }] })
+    const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => ({ ok: true }) })
+    expect(r.published).toBe(0)
+  })
+
+  it('skips when the weekly cap is exhausted', async () => {
+    const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [approvedDraft], 'posts:budget': { week: isoWeekKey(clock.now()), used: 3 } })
+    const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => ({ ok: true }) })
+    expect(r.published).toBe(0)
+  })
+
+  it('keeps the draft + reports reason when the composer publish fails', async () => {
+    const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [approvedDraft] })
+    const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => ({ ok: false, reason: 'post_button_disabled' }) })
+    expect(r).toEqual({ published: 0, reason: 'post_button_disabled' })
+    expect((await new DraftStore(store).all()).length).toBe(1)
+  })
+})
 
 describe('content language reaches the LLM wire', () => {
   it('generateDraft injects the configured language into the post request', async () => {
