@@ -52,3 +52,50 @@ few stable, semantic hooks below. Validated read-only against a live authorised 
 
 > Capture method: `agent-browser --cdp 9222` against real Windows Chrome (debug profile),
 > read-only (snapshot/eval only). No like/comment/connect/post was ever submitted on the account.
+
+## Smart Connect — people search + invite modal (captured live 2026-06-26, read-only)
+
+> Candidate sourcing surface = LinkedIn **people search**. Invite modal lives in the
+> SAME `#interop-outlet` shadow root as the post composer. Validated live on Vlad's
+> authorised account; a Connect was clicked to open the modal, then **Dismissed without
+> sending** (card stayed "Connect", no "Pending" anywhere — no invite was ever sent).
+
+**Candidate harvest (people-search results, light DOM):**
+
+| What | Selector / rule |
+|------|-----------------|
+| Search URL | `https://www.linkedin.com/search/results/people/?keywords=<urlencoded query>` (people vertical) |
+| Connect control | **an `<a>`, NOT a `<button>`**: `a[aria-label^="Invite "][aria-label$=" to connect"]` (text `Connect`). A plain `button[aria-label]` query MISSES it — that's the trap. |
+| Person id (dedup key) | the connect anchor's `componentkey` = `ConnectButtonstate:invitation:urn:li:member:<numericId>_connect` → use `urn:li:member:<numericId>` |
+| Name | strip `^Invite ` / ` to connect$` from the connect anchor's aria-label |
+| Card root | walk up ~5 ancestors from the connect anchor to the first ancestor that contains an `a[href*="/in/"]` |
+| Headline (for scoring) | within the card, the text line after the name + degree marker (e.g. `Talent Acquisition Specialist \| Technical Recruiter \| IT Recruiter`) |
+| Degree | card text line matching `(1st\|2nd\|3rd)` (e.g. `• 2nd`) |
+| Location | card text line after the headline (e.g. `Serbia`) |
+| Profile URL | card `a[href*="/in/"]` (strip `?…`) |
+| Other action states (skip) | `a[aria-label^="Follow "]` (no connect offered) / a `Message` button (already connected) — not connectable, skip |
+| Pagination | `button[aria-label^="Page "]` (Page 1..N) |
+
+**Invite modal (in `#interop-outlet`.shadowRoot — pierce like the composer):**
+
+| What | Selector / rule |
+|------|-----------------|
+| Open | click the connect `<a>` → modal renders in the shadow root (does NOT send) |
+| Modal | shadow `[role="dialog"][aria-labelledby="send-invite-modal"]` (heading "Add a note to your invitation?") |
+| **Send bare invite** | shadow `button[aria-label="Send without a note"]` (text `Send without a note`) — **enabled immediately**; this is the V1 send path |
+| Open note editor | shadow `button[aria-label="Add a note"]` |
+| Note textarea | shadow `textarea#custom-message` (`textarea[name="message"]`, placeholder `Ex: We know each other from…`) |
+| Send with note | shadow `button[aria-label="Send invitation"]` (text `Send`) — **disabled until the note is non-empty** → poll like the composer's Post button |
+| Abandon (no send) | shadow `button[aria-label="Dismiss"]` (empty note ⇒ closes clean, no discard prompt) or the note screen's `Cancel` |
+| Invite-sent signal | the result card flips `Connect` → `Pending`; the modal closes |
+
+**⚠️ Free-account note cap (verified live, settles the open question):** the note editor
+shows **"N personalized invitations remaining for this month."** (this account: 3) + a
+"200" char counter + a Premium upsell. So personalized notes are a **monthly-capped scarce
+resource** on free; **bare "Send without a note" is the unlimited default** (only the
+overall weekly invite cap applies). V1 sends bare; notes (if ever) need a separate tiny
+*monthly* budget for top targets.
+
+> Same shadow-DOM gotchas as the composer apply: pierce strictly via `#interop-outlet.shadowRoot`,
+> the modal renders async (poll the Send button's `disabled`), re-query nodes (held refs can
+> go stale on re-render). Capture: read-only `agent-browser --cdp 9222` eval; nothing was sent.
