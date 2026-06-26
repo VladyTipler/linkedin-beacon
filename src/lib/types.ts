@@ -234,6 +234,18 @@ export interface Draft {
   approved?: boolean
 }
 
+/**
+ * Diagnostic of the most recent in-loop idea extraction, surfaced on the Content tab so
+ * a silently-skipped or failed auto-collect is no longer invisible (was: "генерирую…" → 0).
+ */
+export interface IdeasLastRun {
+  at: string
+  reason: 'ok' | 'no_feed' | 'disabled' | 'no_key' | 'no_expertise' | 'budget_exhausted' | 'error'
+  stored: number
+  budget?: { used: number; limit: number }
+  error?: string
+}
+
 /** Targeting criteria: who/what to engage with (design-spec §4.1, §9 TargetProfile). */
 export interface TargetProfile {
   /** Tech stack keywords, e.g. ['Vue','TypeScript']. */

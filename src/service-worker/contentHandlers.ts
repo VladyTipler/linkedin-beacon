@@ -7,15 +7,6 @@ import { loadLlmConfig } from '@lib/llm/config'
 import { loadContentSettings, languageName } from '@lib/content/settings'
 import { DraftGenerator } from '@lib/content/DraftGenerator'
 import { DraftStore } from '@lib/content/DraftStore'
-import {
-  isoWeekKey,
-  rolloverPostWeek,
-  recordPostWeek,
-  remainingPosts,
-  POST_WEEK_BUDGET_KEY,
-  type PostWeek
-} from '@lib/content/PostWeekBudget'
-import { shouldPublishToday, pickOldestApproved } from '@lib/content/publishPolicy'
 import { loadSettings } from '@lib/engagement/settings'
 import { CommentDraftService } from '@lib/engagement/CommentDraftService'
 import { CommentJudge } from '@lib/engagement/CommentJudge'
@@ -28,7 +19,7 @@ import { ideasPerDayLimit, rolloverIdeaDay, recordIdeaDay, remainingIdeas, IDEA_
 import type { HttpClient, HttpGet, LlmProviderId } from '@lib/llm/contracts'
 import type { LlmModel } from '@lib/llm/models'
 import type { Clock, KeyValueStore } from '@lib/ports'
-import type { Draft, FeedPost, Idea } from '@lib/types'
+import type { Draft, FeedPost, Idea, IdeasLastRun } from '@lib/types'
 
 export type LlmHttp = HttpClient & HttpGet
 
@@ -114,30 +105,52 @@ export interface RunIdeaDeps {
   clock: Clock
 }
 
+/** Storage key for the most recent in-loop extraction diagnostic (surfaced on the Content tab). */
+export const IDEAS_LAST_RUN_KEY = 'ideas:lastRun'
+
 /**
  * Extract ideas from a buffer the autopilot loop already harvested (no re-scroll),
  * capped by the day-keyed ideas/day budget. Crosses the real LLM mapper. Returns how
  * many NEW ideas were banked (dedup-aware) so a failed/duplicate extraction costs no budget.
+ * Writes `ideas:lastRun` on EVERY exit so a silently-skipped/failed auto-collect is visible.
  */
 export async function extractRunIdeas(
   deps: RunIdeaDeps,
   posts: FeedPost[]
 ): Promise<{ stored: number; error?: string }> {
-  if (!posts.length) return { stored: 0, error: 'no_feed' }
+  const writeLast = (r: Omit<IdeasLastRun, 'at'>) =>
+    deps.store.set(IDEAS_LAST_RUN_KEY, { at: deps.clock.now().toISOString(), ...r })
+
+  if (!posts.length) {
+    await writeLast({ reason: 'no_feed', stored: 0 })
+    return { stored: 0, error: 'no_feed' }
+  }
   const modulesState = await deps.store.get('modules:state')
   // SW self-guards (gatekeeper SSOT): never extract for a disabled content module,
   // even if a future caller or a manual message reaches this handler.
-  if (!enabledModules(modulesState).some((m) => m.id === 'content')) return { stored: 0 }
+  if (!enabledModules(modulesState).some((m) => m.id === 'content')) {
+    await writeLast({ reason: 'disabled', stored: 0 })
+    return { stored: 0 }
+  }
   const cfg = await loadLlmConfig(deps.store)
-  if (!cfg.apiKey.trim()) return { stored: 0, error: 'no_key' }
+  if (!cfg.apiKey.trim()) {
+    await writeLast({ reason: 'no_key', stored: 0 })
+    return { stored: 0, error: 'no_key' }
+  }
   const { expertise } = await loadSettings(deps.store)
-  if (!expertise.headline.trim()) return { stored: 0, error: 'no_expertise' }
+  if (!expertise.headline.trim()) {
+    await writeLast({ reason: 'no_expertise', stored: 0 })
+    return { stored: 0, error: 'no_expertise' }
+  }
 
   const limit = ideasPerDayLimit(modulesState)
   const today = deps.clock.now().toISOString().slice(0, 10)
   const budget = rolloverIdeaDay((await deps.store.get<IdeaDay>(IDEA_BUDGET_KEY)) ?? null, today)
   const allowance = remainingIdeas(budget, limit)
-  if (allowance <= 0) return { stored: 0 }
+  if (allowance <= 0) {
+    await writeLast({ reason: 'budget_exhausted', stored: 0, budget: { used: budget.used, limit } })
+    return { stored: 0 }
+  }
 
   const provider = createLlmProvider({ provider: cfg.provider, apiKey: cfg.apiKey, model: cfg.model }, deps.http)
   const bank = new IdeaBank(deps.store)
@@ -147,9 +160,12 @@ export async function extractRunIdeas(
     await bank.add(ideas.slice(0, allowance))
     const stored = (await bank.all()).length - before
     await deps.store.set(IDEA_BUDGET_KEY, recordIdeaDay(budget, stored))
+    await writeLast({ reason: 'ok', stored, budget: { used: budget.used + stored, limit } })
     return { stored }
   } catch (e) {
-    return { stored: 0, error: e instanceof Error ? e.message : 'llm_failed' }
+    const error = e instanceof Error ? e.message : 'llm_failed'
+    await writeLast({ reason: 'error', stored: 0, error })
+    return { stored: 0, error }
   }
 }
 
@@ -213,76 +229,11 @@ export async function commentOnPost(
   }
 }
 
-export interface PublishApprovedDeps {
-  store: KeyValueStore
-  clock: Clock
-  prepare: () => Promise<void>
-  publish: (text: string) => Promise<{ ok: boolean; reason?: string } | undefined>
-}
-
-/** Auto-publish step: publish ONE oldest approved draft if today∈publishDays AND weekly cap left. */
-export async function publishApprovedDrafts(
-  deps: PublishApprovedDeps
-): Promise<{ published: number; reason?: string }> {
-  const modulesState = await deps.store.get('modules:state')
-  if (!enabledModules(modulesState).some((m) => m.id === 'content')) return { published: 0, reason: 'disabled' }
-
-  const { publishDays, postsPerWeek } = await loadContentSettings(deps.store)
-  const now = deps.clock.now()
-  const budget = rolloverPostWeek((await deps.store.get<PostWeek>(POST_WEEK_BUDGET_KEY)) ?? null, isoWeekKey(now))
-  const drafts = new DraftStore(deps.store)
-  const all = await drafts.all()
-  const draft = pickOldestApproved(all)
-
-  const ok = shouldPublishToday({
-    weekday: now.getDay(),
-    publishDays,
-    remainingPosts: remainingPosts(budget, postsPerWeek),
-    hasApproved: draft !== null
-  })
-  if (!ok || !draft) return { published: 0 }
-
-  await deps.prepare()
-  const res = await deps.publish(draft.text)
-  if (!res?.ok) return { published: 0, reason: res?.reason ?? 'publish_failed' }
-
-  await drafts.remove(draft.id)
-  await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))
-  return { published: 1 }
-}
-
-export interface PublishDeps {
-  store: KeyValueStore
-  clock: Clock
-  /** Sends the text to the content script's composer adapter; undefined if no tab. */
-  publish: (text: string) => Promise<{ ok: boolean; reason?: string } | undefined>
-}
-
-/**
- * Approve-first publish of ONE draft (Vlad clicked «Опубликовать»). Gated by the
- * weekly post cap (a safety limit on a manual action, NOT an autopilot budget). On a
- * successful DOM publish: consume the draft + record the week. A failed publish keeps
- * the draft and surfaces the reason. Posts are never full-auto / never in the run loop.
- */
-export async function publishPost(
-  deps: PublishDeps,
-  draftId: string
-): Promise<{ ok: boolean; reason?: string }> {
-  const drafts = new DraftStore(deps.store)
-  const draft = (await drafts.all()).find((d) => d.id === draftId)
-  if (!draft) return { ok: false, reason: 'not_found' }
-
-  const [{ postsPerWeek }, rawBudget] = await Promise.all([
-    loadContentSettings(deps.store),
-    deps.store.get<PostWeek>(POST_WEEK_BUDGET_KEY)
-  ])
-  const budget = rolloverPostWeek(rawBudget ?? null, isoWeekKey(deps.clock.now()))
-  if (remainingPosts(budget, postsPerWeek) <= 0) return { ok: false, reason: 'budget' }
-
-  const res = await deps.publish(draft.text)
-  if (!res?.ok) return { ok: false, reason: res?.reason ?? 'publish_failed' }
-
-  await drafts.remove(draftId)
-  await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))
-  return { ok: true }
-}
+// Post-publishing handlers live in a sibling file (SRP + ≤300); re-exported so
+// callers (service-worker/index.ts) and tests keep one import site.
+export {
+  publishPost,
+  publishApprovedDrafts,
+  type PublishDeps,
+  type PublishApprovedDeps
+} from './contentHandlers.publish'

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas, publishPost, publishApprovedDrafts } from './contentHandlers'
+import { commentOnPost, extractRunIdeas, generateDraft, generateIdeas, publishPost, publishApprovedDrafts, IDEAS_LAST_RUN_KEY } from './contentHandlers'
+import type { IdeasLastRun } from '@lib/types'
 import type { KeyValueStore, Clock } from '@lib/ports'
 import { DraftStore } from '@lib/content/DraftStore'
 import { isoWeekKey } from '@lib/content/PostWeekBudget'
@@ -133,6 +134,34 @@ describe('extractRunIdeas (LLM boundary)', () => {
       stored: 0,
       error: 'no_expertise'
     })
+  })
+
+  it('records ideas:lastRun=ok with the stored count + budget on success', async () => {
+    const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
+    await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)
+    const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
+    expect(last.reason).toBe('ok')
+    expect(last.stored).toBe(1)
+    expect(last.budget).toEqual({ used: 1, limit: 5 })
+    expect(typeof last.at).toBe('string')
+  })
+
+  it('records ideas:lastRun=budget_exhausted (with counts) instead of a silent skip', async () => {
+    const store = memStore({ ...CONFIGURED, ...CONTENT_MODS, 'ideas:budget': { day: '2026-06-25', used: 5 } })
+    await extractRunIdeas({ store, http: fakeHttp(SPARK_JSON), clock: fixedClock }, posts)
+    const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
+    expect(last.reason).toBe('budget_exhausted')
+    expect(last.budget).toEqual({ used: 5, limit: 5 })
+    expect(last.stored).toBe(0)
+  })
+
+  it('records ideas:lastRun=error with the provider/parse message when extraction throws', async () => {
+    const store = memStore({ ...CONFIGURED, ...CONTENT_MODS })
+    await extractRunIdeas({ store, http: fakeHttp('sorry, here are some ideas as prose'), clock: fixedClock }, posts)
+    const last = (await store.get(IDEAS_LAST_RUN_KEY)) as IdeasLastRun
+    expect(last.reason).toBe('error')
+    expect(typeof last.error).toBe('string')
+    expect(last.stored).toBe(0)
   })
 })
 
