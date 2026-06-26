@@ -10,10 +10,9 @@ import {
   POST_WEEK_BUDGET_KEY,
   type PostWeek
 } from '@lib/content/PostWeekBudget'
+import { IDEAS_LAST_RUN_KEY } from '@lib/ideas/IdeaDayBudget'
 import type { Idea, Draft, IdeasLastRun } from '@lib/types'
 import { panelBus } from '../lib/panelBus'
-
-const IDEAS_LAST_RUN_KEY = 'ideas:lastRun'
 
 /** Side-panel state for the Content screen: idea bank + draft queue. */
 export function useContent() {
@@ -26,7 +25,6 @@ export function useContent() {
   const draftList = ref<Draft[]>([])
   const generating = ref(false)
   const error = ref<string | null>(null)
-  const publishing = ref<string | null>(null)
   const postsLeft = ref(0)
   const lastRun = ref<IdeasLastRun | null>(null)
 
@@ -94,22 +92,9 @@ export function useContent() {
     postsLeft.value = remainingPosts(budget, postsPerWeek)
   }
 
-  /** Approve-first publish: SW gates the week cap + drives the composer adapter. */
-  async function publishDraft(id: string) {
-    publishing.value = id
-    error.value = null
-    const res = await panelBus.request<{ ok: boolean; reason?: string }>({ type: 'PUBLISH_POST', draftId: id })
-    publishing.value = null
-    if (!res?.ok) {
-      error.value = res?.reason ?? 'publish_failed'
-      return
-    }
-    await Promise.all([loadDrafts(), loadPostBudget()])
-  }
-
   return {
-    tab, ideas, drafts: draftList, generating, error, publishing, postsLeft, lastRun,
+    tab, ideas, drafts: draftList, generating, error, postsLeft, lastRun,
     loadIdeas, generateIdeas, removeIdea, loadLastRun,
-    loadDrafts, toDraft, removeDraft, updateDraft, approveDraft, publishDraft, loadPostBudget
+    loadDrafts, toDraft, removeDraft, updateDraft, approveDraft, loadPostBudget
   }
 }

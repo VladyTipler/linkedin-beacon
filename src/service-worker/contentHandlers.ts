@@ -15,7 +15,7 @@ import { enabledModules } from '@lib/autopilot/startGate'
 import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
 import { IdeaBank } from '@lib/ideas/IdeaBank'
 import { feedPostToFeedItem } from '@lib/ideas/feedItem'
-import { ideasPerDayLimit, rolloverIdeaDay, recordIdeaDay, remainingIdeas, IDEA_BUDGET_KEY, type IdeaDay } from '@lib/ideas/IdeaDayBudget'
+import { ideasPerDayLimit, rolloverIdeaDay, recordIdeaDay, remainingIdeas, IDEA_BUDGET_KEY, IDEAS_LAST_RUN_KEY, type IdeaDay } from '@lib/ideas/IdeaDayBudget'
 import type { HttpClient, HttpGet, LlmProviderId } from '@lib/llm/contracts'
 import type { LlmModel } from '@lib/llm/models'
 import type { Clock, KeyValueStore } from '@lib/ports'
@@ -105,8 +105,6 @@ export interface RunIdeaDeps {
   clock: Clock
 }
 
-/** Storage key for the most recent in-loop extraction diagnostic (surfaced on the Content tab). */
-export const IDEAS_LAST_RUN_KEY = 'ideas:lastRun'
 /** Minimum buffered posts to spend an LLM call on (anti-slop: a thin feed makes weak ideas). */
 export const MIN_IDEA_BUFFER = 5
 
@@ -237,11 +235,6 @@ export async function commentOnPost(
   }
 }
 
-// Post-publishing handlers live in a sibling file (SRP + ≤300); re-exported so
-// callers (service-worker/index.ts) and tests keep one import site.
-export {
-  publishPost,
-  publishApprovedDrafts,
-  type PublishDeps,
-  type PublishApprovedDeps
-} from './contentHandlers.publish'
+// Auto-publish handler lives in a sibling file (SRP); re-exported so callers
+// (service-worker/index.ts) and tests keep one import site.
+export { publishApprovedDrafts, type PublishApprovedDeps } from './contentHandlers.publish'

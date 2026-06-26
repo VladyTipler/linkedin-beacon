@@ -7,6 +7,8 @@ export interface IdeaDay {
 }
 
 export const IDEA_BUDGET_KEY = 'ideas:budget'
+/** Persisted diagnostic of the most recent in-loop extraction (shared by SW writer + UI reader). */
+export const IDEAS_LAST_RUN_KEY = 'ideas:lastRun'
 export const DEFAULT_IDEAS_PER_DAY = 5
 
 /** The content module's ideas/day limit (via the shared moduleLimit reader). */

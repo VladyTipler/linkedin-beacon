@@ -318,8 +318,6 @@ export type BeaconMessage =
   | { type: 'GENERATE_DRAFT'; idea: Idea }
   /** sidepanel → SW: harvest feed → extract ideas → bank; replies { ideas, error? }. */
   | { type: 'GENERATE_IDEAS' }
-  /** sidepanel → SW: publish an approved draft now (approve-first); replies { ok, reason? }. */
-  | { type: 'PUBLISH_POST'; draftId: string }
   /** SW → content: harvest connect candidates from the current page; replies PersonCandidate[]. */
   | { type: 'HARVEST_PEOPLE' }
   | { type: 'PING' }

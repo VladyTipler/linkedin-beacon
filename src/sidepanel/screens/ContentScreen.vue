@@ -21,7 +21,9 @@ const lastRunText = computed(() => {
   if (r.reason === 'no_feed') return `Автосбор: лента пуста на момент прогона (${t})`
   if (r.reason === 'thin_feed') return `Маловато постов для идей в этом прогоне (${r.posts}) — соберётся в следующем (${t})`
   if (r.reason === 'disabled') return `Контент-модуль был выключен в этом прогоне (${t})`
-  return `${ERR[r.reason] ?? `Автосбор: ${r.reason}`} (${t})`
+  if (r.reason === 'no_key') return `Автосбор пропущен: не задан LLM-ключ (⚙) (${t})`
+  if (r.reason === 'no_expertise') return `Автосбор пропущен: не заполнен профиль экспертизы (⚙) (${t})`
+  return `Автосбор: ${r.reason} (${t})`
 })
 
 const ERR: Record<string, string> = {
@@ -29,12 +31,7 @@ const ERR: Record<string, string> = {
   no_expertise: 'Заполни профиль экспертизы в настройках (⚙).',
   no_feed: 'Открой вкладку ленты LinkedIn.',
   ideas_not_json:
-    'Модель вернула ответ не в том формате. Выбери модель посильнее (⚙) — например openai/gpt-4o-mini или google/gemini-2.5-flash — и попробуй снова.',
-  budget: 'Лимит публикаций на эту неделю исчерпан.',
-  composer_trigger_not_found: 'Не удалось открыть форму публикации. Открой ленту LinkedIn и попробуй снова.',
-  composer_not_found: 'Не удалось открыть форму публикации. Открой ленту LinkedIn и попробуй снова.',
-  post_button_disabled: 'Не получилось ввести текст в форму. Попробуй ещё раз.',
-  modal_did_not_close: 'Публикация не подтвердилась. Проверь ленту и попробуй ещё раз.'
+    'Модель вернула ответ не в том формате. Выбери модель посильнее (⚙) — например openai/gpt-4o-mini или google/gemini-2.5-flash — и попробуй снова.'
 }
 
 async function copy(text: string) {

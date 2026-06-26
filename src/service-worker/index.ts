@@ -304,25 +304,6 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       void content.commentOnPost({ store, http: llmHttp, clock }, message.post).then(sendResponse)
       return true
 
-    case 'PUBLISH_POST':
-      void withPageActivity(
-        () =>
-          content.publishPost(
-            {
-              store,
-              clock,
-              publish: (text) =>
-                sendToLinkedInTab<{ ok: boolean; reason?: string }>({
-                  type: 'EXECUTE_ACTION',
-                  action: { type: 'post', target: { url: 'https://www.linkedin.com/feed/' }, payload: { post: text } }
-                })
-            },
-            message.draftId
-          ),
-        PUBLISHING
-      ).then(sendResponse)
-      return true
-
     case 'LIST_QUARANTINE':
       void quarantine.list().then(sendResponse)
       return true

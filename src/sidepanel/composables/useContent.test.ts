@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock the panel bus so publishDraft round-trips through a controllable fake.
+// Stub the panel bus so useContent imports cleanly in jsdom (no chrome.runtime).
 const request = vi.fn()
 vi.mock('../lib/panelBus', () => ({
   panelBus: { request: (...a: unknown[]) => request(...a), available: () => true }
@@ -26,24 +26,7 @@ beforeEach(() => {
   mem.clear()
 })
 
-describe('publishDraft', () => {
-  it('on success clears error, drops the publishing flag, and reloads drafts', async () => {
-    request.mockResolvedValueOnce({ ok: true })
-    const c = useContent()
-    await c.publishDraft('d1')
-    expect(request).toHaveBeenCalledWith({ type: 'PUBLISH_POST', draftId: 'd1' })
-    expect(c.error.value).toBeNull()
-    expect(c.publishing.value).toBeNull()
-  })
-
-  it('on failure surfaces the reason and stops the publishing flag', async () => {
-    request.mockResolvedValueOnce({ ok: false, reason: 'budget' })
-    const c = useContent()
-    await c.publishDraft('d1')
-    expect(c.error.value).toBe('budget')
-    expect(c.publishing.value).toBeNull()
-  })
-
+describe('useContent post budget', () => {
   it('loadPostBudget computes remaining against the default weekly cap (3)', async () => {
     const c = useContent()
     await c.loadPostBudget()
