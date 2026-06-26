@@ -6,8 +6,9 @@ import type { ExpertiseProfile, FeedItem, Idea, IdeaSpark } from '../types'
  *
  * The critical anti-slop rule: the feed is a SIGNAL of what topics resonate, not
  * a set of examples to imitate. Echoing posts produces generic AI-slop that kills
- * the "brand" pillar. So the prompt forbids copying and crosses each topic with
- * the user's expertise to yield an original angle. Behind LlmProvider → fake-tested.
+ * the "brand" pillar. So the prompt forbids copying and asks for the BROADER, more
+ * human angle each topic opens up (career, lessons, opinions) — a light tech undertone,
+ * not a deep-dive — so the post earns reach + views. Behind LlmProvider → fake-tested.
  */
 export class IdeaExtractor {
   constructor(private readonly provider: LlmProvider) {}
@@ -15,10 +16,11 @@ export class IdeaExtractor {
   async extract(posts: FeedItem[], expertise: ExpertiseProfile): Promise<Idea[]> {
     const system = [
       'You surface CONTENT IDEAS for the user to post on LinkedIn.',
-      `The user is: ${expertise.headline}. Stack: ${expertise.stack.join(', ')}.`,
+      `The user works in: ${expertise.headline}. Stack: ${expertise.stack.join(', ')} — but that is a light undertone, not the whole post.`,
       'The feed posts below are a SIGNAL of which topics resonate now — NOT examples to imitate.',
       'Do not copy, summarise or paraphrase the posts. Echoing the feed is AI-slop and is forbidden.',
-      "Cross each resonant topic with the user's own expertise to produce an original angle.",
+      'Find the BROADER, more human angle each topic opens up — a career lesson, a behind-the-scenes story, an opinion, or a relatable observation — that a WIDE audience engages with (peers AND a recruiter or non-specialist scrolling the feed), so the post earns reach and views, not only niche-engineer depth.',
+      "Keep a light tech undertone, avoid dry deep-technical deep-dives, and ground each idea in the user's real experience.",
       'Ground EACH idea in ONE specific post. Return ONLY a JSON array of',
       '[{"topic": string, "angle": string, "sourceIndex": number, "claim": string, "quote": string}].',
       'sourceIndex = the 1-based number of the post that sparked it. claim = its point/tension worth a take.',
@@ -42,7 +44,8 @@ export class IdeaExtractor {
       // phase BEFORE the content, so a small cap starves the output → empty/truncated
       // content → parse fails → 0 ideas. The "3–6 ideas" instruction bounds output;
       // matches DraftGenerator/CommentDraftService, which also omit the cap.
-      temperature: 0.4
+      // Higher temperature → more varied, broader-audience angles (not literal tech extraction).
+      temperature: 0.7
     })
     return parseIdeas(completion.text, posts)
   }
