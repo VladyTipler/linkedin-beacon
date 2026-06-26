@@ -38,8 +38,11 @@ export class IdeaExtractor {
         { role: 'system', content: system },
         { role: 'user', content: user }
       ],
-      temperature: 0.4,
-      maxTokens: 600
+      // No maxTokens cap: reasoning models (e.g. gemini-3.5-flash) spend a reasoning
+      // phase BEFORE the content, so a small cap starves the output → empty/truncated
+      // content → parse fails → 0 ideas. The "3–6 ideas" instruction bounds output;
+      // matches DraftGenerator/CommentDraftService, which also omit the cap.
+      temperature: 0.4
     })
     return parseIdeas(completion.text, posts)
   }

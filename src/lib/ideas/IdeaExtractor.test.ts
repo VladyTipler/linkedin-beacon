@@ -59,6 +59,16 @@ describe('IdeaExtractor', () => {
     expect(joined).toContain('do not copy') // anti-slop framing
   })
 
+  it('does not starve reasoning models with a tiny output cap', async () => {
+    // Reasoning models (e.g. gemini-3.5-flash) spend tokens on a reasoning phase BEFORE
+    // the content. A small max-tokens cap (was 600) is consumed by reasoning → `content`
+    // comes back empty/truncated → parse fails → 0 ideas (and the in-loop error is swallowed).
+    // Verified live: 600 → truncated/0 ideas; uncapped → full JSON. Omit the cap (or keep ≥2000).
+    const { provider, calls } = fakeProvider('[]')
+    await new IdeaExtractor(provider).extract(posts, expertise)
+    expect(calls[0].maxTokens === undefined || (calls[0].maxTokens ?? 0) >= 2000).toBe(true)
+  })
+
   it('drops malformed entries that lack topic or angle', async () => {
     const { provider } = fakeProvider(
       JSON.stringify([{ topic: 'ok', angle: 'good' }, { topic: 'no angle' }, { angle: 'no topic' }])
