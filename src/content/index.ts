@@ -14,7 +14,7 @@ import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
-import { harvestPeople } from './harvestPeople'
+import { harvestPeople, harvestUntilReady } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
 import {
   SCANNING,
@@ -282,8 +282,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return true // async sendResponse
 
     case 'HARVEST_PEOPLE':
-      sendResponse(harvestPeople(document))
-      return false
+      // LinkedIn renders search results a few seconds after the page (and this content
+      // script) is ready, so poll until they appear — a single immediate harvest is [].
+      void harvestUntilReady(() => harvestPeople(document), sleep).then(sendResponse)
+      return true // async sendResponse
 
     case 'EXECUTE_ACTION':
       void runAction(message).then(sendResponse)

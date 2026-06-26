@@ -28,3 +28,24 @@ export function harvestPeople(root: ParentNode): PersonCandidate[] {
   }
   return out
 }
+
+/**
+ * Harvest, retrying until the results render. LinkedIn renders people-search results
+ * a few seconds AFTER the content script is ready, so a single immediate harvest (right
+ * after the SW navigates the tab) returns [] — which silently yields zero connects.
+ * Poll until candidates appear or the attempts run out. `harvest`/`sleepMs` are injected
+ * so the loop is unit-testable without a live DOM.
+ */
+export async function harvestUntilReady(
+  harvest: () => PersonCandidate[],
+  sleepMs: (ms: number) => Promise<void>,
+  attempts = 16,
+  intervalMs = 500
+): Promise<PersonCandidate[]> {
+  for (let i = 0; i < attempts; i++) {
+    const people = harvest()
+    if (people.length > 0) return people
+    await sleepMs(intervalMs)
+  }
+  return harvest()
+}
