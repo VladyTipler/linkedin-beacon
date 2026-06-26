@@ -28,7 +28,7 @@ import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
-import { GENERATING_IDEAS, PUBLISHING } from '@lib/autopilot/statusLabels'
+import { GENERATING_IDEAS, PUBLISHING, SEARCHING_PEOPLE, CONNECTING } from '@lib/autopilot/statusLabels'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -446,18 +446,27 @@ async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
 async function runConnectsThen(tabId: number, afterUrl: string): Promise<number> {
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
+  const setActivity = (label: string) =>
+    chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label }).catch(() => {})
   const res = await runConnectStep({
     store, clock, rng,
-    navigate: (url) => navigateLinkedInTab(tabId, url),
+    navigate: async (url) => {
+      await navigateLinkedInTab(tabId, url)
+      // Each navigation destroys the content script + its overlay/pill — re-assert it
+      // on the freshly-loaded page so the "agent is working" UI stays consistent.
+      await setActivity(SEARCHING_PEOPLE)
+    },
     harvest: async () =>
       (await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE' }).catch(() => [])) ?? [],
-    connect: (c) =>
-      chrome.tabs
+    connect: async (c) => {
+      await setActivity(CONNECTING)
+      return chrome.tabs
         .sendMessage(tabId, {
           type: 'EXECUTE_ACTION',
           action: { type: 'connect', target: { url: c.profileUrl, meta: { memberId: c.memberId, name: c.name } } }
         })
-        .catch(() => undefined),
+        .catch(() => undefined)
+    },
     pace: () => sleep(pacer.nextMs(8000, 30000))
   })
   await navigateLinkedInTab(tabId, afterUrl)

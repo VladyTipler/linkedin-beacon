@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest'
-import { harvestPeople, harvestUntilReady } from './harvestPeople'
+import { harvestPeople, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
 import { PEOPLE_SEARCH_HTML } from './__fixtures__/people-search-card'
 import type { PersonCandidate } from '@lib/types'
 
@@ -20,23 +20,55 @@ describe('harvestPeople (real card HTML boundary)', () => {
   })
 })
 
-describe('harvestUntilReady (poll until LinkedIn renders search results)', () => {
-  const cand: PersonCandidate = { memberId: '1', name: 'A', headline: '', profileUrl: '' }
+const c = (id: string): PersonCandidate => ({ memberId: id, name: id, headline: '', profileUrl: '' })
 
-  it('retries until results render, then returns them', async () => {
+describe('harvestPeoplePage (wait for the page to render before reading)', () => {
+  it('polls until cards render, then returns them', async () => {
     let calls = 0
-    const harvest = () => (++calls >= 3 ? [cand] : []) // empty twice, then rendered
-    const sleeps: number[] = []
-    const res = await harvestUntilReady(harvest, async (ms) => { sleeps.push(ms) }, 16, 500)
-    expect(res).toEqual([cand])
+    const res = await harvestPeoplePage(() => (++calls >= 3 ? [c('1')] : []), async () => {}, 16, 500)
+    expect(res).toEqual([c('1')])
     expect(calls).toBe(3)
-    expect(sleeps).toEqual([500, 500]) // slept twice before success
   })
 
-  it('gives up after the attempts and returns the last (possibly empty) result', async () => {
+  it('returns [] if nothing renders within the attempts', async () => {
     let calls = 0
-    const res = await harvestUntilReady(() => { calls++; return [] }, async () => {}, 3, 10)
+    const res = await harvestPeoplePage(() => { calls++; return [] }, async () => {}, 3, 10)
     expect(res).toEqual([])
-    expect(calls).toBe(4) // 3 in-loop attempts + 1 final
+    expect(calls).toBe(4) // 3 in-loop + 1 final
+  })
+})
+
+describe('harvestPeoplePaginated (accumulate across pagination)', () => {
+  it('harvests each page, dedups by memberId, advances until there is no next page', async () => {
+    const pages = [[c('1'), c('2')], [c('2'), c('3')], [c('4')]]
+    let p = 0
+    const res = await harvestPeoplePaginated(
+      async () => pages[p],
+      async () => { p++; return p < pages.length },
+      { target: 30, maxPages: 5 }
+    )
+    expect(res.map((x) => x.memberId).sort()).toEqual(['1', '2', '3', '4'])
+  })
+
+  it('stops at the target without paginating further', async () => {
+    let nexts = 0
+    const res = await harvestPeoplePaginated(
+      async () => [c('1'), c('2'), c('3')],
+      async () => { nexts++; return true },
+      { target: 3, maxPages: 5 }
+    )
+    expect(res).toHaveLength(3)
+    expect(nexts).toBe(0)
+  })
+
+  it('is bounded by maxPages', async () => {
+    let reads = 0
+    const res = await harvestPeoplePaginated(
+      async () => { reads++; return [] },
+      async () => true,
+      { target: 30, maxPages: 3 }
+    )
+    expect(res).toEqual([])
+    expect(reads).toBe(3)
   })
 })

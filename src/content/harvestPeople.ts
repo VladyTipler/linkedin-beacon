@@ -30,13 +30,11 @@ export function harvestPeople(root: ParentNode): PersonCandidate[] {
 }
 
 /**
- * Harvest, retrying until the results render. LinkedIn renders people-search results
- * a few seconds AFTER the content script is ready, so a single immediate harvest (right
- * after the SW navigates the tab) returns [] — which silently yields zero connects.
- * Poll until candidates appear or the attempts run out. `harvest`/`sleepMs` are injected
- * so the loop is unit-testable without a live DOM.
+ * Wait for the current people-search page to render its cards, then harvest it. Results
+ * appear a few seconds AFTER the content script is ready, so a single read returns [].
+ * Poll until cards appear or the attempts run out. Injectable for unit tests.
  */
-export async function harvestUntilReady(
+export async function harvestPeoplePage(
   harvest: () => PersonCandidate[],
   sleepMs: (ms: number) => Promise<void>,
   attempts = 16,
@@ -48,4 +46,25 @@ export async function harvestUntilReady(
     await sleepMs(intervalMs)
   }
   return harvest()
+}
+
+/**
+ * Harvest across pagination (the people-search list has NO infinite scroll — you switch
+ * pages). Wait+harvest each page, accumulate unique candidates (by memberId), then click
+ * to the next page; stop at the target, the page cap, or when there's no next page.
+ * `harvestPage`/`nextPage` are injected so the loop is unit-testable without a live DOM.
+ */
+export async function harvestPeoplePaginated(
+  harvestPage: () => Promise<PersonCandidate[]>,
+  nextPage: () => Promise<boolean>,
+  opts: { target?: number; maxPages?: number } = {}
+): Promise<PersonCandidate[]> {
+  const { target = 30, maxPages = 5 } = opts
+  const acc = new Map<string, PersonCandidate>()
+  for (let page = 0; page < maxPages; page++) {
+    for (const p of await harvestPage()) if (!acc.has(p.memberId)) acc.set(p.memberId, p)
+    if (acc.size >= target) break
+    if (!(await nextPage())) break
+  }
+  return [...acc.values()]
 }

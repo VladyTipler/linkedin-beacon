@@ -14,7 +14,7 @@ import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
-import { harvestPeople, harvestUntilReady } from './harvestPeople'
+import { harvestPeople, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
 import {
   SCANNING,
@@ -84,6 +84,30 @@ function feedScroller(): Element {
     }
   }
   return document.scrollingElement ?? document.documentElement
+}
+
+// Advance the people-search pagination (no infinite scroll — you switch pages). The
+// current page button has aria-current="true"; click the next-numbered one and wait for
+// the indicator to switch (its results then render; the harvest poll waits for them).
+async function goToNextPeoplePage(): Promise<boolean> {
+  const pageBtns = () => [...document.querySelectorAll<HTMLButtonElement>('button[aria-label^="Page "]')]
+  const cur = pageBtns().find((b) => b.getAttribute('aria-current') === 'true')
+  if (!cur) return false
+  const curNum = parseInt((cur.getAttribute('aria-label') ?? '').replace('Page ', ''), 10)
+  if (Number.isNaN(curNum)) return false
+  const next = pageBtns().find((b) => b.getAttribute('aria-label') === `Page ${curNum + 1}`)
+  if (!next || next.disabled) return false
+  next.scrollIntoView()
+  next.click()
+  for (let i = 0; i < 16; i++) {
+    await sleep(500)
+    const now = pageBtns().find((b) => b.getAttribute('aria-current') === 'true')
+    if (now?.getAttribute('aria-label') === `Page ${curNum + 1}`) {
+      await sleep(1500) // settle: let the new page's cards replace the old before harvest
+      return true
+    }
+  }
+  return false
 }
 
 async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader['parse']>> {
@@ -282,9 +306,11 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return true // async sendResponse
 
     case 'HARVEST_PEOPLE':
-      // LinkedIn renders search results a few seconds after the page (and this content
-      // script) is ready, so poll until they appear — a single immediate harvest is [].
-      void harvestUntilReady(() => harvestPeople(document), sleep).then(sendResponse)
+      // No infinite scroll: wait for each page to render, harvest it, then paginate.
+      void harvestPeoplePaginated(
+        () => harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms)),
+        () => goToNextPeoplePage()
+      ).then(sendResponse)
       return true // async sendResponse
 
     case 'EXECUTE_ACTION':

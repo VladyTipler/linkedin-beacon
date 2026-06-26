@@ -11,6 +11,10 @@ export const COLLECTING_IDEAS = 'Собираю идеи…'
 export const GENERATING_IDEAS = 'Генерирую идеи…'
 /** Shown while the approved draft is being typed + posted into the composer. */
 export const PUBLISHING = 'Публикую…'
+/** Smart Connect: scrolling the people-search results to load candidate cards. */
+export const SEARCHING_PEOPLE = 'Ищу людей…'
+/** Smart Connect: sending a connection request. */
+export const CONNECTING = 'Добавляю в сеть…'
 
 /** "Пауза 22с" — the anti-ban gap before the next action. */
 export function pauseLabel(ms: number): string {
