@@ -13,7 +13,8 @@ import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { DomSsiSource } from '@/adapters/DomSsiSource'
 import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
-import { executeComment, executeLike, executeComposerPost } from './domActions'
+import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
+import { harvestPeople } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
 import {
   SCANNING,
@@ -280,6 +281,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       void harvestByScrolling(message.limit).then(sendResponse)
       return true // async sendResponse
 
+    case 'HARVEST_PEOPLE':
+      sendResponse(harvestPeople(document))
+      return false
+
     case 'EXECUTE_ACTION':
       void runAction(message).then(sendResponse)
       return true // async sendResponse
@@ -331,6 +336,10 @@ async function runAction(message: { action: import('@lib/types').ActionRequest }
   }
   if (action.type === 'post') {
     return executeComposerPost(document, action.payload?.post ?? '', delay)
+  }
+  if (action.type === 'connect') {
+    const meta = action.target.meta ?? {}
+    return executeConnect(document, { memberId: String(meta.memberId ?? ''), name: String(meta.name ?? '') }, delay)
   }
   return { ok: false, reason: `unsupported_action:${action.type}` }
 }
