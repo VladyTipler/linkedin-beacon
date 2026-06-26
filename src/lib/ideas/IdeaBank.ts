@@ -30,6 +30,11 @@ export class IdeaBank {
     return asArray<Idea>(await this.store.get<Idea[]>(IDEA_BANK_KEY))
   }
 
+  /** Ideas newest-first (most recently added on top) — display order for the UI. */
+  async allNewestFirst(): Promise<Idea[]> {
+    return (await this.all()).reverse()
+  }
+
   async remove(idea: Idea): Promise<void> {
     const target = key(idea)
     const next = (await this.all()).filter((i) => key(i) !== target)

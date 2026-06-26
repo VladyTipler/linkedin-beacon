@@ -25,6 +25,13 @@ describe('IdeaBank', () => {
     expect(await bank.all()).toEqual([a, b])
   })
 
+  it('returns newest-first for display (most recently added on top)', async () => {
+    const bank = new IdeaBank(memStore())
+    await bank.add([a])
+    await bank.add([b])
+    expect(await bank.allNewestFirst()).toEqual([b, a])
+  })
+
   it('deduplicates by topic+angle (case/space-insensitive)', async () => {
     const bank = new IdeaBank(memStore())
     await bank.add([a])

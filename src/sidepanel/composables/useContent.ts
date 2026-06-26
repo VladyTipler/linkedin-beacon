@@ -34,7 +34,7 @@ export function useContent() {
   const lastRun = ref<IdeasLastRun | null>(null)
 
   async function loadIdeas() {
-    ideas.value = await bank.all()
+    ideas.value = await bank.allNewestFirst()
   }
 
   /** The most recent AUTO idea-collect during a run (written by the SW on every path). */
@@ -48,7 +48,7 @@ export function useContent() {
     const res = await panelBus.request<{ ideas: Idea[]; error?: string }>({ type: 'GENERATE_IDEAS' })
     generating.value = false
     if (res?.error) error.value = res.error
-    ideas.value = res?.ideas ?? (await bank.all())
+    ideas.value = await bank.allNewestFirst()
     await loadLastRun()
   }
 
