@@ -21,6 +21,19 @@ onMounted(exp.load)
 const content = useContentSettings()
 onMounted(content.load)
 
+// Auto-publish weekdays (Date.getDay: 0=Sun..6=Sat). Toggle reassigns a new sorted
+// array (never in-place) so the shared default constant isn't mutated.
+const WEEKDAYS = [
+  { n: 1, label: 'Пн' }, { n: 2, label: 'Вт' }, { n: 3, label: 'Ср' },
+  { n: 4, label: 'Чт' }, { n: 5, label: 'Пт' }, { n: 6, label: 'Сб' }, { n: 0, label: 'Вс' }
+]
+function togglePubDay(n: number) {
+  const cur = content.publishDays.value
+  content.publishDays.value = cur.includes(n)
+    ? cur.filter((x) => x !== n)
+    : [...cur, n].sort((a, b) => a - b)
+}
+
 const saveError = ref(false)
 
 async function onSave() {
@@ -106,6 +119,20 @@ async function onSave() {
       <span class="k">Постов в неделю (рек. 2–3, approve-first)</span>
       <input type="number" min="1" v-model.number="content.postsPerWeek.value" data-testid="posts-per-week" />
     </label>
+    <div class="fld">
+      <span class="k">Дни авто-публикации (бот публикует одобренный пост в выбранный день, когда работает)</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+        <label v-for="day in WEEKDAYS" :key="day.n" class="chip" style="margin-top:0;cursor:pointer">
+          <input
+            type="checkbox"
+            :data-testid="`pubday-${day.n}`"
+            :checked="content.publishDays.value.includes(day.n)"
+            @change="togglePubDay(day.n)"
+          />
+          {{ day.label }}
+        </label>
+      </div>
+    </div>
     <label class="fld">
       <span class="k">Язык постов и комментариев</span>
       <select v-model="content.contentLanguage.value" data-testid="content-language">

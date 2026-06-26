@@ -25,4 +25,25 @@ describe('SettingsScreen', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="save-error"]').exists()).toBe(true)
   })
+
+  it('renders 7 publish-day checkboxes defaulting to Mon/Wed/Fri', async () => {
+    const w = mount(SettingsScreen)
+    await flushPromises()
+    expect(w.find('[data-testid="pubday-1"]').exists()).toBe(true)
+    expect(w.find('[data-testid="pubday-0"]').exists()).toBe(true)
+    expect((w.find('[data-testid="pubday-1"]').element as HTMLInputElement).checked).toBe(true)  // Mon
+    expect((w.find('[data-testid="pubday-2"]').element as HTMLInputElement).checked).toBe(false) // Tue
+  })
+
+  it('toggles a publish weekday and persists publishDays without it', async () => {
+    const setMock = vi.fn(async (_obj: Record<string, any>) => {})
+    ;(globalThis as any).chrome.storage.local.set = setMock
+    const w = mount(SettingsScreen)
+    await flushPromises()
+    await w.find('[data-testid="pubday-1"]').setValue(false) // un-check Monday (default [1,3,5])
+    await w.find('[data-testid="llm-save"]').trigger('click')
+    await flushPromises()
+    const call = setMock.mock.calls.find((c) => c[0] && c[0]['content:settings'])
+    expect(call?.[0]['content:settings'].publishDays).toEqual([3, 5])
+  })
 })
