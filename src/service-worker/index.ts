@@ -152,6 +152,17 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
         // Connect step threw (tab gone, storage error, etc.) — fall through to the engagement loop.
       }
     }
+    if (tabId) {
+      try {
+        const published = await publishApprovedThen(tabId)
+        if (published) {
+          const s = await autopilotState()
+          if (s) { s.postsPublished = published; await saveAutopilot(s) }
+        }
+      } catch {
+        // Publish step threw (tab gone, composer error) — fall through to the engagement loop.
+      }
+    }
     if (await startLoop()) return
     // Couldn't reach the page — roll back so the UI doesn't show a phantom "running".
     const s = await autopilotState()
@@ -189,6 +200,9 @@ async function stopAutopilot(reason: StopReason): Promise<void> {
   const modules: RunReport['modules'] = [{ id: 'engagement', executed: s.used, skipped: 0, failed: 0 }]
   if (s.connectsExecuted) {
     modules.push({ id: 'smart_connect', executed: s.connectsExecuted, skipped: 0, failed: 0 })
+  }
+  if (s.postsPublished) {
+    modules.push({ id: 'content', executed: s.postsPublished, skipped: 0, failed: 0 })
   }
   const report: RunReport = {
     id: randomId(),
@@ -471,6 +485,31 @@ async function runConnectsThen(tabId: number, afterUrl: string): Promise<number>
   })
   await navigateLinkedInTab(tabId, afterUrl)
   return res.executed
+}
+
+/**
+ * Auto-publish step: publish ONE oldest approved draft if today∈publishDays and the
+ * weekly cap has room. `prepare` (navigate to feed + ready-gate + activity) runs ONLY
+ * when about to publish — same nav race as Smart Connect, so reuse navigateLinkedInTab's
+ * status:complete + url gate, never a bare ping. Returns posts published (0 or 1).
+ */
+async function publishApprovedThen(tabId: number): Promise<number> {
+  const res = await content.publishApprovedDrafts({
+    store,
+    clock,
+    prepare: async () => {
+      await navigateLinkedInTab(tabId, 'https://www.linkedin.com/feed/')
+      await chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label: PUBLISHING }).catch(() => {})
+    },
+    publish: (text) =>
+      chrome.tabs
+        .sendMessage(tabId, {
+          type: 'EXECUTE_ACTION',
+          action: { type: 'post', target: { url: 'https://www.linkedin.com/feed/' }, payload: { post: text } }
+        })
+        .catch(() => undefined)
+  })
+  return res.published
 }
 
 async function reinjectContentScript(tabId: number): Promise<boolean> {

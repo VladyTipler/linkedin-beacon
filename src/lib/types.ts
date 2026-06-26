@@ -131,6 +131,8 @@ export interface AutopilotState {
   startedAt: string
   /** Connects sent by the Smart Connect step of this run (for the run report). */
   connectsExecuted?: number
+  /** Approved posts auto-published by the content step of this run (for the run report). */
+  postsPublished?: number
 }
 
 export interface AutopilotStatus {
