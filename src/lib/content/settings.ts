@@ -1,6 +1,7 @@
 import type { KeyValueStore } from '../ports'
 import type { CommentTone } from '../types'
 import { DEFAULT_POSTS_PER_WEEK } from './PostWeekBudget'
+import { asArray } from '../engagement/settings'
 
 export const CONTENT_SETTINGS_KEY = 'content:settings'
 
@@ -17,12 +18,22 @@ export interface ContentSettings {
   postsPerWeek: number
   /** Language for generated posts AND comments (Vlad targets USD-remote → English). */
   contentLanguage: string
+  /** Days of week when auto-publish can run (0=Sunday..6=Saturday). */
+  publishDays: number[]
 }
 
 export const DEFAULT_COMMENTS_PER_DAY = 5
 export const DEFAULT_CONTENT_LANGUAGE = 'en'
+export const DEFAULT_PUBLISH_DAYS = [1, 3, 5] // Mon, Wed, Fri (Date.getDay: 0=Sun..6=Sat)
 
 const LANG_NAMES: Record<string, string> = { en: 'English', ru: 'Russian' }
+
+function sanitiseDays(raw: unknown): number[] {
+  const days = asArray<number>(raw)
+    .map((n) => Number(n))
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+  return days.length ? [...new Set(days)].sort((a, b) => a - b) : DEFAULT_PUBLISH_DAYS
+}
 
 /** Human-readable language name for prompt injection (defaults to English). */
 export function languageName(code: string): string {
@@ -52,7 +63,8 @@ export async function loadContentSettings(store: KeyValueStore): Promise<Content
       typeof raw?.postsPerWeek === 'number' && raw.postsPerWeek > 0
         ? raw.postsPerWeek
         : DEFAULT_POSTS_PER_WEEK,
-    contentLanguage: raw?.contentLanguage?.trim() ? raw.contentLanguage : DEFAULT_CONTENT_LANGUAGE
+    contentLanguage: raw?.contentLanguage?.trim() ? raw.contentLanguage : DEFAULT_CONTENT_LANGUAGE,
+    publishDays: sanitiseDays(raw?.publishDays)
   }
 }
 

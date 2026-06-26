@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { loadContentSettings, saveContentSettings, DEFAULT_POST_PROMPT } from './settings'
 import type { KeyValueStore } from '@lib/ports'
 
-function memStore(): KeyValueStore {
-  const m = new Map<string, unknown>()
+function memStore(initial?: Record<string, unknown>): KeyValueStore {
+  const m = new Map<string, unknown>(Object.entries(initial ?? {}))
   return {
     async get<T>(k: string) { return m.has(k) ? (m.get(k) as T) : null },
     async set<T>(k: string, v: T) { m.set(k, v) }
@@ -29,7 +29,8 @@ describe('content settings', () => {
       commentsPerDay: 3,
       commentTone: 'friendly',
       postsPerWeek: 5,
-      contentLanguage: 'ru'
+      contentLanguage: 'ru',
+      publishDays: [1, 3, 5]
     })
     const s = await loadContentSettings(store)
     expect(s.postPrompt).toBe('Write like a pirate.')
@@ -38,5 +39,15 @@ describe('content settings', () => {
     expect(s.commentTone).toBe('friendly')
     expect(s.postsPerWeek).toBe(5)
     expect(s.contentLanguage).toBe('ru')
+    expect(s.publishDays).toEqual([1, 3, 5])
+  })
+
+  it('defaults publishDays to Mon/Wed/Fri when unset', async () => {
+    expect((await loadContentSettings(memStore())).publishDays).toEqual([1, 3, 5])
+  })
+
+  it('sanitises persisted publishDays (array-as-object, out-of-range, dupes)', async () => {
+    const store = memStore({ 'content:settings': { publishDays: { 0: 1, 1: 1, 2: 9, 3: -2 } } })
+    expect((await loadContentSettings(store)).publishDays).toEqual([1])
   })
 })

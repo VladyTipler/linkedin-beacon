@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
-import { loadContentSettings, saveContentSettings, DEFAULT_CONTENT_LANGUAGE } from '@lib/content/settings'
+import { loadContentSettings, saveContentSettings, DEFAULT_CONTENT_LANGUAGE, DEFAULT_PUBLISH_DAYS } from '@lib/content/settings'
 import { DEFAULT_POSTS_PER_WEEK } from '@lib/content/PostWeekBudget'
 import type { CommentTone } from '@lib/types'
 
@@ -13,6 +13,7 @@ export function useContentSettings() {
   const commentTone = ref<CommentTone>('expert')
   const postsPerWeek = ref(DEFAULT_POSTS_PER_WEEK)
   const contentLanguage = ref(DEFAULT_CONTENT_LANGUAGE)
+  const publishDays = ref(DEFAULT_PUBLISH_DAYS)
 
   async function load() {
     const s = await loadContentSettings(store)
@@ -22,6 +23,7 @@ export function useContentSettings() {
     commentTone.value = s.commentTone
     postsPerWeek.value = s.postsPerWeek
     contentLanguage.value = s.contentLanguage
+    publishDays.value = s.publishDays
   }
 
   async function save() {
@@ -31,9 +33,10 @@ export function useContentSettings() {
       commentsPerDay: commentsPerDay.value,
       commentTone: commentTone.value,
       postsPerWeek: postsPerWeek.value,
-      contentLanguage: contentLanguage.value
+      contentLanguage: contentLanguage.value,
+      publishDays: publishDays.value
     })
   }
 
-  return { prompt, commentsEnabled, commentsPerDay, commentTone, postsPerWeek, contentLanguage, load, save }
+  return { prompt, commentsEnabled, commentsPerDay, commentTone, postsPerWeek, contentLanguage, publishDays, load, save }
 }
