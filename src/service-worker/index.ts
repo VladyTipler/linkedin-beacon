@@ -22,13 +22,17 @@ import { engagementLimit } from '@lib/autopilot/engagementLimit'
 import { decideAutopilotStart, enabledModules, runLoopModules } from '@lib/autopilot/startGate'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { runConnectStep } from './connectHandlers'
+import { runViewStep } from './viewHandlers'
+import { loadConnectSettings } from '@lib/connect/settings'
+import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
+import { geoUrnsForRegions } from '@lib/connect/regions'
 import { loadContentSettings } from '@lib/content/settings'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
-import { GENERATING_IDEAS, PUBLISHING, SEARCHING_PEOPLE, CONNECTING } from '@lib/autopilot/statusLabels'
+import { GENERATING_IDEAS, PUBLISHING, SEARCHING_PEOPLE, CONNECTING, VIEWING_PROFILES } from '@lib/autopilot/statusLabels'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -142,7 +146,19 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
     return false
   }
   const connectEnabled = enabledModules(modulesState).some((m) => m.id === 'smart_connect')
+  const viewsEnabled = enabledModules(modulesState).some((m) => m.id === 'profile_views')
   const launch = async () => {
+    if (tabId && viewsEnabled) {
+      try {
+        const viewed = await runViewsThen(tabId)
+        if (viewed) {
+          const s = await autopilotState()
+          if (s) { s.viewsExecuted = viewed; await saveAutopilot(s) }
+        }
+      } catch {
+        // Views step threw — fall through to the rest of the run.
+      }
+    }
     if (tabId && connectEnabled) {
       try {
         const executed = await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
@@ -198,6 +214,9 @@ async function stopAutopilot(reason: StopReason): Promise<void> {
   await saveAutopilot(s)
   if (s.tabId) chrome.tabs.sendMessage(s.tabId, { type: 'STOP_AUTOPILOT' }).catch(() => {})
   const modules: RunReport['modules'] = [{ id: 'engagement', executed: s.used, skipped: 0, failed: 0 }]
+  if (s.viewsExecuted) {
+    modules.push({ id: 'profile_views', executed: s.viewsExecuted, skipped: 0, failed: 0 })
+  }
   if (s.connectsExecuted) {
     modules.push({ id: 'smart_connect', executed: s.connectsExecuted, skipped: 0, failed: 0 })
   }
@@ -435,6 +454,31 @@ async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
     const pong = await chrome.tabs.sendMessage(tabId, { type: 'PING' }).catch(() => null)
     if (pong) return
   }
+}
+
+/** Run the Profile Views step against `tabId`, return the tab to the feed, report count viewed. */
+async function runViewsThen(tabId: number): Promise<number> {
+  const rng = new MathRandomRng()
+  const pacer = new HumanDelay(rng)
+  const settings = await loadConnectSettings(store)
+  if (!settings.searchKeywords.trim()) return 0
+  const searchUrl = peopleSearchUrl(settings.searchKeywords, geoUrnsForRegions(settings.targetRegions))
+  const setActivity = (label: string) =>
+    chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label }).catch(() => {})
+  const res = await runViewStep({
+    store, clock, rng, searchUrl,
+    navigate: async (url) => {
+      await navigateLinkedInTab(tabId, url)
+      await setActivity(VIEWING_PROFILES) // re-assert overlay (nav destroys the content script)
+    },
+    harvest: async () =>
+      (await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE' }).catch(() => [])) ?? [],
+    dwell: async () =>
+      chrome.tabs.sendMessage(tabId, { type: 'DWELL_PROFILE' }).catch(() => undefined),
+    pace: () => sleep(pacer.nextMs(8000, 30000))
+  })
+  await navigateLinkedInTab(tabId, 'https://www.linkedin.com/feed/')
+  return res.executed
 }
 
 /** Run the Smart Connect step against `tabId`, return the tab to the feed, report count sent. */

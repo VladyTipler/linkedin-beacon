@@ -133,6 +133,8 @@ export interface AutopilotState {
   connectsExecuted?: number
   /** Approved posts auto-published by the content step of this run (for the run report). */
   postsPublished?: number
+  /** Profiles viewed by the Smart-Views step of this run (for the run report). */
+  viewsExecuted?: number
 }
 
 export interface AutopilotStatus {

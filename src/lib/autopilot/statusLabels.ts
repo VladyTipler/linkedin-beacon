@@ -15,6 +15,8 @@ export const PUBLISHING = 'Публикую…'
 export const SEARCHING_PEOPLE = 'Ищу людей…'
 /** Smart Connect: sending a connection request. */
 export const CONNECTING = 'Добавляю в сеть…'
+/** Profile Views: dwelling on a profile page. */
+export const VIEWING_PROFILES = 'Смотрю профили…'
 
 /** "Пауза 22с" — the anti-ban gap before the next action. */
 export function pauseLabel(ms: number): string {
