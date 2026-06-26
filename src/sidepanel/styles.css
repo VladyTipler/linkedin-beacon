@@ -131,5 +131,5 @@ body{min-height:100vh;display:flex;justify-content:center;padding:0;background:r
 .subtabs{display:flex;gap:8px;margin-bottom:12px}
 .subtabs button{flex:1;padding:8px;border:1px solid var(--line);border-radius:9px;background:#0e1422;color:var(--mut);cursor:pointer}
 .subtabs button.on{background:#141c2e;color:#fff;border-color:var(--lime,#c4ff4d)}
-.note .row{display:flex;gap:8px;margin-top:9px}
+.note .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:9px}
 .note textarea{width:100%;margin-top:8px;background:#0e1422;border:1px solid var(--line);border-radius:9px;color:#fff;padding:9px;font:inherit;resize:vertical}
