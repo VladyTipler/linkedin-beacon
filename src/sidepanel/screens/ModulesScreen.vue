@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import type { ModuleId, ModuleState } from '@lib/types'
 import ModuleCard from '../components/ModuleCard.vue'
 import EngagementSettingsForm from '../components/EngagementSettingsForm.vue'
 import { useEngagementStats } from '../composables/useEngagementStats'
+import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
+import { loadConnectSettings, saveConnectSettings, defaultConnectKeywords } from '@lib/connect/settings'
+import { loadSettings } from '@lib/engagement/settings'
+import { panelBus } from '../lib/panelBus'
 
 defineProps<{ modules: ModuleState[] }>()
 defineEmits<{ toggle: [id: ModuleId]; setLimit: [id: ModuleId, n: number] }>()
@@ -15,6 +19,19 @@ const { likes, comments, ceiling } = useEngagementStats()
 const barWidth = computed(() =>
   ceiling.value > 0 ? `${Math.min(100, Math.round((likes.value / ceiling.value) * 100))}%` : '0%'
 )
+
+const connectKeywords = ref('')
+const store = new ChromeStorageStore()
+onMounted(async () => {
+  if (!panelBus.available()) return
+  const s = await loadConnectSettings(store)
+  if (s.searchKeywords.trim()) { connectKeywords.value = s.searchKeywords; return }
+  const { expertise } = await loadSettings(store)
+  connectKeywords.value = defaultConnectKeywords(expertise)
+})
+function saveKeywords() {
+  if (panelBus.available()) void saveConnectSettings(store, { searchKeywords: connectKeywords.value })
+}
 </script>
 
 <template>
@@ -64,6 +81,10 @@ const barWidth = computed(() =>
         Привет, <b>Anna</b>! Вижу, ты нанимаешь Senior Frontend в <b>finance-tech</b>. 11 лет на Vue/TS, последний год строю AI-native инструменты. Буду рад быть на связи 🙌
       </div>
       <div class="limitbar"><div class="lh"><span>Connect-запросы · неделя</span><span class="mono">38/80</span></div><div class="track"><div class="fill" style="width:47%;background:linear-gradient(90deg,#4d9fff,#3a7fd0)"></div></div></div>
+      <label class="fld">
+        <span class="k">Кого искать</span>
+        <input v-model="connectKeywords" @change="saveKeywords" placeholder="frontend recruiter" />
+      </label>
     </ModuleCard>
 
     <ModuleCard

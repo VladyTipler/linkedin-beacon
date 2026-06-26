@@ -10,7 +10,7 @@ const STORE_KEY = 'modules:state'
 export function defaultModules(): ModuleState[] {
   return [
     { id: 'engagement', enabled: true, automationLevel: 'manual', available: true, dailyLimit: 35 },
-    { id: 'smart_connect', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 80 },
+    { id: 'smart_connect', enabled: false, automationLevel: 'manual', available: true, dailyLimit: 100 },
     { id: 'content', enabled: false, automationLevel: 'manual', available: true, dailyLimit: 5 },
     { id: 'auto_apply', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 0 }
   ]

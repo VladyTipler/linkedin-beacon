@@ -22,7 +22,7 @@ describe('useModules', () => {
     const eng = d.find((m) => m.id === 'engagement')!
     expect(eng.dailyLimit).toBe(35)
     expect(eng.available).toBe(true)
-    expect(d.find((m) => m.id === 'smart_connect')!.available).toBe(false)
+    expect(d.find((m) => m.id === 'smart_connect')!.available).toBe(true)
     expect(d.find((m) => m.id === 'content')!.available).toBe(true)
   })
 
@@ -35,15 +35,15 @@ describe('useModules', () => {
   })
 
   it('pins module availability to the current build, ignoring a stale stored value', async () => {
-    // Old build had smart_connect available:true; the new build flags it «Скоро».
+    // Old build had smart_connect available:false (Скоро); new build ships it live.
     mem.set('modules:state', [
-      { id: 'smart_connect', enabled: true, automationLevel: 'manual', available: true, dailyLimit: 80 }
+      { id: 'smart_connect', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 80 }
     ])
     const m = useModules()
     // onMounted merge runs asynchronously; flush.
     await flushPromises()
     const sc = m.modules.value.find((x) => x.id === 'smart_connect')!
-    expect(sc.available).toBe(false)
+    expect(sc.available).toBe(true)
   })
 
   it('ships content as a real module with an ideas/day limit', () => {
