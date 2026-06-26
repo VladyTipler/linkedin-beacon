@@ -13,7 +13,9 @@
 Research-FIRST (4 web-агента → LinkedIn Help a105145/a594698): подтверждено — исходящие просмотры профилей
 растят People-пиллар; входящие просмотры = МИФ; Sales Navigator НЕ множитель (потолок free ~75). Research +
 spec + plan в `docs/{research,superpowers/specs,superpowers/plans}/2026-06-26-ssi-pull*`.
-- **⭐ Просмотр профилей (Feature A) — ПОЛНОСТЬЮ, live-verifiable:** модуль `profile_views` (default 40/день),
+- **⭐ Просмотр профилей (Feature A) — ПОЛНОСТЬЮ + LIVE-VERIFIED (2026-06-27, CDP, реальный аккаунт):**
+  views-only смоук (лимит 4) → зашёл на 2 профиля рекрутёров, записал views:history/daily/seen-set; полный
+  путь search→harvest→profile→dwell→persist работает. Модуль `profile_views` (default 40/день),
   шаг `runViewsThen` в «Запустить» ПЕРЕД connects, переиспользует таргет Smart Connect (SSOT), тот же анти-бан
   гейт (day-cap+jitter+human pace+seen-set dedup+ready-gate+overlay re-assert). Gate на viewsEnabled +
   empty-keywords guard (advisor). Карточка + Reports split + список. Core: `src/lib/views/` (ViewDayBudget,
@@ -35,7 +37,7 @@ Todoist ⭐ переформулирован. Сделать реальное ч
 2. **Честное unknown-состояние:** `ProfileSnapshot` сейчас всё bool/number — добавить «не смог проверить»
    (tri-state или `unreadable: string[]`), НЕ показывать ложное «нет X». Boundary-тест на реальной форме.
 3. PII-sanitize любой fixture (no urn/contact/csrf). Включить `AUDIT_ENTRY_ENABLED`, wire `loading` ref.
-Затем: live-smoke просмотров (Vlad, foreground-вкладка) — заходит на N профилей, Reports показывает, day-cap держит.
+(Просмотры профилей уже live-verified — см. выше.)
 
 ## Prior session (2026-06-26) — Content Pipeline v2 SHIPPED + live-verified + UX pass
 Built via brainstorm→spec→plan→subagent-TDD (12 tasks), then a long live-debug + UX round.
