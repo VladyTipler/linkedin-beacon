@@ -3,9 +3,9 @@ import { onMounted } from 'vue'
 import { useContent } from '../composables/useContent'
 
 const {
-  tab, ideas, drafts, generating, error, publishing, postsLeft,
+  tab, ideas, drafts, generating, error, postsLeft,
   loadIdeas, generateIdeas, removeIdea, toDraft,
-  loadDrafts, removeDraft, updateDraft, publishDraft, loadPostBudget
+  loadDrafts, removeDraft, updateDraft, approveDraft, loadPostBudget
 } = useContent()
 
 onMounted(() => Promise.all([loadIdeas(), loadDrafts(), loadPostBudget()]))
@@ -66,10 +66,11 @@ async function copy(text: string) {
         <div class="lbl">{{ d.ideaTopic }}</div>
         <textarea :value="d.text" rows="6" @change="updateDraft(d.id, ($event.target as HTMLTextAreaElement).value)" />
         <div class="row">
-          <button class="btn primary" :disabled="publishing === d.id || postsLeft <= 0"
-                  :data-testid="`publish-${d.id}`" @click="publishDraft(d.id)">
-            {{ publishing === d.id ? 'Публикую…' : 'Опубликовать' }}
+          <span v-if="d.approved" class="lbl" :data-testid="`approved-badge-${d.id}`" style="color: var(--lime)">Одобрено ✓</span>
+          <button v-if="!d.approved" class="btn primary" :data-testid="`approve-${d.id}`" @click="approveDraft(d.id, true)">
+            Одобрить
           </button>
+          <button v-else class="btn" :data-testid="`unapprove-${d.id}`" @click="approveDraft(d.id, false)">Отозвать</button>
           <button class="btn" data-testid="copy" @click="copy(d.text)">Копировать</button>
           <button class="btn" @click="toDraft({ topic: d.ideaTopic, angle: d.ideaAngle })">Перегенерировать</button>
           <button class="btn" @click="removeDraft(d.id)">Удалить</button>

@@ -46,7 +46,8 @@ export function useContent() {
   }
 
   async function loadDrafts() {
-    draftList.value = await drafts.all()
+    const all = await drafts.all()
+    draftList.value = [...all].sort((a, b) => Number(b.approved ?? false) - Number(a.approved ?? false))
   }
 
   async function toDraft(idea: Idea) {
@@ -61,6 +62,11 @@ export function useContent() {
 
   async function removeDraft(id: string) {
     await drafts.remove(id)
+    await loadDrafts()
+  }
+
+  async function approveDraft(id: string, approved: boolean) {
+    await drafts.setApproved(id, approved)
     await loadDrafts()
   }
 
@@ -95,6 +101,6 @@ export function useContent() {
   return {
     tab, ideas, drafts: draftList, generating, error, publishing, postsLeft,
     loadIdeas, generateIdeas, removeIdea,
-    loadDrafts, toDraft, removeDraft, updateDraft, publishDraft, loadPostBudget
+    loadDrafts, toDraft, removeDraft, updateDraft, approveDraft, publishDraft, loadPostBudget
   }
 }
