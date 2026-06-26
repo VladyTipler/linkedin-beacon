@@ -10,8 +10,10 @@ import {
   POST_WEEK_BUDGET_KEY,
   type PostWeek
 } from '@lib/content/PostWeekBudget'
-import type { Idea, Draft } from '@lib/types'
+import type { Idea, Draft, IdeasLastRun } from '@lib/types'
 import { panelBus } from '../lib/panelBus'
+
+const IDEAS_LAST_RUN_KEY = 'ideas:lastRun'
 
 /** Side-panel state for the Content screen: idea bank + draft queue. */
 export function useContent() {
@@ -26,9 +28,15 @@ export function useContent() {
   const error = ref<string | null>(null)
   const publishing = ref<string | null>(null)
   const postsLeft = ref(0)
+  const lastRun = ref<IdeasLastRun | null>(null)
 
   async function loadIdeas() {
     ideas.value = await bank.all()
+  }
+
+  /** The most recent AUTO idea-collect during a run (written by the SW on every path). */
+  async function loadLastRun() {
+    lastRun.value = (await store.get<IdeasLastRun>(IDEAS_LAST_RUN_KEY)) ?? null
   }
 
   async function generateIdeas() {
@@ -38,6 +46,7 @@ export function useContent() {
     generating.value = false
     if (res?.error) error.value = res.error
     ideas.value = res?.ideas ?? (await bank.all())
+    await loadLastRun()
   }
 
   async function removeIdea(idea: Idea) {
@@ -99,8 +108,8 @@ export function useContent() {
   }
 
   return {
-    tab, ideas, drafts: draftList, generating, error, publishing, postsLeft,
-    loadIdeas, generateIdeas, removeIdea,
+    tab, ideas, drafts: draftList, generating, error, publishing, postsLeft, lastRun,
+    loadIdeas, generateIdeas, removeIdea, loadLastRun,
     loadDrafts, toDraft, removeDraft, updateDraft, approveDraft, publishDraft, loadPostBudget
   }
 }

@@ -69,4 +69,16 @@ describe('ContentScreen', () => {
 
     expect(w.find('[data-testid^="approved-badge-"]').exists()).toBe(true)
   })
+
+  it('surfaces the last auto-collect status on the ideas tab (no more silent zero)', async () => {
+    const storage = (globalThis as any).chrome.storage.local
+    storage._map.set('ideas:lastRun', {
+      at: '2026-06-26T10:00:00Z', reason: 'budget_exhausted', stored: 0, budget: { used: 5, limit: 5 }
+    })
+    const w = mount(ContentScreen)
+    await flushPromises()
+    const line = w.find('[data-testid="ideas-last-run"]')
+    expect(line.exists()).toBe(true)
+    expect(line.text()).toContain('5/5')
+  })
 })

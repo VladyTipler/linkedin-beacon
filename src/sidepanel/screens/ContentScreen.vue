@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useContent } from '../composables/useContent'
 
 const {
-  tab, ideas, drafts, generating, error, postsLeft,
-  loadIdeas, generateIdeas, removeIdea, toDraft,
+  tab, ideas, drafts, generating, error, postsLeft, lastRun,
+  loadIdeas, generateIdeas, removeIdea, toDraft, loadLastRun,
   loadDrafts, removeDraft, updateDraft, approveDraft, loadPostBudget
 } = useContent()
 
-onMounted(() => Promise.all([loadIdeas(), loadDrafts(), loadPostBudget()]))
+onMounted(() => Promise.all([loadIdeas(), loadDrafts(), loadPostBudget(), loadLastRun()]))
+
+/** Human-readable status of the last AUTO idea-collect during a run (empty until one runs). */
+const lastRunText = computed(() => {
+  const r = lastRun.value
+  if (!r) return ''
+  const t = new Date(r.at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+  if (r.reason === 'ok') return `Последний автосбор: +${r.stored} идей (${t})`
+  if (r.reason === 'budget_exhausted') return `Бюджет идей на сегодня исчерпан (${r.budget?.used}/${r.budget?.limit}) — обновится завтра`
+  if (r.reason === 'error') return `Ошибка автосбора в прогоне: ${r.error} (${t})`
+  if (r.reason === 'no_feed') return `Автосбор: лента пуста на момент прогона (${t})`
+  return `${ERR[r.reason] ?? `Автосбор: ${r.reason}`} (${t})`
+})
 
 const ERR: Record<string, string> = {
   no_key: 'Задай LLM-ключ в настройках (⚙).',
@@ -42,6 +54,7 @@ async function copy(text: string) {
       <button class="btn primary" :disabled="generating" data-testid="gen-ideas" @click="generateIdeas">
         {{ generating ? 'Генерация…' : 'Сгенерировать идеи' }}
       </button>
+      <p v-if="lastRunText" class="lbl" style="opacity:.7" data-testid="ideas-last-run">{{ lastRunText }}</p>
       <p v-if="!ideas.length" class="banner">Пока нет идей. Открой ленту и нажми «Сгенерировать».</p>
       <div v-for="(idea, i) in ideas" :key="i" class="note" :data-testid="`idea-${i}`">
         <div class="lbl">{{ idea.topic }}</div>
