@@ -37,8 +37,10 @@ onMounted(async () => {
   connectKeywords.value = defaultConnectKeywords(expertise)
 })
 function saveConnect() {
+  // Persist a PLAIN array — chrome.storage serialises a Vue reactive array as an
+  // array-like object {0:..,1:..}, which reads back non-array (regions then dropped).
   if (panelBus.available()) {
-    void saveConnectSettings(store, { searchKeywords: connectKeywords.value, targetRegions: connectRegions.value })
+    void saveConnectSettings(store, { searchKeywords: connectKeywords.value, targetRegions: [...connectRegions.value] })
   }
 }
 function toggleRegion(r: string) {

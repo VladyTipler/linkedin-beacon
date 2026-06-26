@@ -28,4 +28,9 @@ describe('connect settings', () => {
     await saveConnectSettings(s, { searchKeywords: 'qa hiring', targetRegions: ['Europe', 'Asia'] })
     expect(await loadConnectSettings(s)).toEqual({ searchKeywords: 'qa hiring', targetRegions: ['Europe', 'Asia'] })
   })
+
+  it('recovers targetRegions saved as an array-like object (chrome.storage gotcha)', async () => {
+    const s = fakeStore({ [CONNECT_SETTINGS_KEY]: { searchKeywords: 'x', targetRegions: { 0: 'US', 1: 'Europe' } } })
+    expect((await loadConnectSettings(s)).targetRegions).toEqual(['US', 'Europe'])
+  })
 })

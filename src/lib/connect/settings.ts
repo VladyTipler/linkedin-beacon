@@ -1,5 +1,6 @@
 import type { KeyValueStore } from '../ports'
 import type { ExpertiseProfile } from '../types'
+import { asArray } from '../engagement/settings'
 
 export const CONNECT_SETTINGS_KEY = 'connect:settings'
 
@@ -20,9 +21,12 @@ export function defaultConnectKeywords(expertise: ExpertiseProfile): string {
 
 export async function loadConnectSettings(store: KeyValueStore): Promise<ConnectSettings> {
   const raw = await store.get<ConnectSettings>(CONNECT_SETTINGS_KEY)
+  // chrome.storage serialises a saved reactive array as an array-like object {0:..,1:..};
+  // asArray recovers it (and an already-corrupted store) so regions aren't silently dropped.
+  const regions = asArray<string>(raw?.targetRegions)
   return {
     searchKeywords: typeof raw?.searchKeywords === 'string' ? raw.searchKeywords : '',
-    targetRegions: Array.isArray(raw?.targetRegions) ? raw.targetRegions : DEFAULT_TARGET_REGIONS
+    targetRegions: regions.length ? regions : DEFAULT_TARGET_REGIONS
   }
 }
 
