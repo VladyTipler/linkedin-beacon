@@ -13,6 +13,7 @@ import {
   rolloverConnectDay, recordConnectDay, dailyConnectCap, remainingDailyConnects,
   CONNECT_DAY_BUDGET_KEY, type ConnectDay
 } from '@lib/connect/ConnectWeekBudget'
+import { CONNECT_HISTORY_KEY, appendConnectHistory, type ConnectRecord } from '@lib/connect/ConnectHistory'
 
 export const CONNECT_SENT_KEY = 'connects:sent'
 
@@ -66,16 +67,24 @@ export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResu
   const sent = new Set(asArray<string>(await deps.store.get<string[]>(CONNECT_SENT_KEY)))
   const chosen = selectCandidates(harvested, sent, cap)
 
-  const newlySent: string[] = []
+  const sentRecords: ConnectRecord[] = []
   for (const c of chosen) {
     const res = await deps.connect(c)
-    if (res?.ok) newlySent.push(c.memberId)
+    if (res?.ok) {
+      sentRecords.push({
+        memberId: c.memberId, name: c.name, headline: c.headline,
+        profileUrl: c.profileUrl, sentAt: deps.clock.now().toISOString()
+      })
+    }
     await deps.pace()
   }
-  if (newlySent.length) {
-    await deps.store.set(CONNECT_SENT_KEY, [...sent, ...newlySent])
-    await deps.store.set(CONNECT_WEEK_BUDGET_KEY, recordConnectWeek(budget, newlySent.length))
-    await deps.store.set(CONNECT_DAY_BUDGET_KEY, recordConnectDay(dayBudget, newlySent.length))
+  if (sentRecords.length) {
+    const ids = sentRecords.map((r) => r.memberId)
+    await deps.store.set(CONNECT_SENT_KEY, [...sent, ...ids])
+    await deps.store.set(CONNECT_WEEK_BUDGET_KEY, recordConnectWeek(budget, sentRecords.length))
+    await deps.store.set(CONNECT_DAY_BUDGET_KEY, recordConnectDay(dayBudget, sentRecords.length))
+    // History: who was added + when, for the reports view.
+    await deps.store.set(CONNECT_HISTORY_KEY, appendConnectHistory(await deps.store.get(CONNECT_HISTORY_KEY), sentRecords))
   }
-  return { executed: newlySent.length, skipped: harvested.length - newlySent.length }
+  return { executed: sentRecords.length, skipped: harvested.length - sentRecords.length }
 }

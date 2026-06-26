@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runConnectStep } from './connectHandlers'
 import { CONNECT_WEEK_BUDGET_KEY, CONNECT_DAY_BUDGET_KEY } from '@lib/connect/ConnectWeekBudget'
+import { CONNECT_HISTORY_KEY, type ConnectRecord } from '@lib/connect/ConnectHistory'
 import { CONNECT_SENT_KEY } from './connectHandlers'
 import type { PersonCandidate } from '@lib/types'
 
@@ -33,6 +34,12 @@ describe('runConnectStep', () => {
     expect(d._m.get(CONNECT_WEEK_BUDGET_KEY)).toMatchObject({ used: 2 })
     expect(d._m.get(CONNECT_DAY_BUDGET_KEY)).toMatchObject({ used: 2 })
     expect(d._m.get(CONNECT_SENT_KEY)).toEqual(['1', '2'])
+    // history records WHO was added + when (with details), for the reports view
+    const history = d._m.get(CONNECT_HISTORY_KEY) as ConnectRecord[]
+    expect(history).toEqual([
+      { memberId: '1', name: '1', headline: 'Recruiter', profileUrl: '/in/1', sentAt: '2026-06-26T00:00:00.000Z' },
+      { memberId: '2', name: '2', headline: 'Recruiter', profileUrl: '/in/2', sentAt: '2026-06-26T00:00:00.000Z' }
+    ])
   })
 
   it('returns early when the daily cap is reached (even if the week has room)', async () => {
