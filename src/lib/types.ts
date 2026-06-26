@@ -70,6 +70,16 @@ export interface ActionRequest {
   payload?: { note?: string; comment?: string; post?: string }
 }
 
+/** A connectable person harvested from a LinkedIn people-search result card. */
+export interface PersonCandidate {
+  /** Stable LinkedIn member id (from the connect anchor's componentkey). Dedup key. */
+  memberId: string
+  name: string
+  /** The professional sub-headline (shown for transparency in the run report). */
+  headline: string
+  profileUrl: string
+}
+
 export type ActionStatus =
   | 'pending' // awaiting manual approval
   | 'quarantined' // approved, sends after the cancel window unless cancelled
