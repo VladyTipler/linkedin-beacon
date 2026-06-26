@@ -25,3 +25,11 @@ export function pauseLabel(ms: number): string {
 export function breakLabel(ms: number): string {
   return `Перерыв ${Math.max(1, Math.round(ms / 60000))} мин ☕`
 }
+
+/** "Перерыв 2:09 ☕" — live mm:ss for the break countdown pill. */
+export function breakCountdownLabel(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000))
+  const m = Math.floor(total / 60)
+  const s = String(total % 60).padStart(2, '0')
+  return `Перерыв ${m}:${s} ☕`
+}

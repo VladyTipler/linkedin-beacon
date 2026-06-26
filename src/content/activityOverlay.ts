@@ -73,6 +73,31 @@ export function setActivityLabel(text: string, doc: Document = document): void {
   if (label) label.textContent = text
 }
 
+/**
+ * Count `ms` down on the pill once per second (so an anti-ban pause/break reads as a LIVE
+ * timer, not frozen text), then resolve after the full duration — a drop-in for `await sleep(ms)`.
+ * A backgrounded tab throttles this interval AND the real pacing identically, so the visible
+ * countdown stays in sync with the actual wait; docked next to a foreground tab it ticks at 1 Hz.
+ */
+export function countdownActivity(
+  ms: number,
+  label: (remainingMs: number) => string,
+  doc: Document = document
+): Promise<void> {
+  setActivityLabel(label(ms), doc)
+  return new Promise((resolve) => {
+    const deadline = Date.now() + ms
+    const tick = setInterval(() => {
+      const remaining = deadline - Date.now()
+      if (remaining > 0) setActivityLabel(label(remaining), doc)
+    }, 1000)
+    setTimeout(() => {
+      clearInterval(tick)
+      resolve()
+    }, ms)
+  })
+}
+
 /** End one activity span — hide the border (and clear the label) once every span has ended. */
 export function hideActivity(doc: Document = document): void {
   active = Math.max(0, active - 1)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pauseLabel, breakLabel, SCANNING, LIKING } from './statusLabels'
+import { pauseLabel, breakLabel, breakCountdownLabel, SCANNING, LIKING } from './statusLabels'
 
 describe('statusLabels', () => {
   it('formats the anti-ban pause in seconds', () => {
@@ -15,6 +15,12 @@ describe('statusLabels', () => {
     expect(breakLabel(120000)).toBe('Перерыв 2 мин ☕')
     expect(breakLabel(60000)).toBe('Перерыв 1 мин ☕')
     expect(breakLabel(150000)).toBe('Перерыв 3 мин ☕') // 2.5 → 3
+  })
+
+  it('formats the live break countdown as m:ss', () => {
+    expect(breakCountdownLabel(129000)).toBe('Перерыв 2:09 ☕')
+    expect(breakCountdownLabel(60000)).toBe('Перерыв 1:00 ☕')
+    expect(breakCountdownLabel(5000)).toBe('Перерыв 0:05 ☕')
   })
 
   it('exposes phase constants', () => {

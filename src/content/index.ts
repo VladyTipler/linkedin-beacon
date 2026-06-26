@@ -15,7 +15,7 @@ import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
 import { harvestPeople, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
-import { showActivity, hideActivity, setActivityLabel } from './activityOverlay'
+import { showActivity, hideActivity, setActivityLabel, countdownActivity } from './activityOverlay'
 import {
   SCANNING,
   LIKING,
@@ -23,7 +23,7 @@ import {
   GENERATING_IDEAS,
   COLLECTING_IDEAS,
   pauseLabel,
-  breakLabel
+  breakCountdownLabel
 } from '@lib/autopilot/statusLabels'
 import { assertNever, type BeaconMessage, type FeedItem } from '@lib/types'
 
@@ -243,13 +243,11 @@ async function runAutopilotLoop(modules: {
             }
           }
           const paceMs = delay.nextMs(8000, 45000)
-          setActivityLabel(pauseLabel(paceMs))
-          await sleep(paceMs)
+          await countdownActivity(paceMs, pauseLabel) // live "Пауза 11с → 10с → …" + waits paceMs
           const breakMs = humanBreak.nextBreakMs(actionsSinceBreak, new MathRandomRng())
           if (breakMs > 0) {
             actionsSinceBreak = 0
-            setActivityLabel(breakLabel(breakMs))
-            await sleep(breakMs)
+            await countdownActivity(breakMs, breakCountdownLabel) // live "Перерыв 2:09 ☕"
           }
         }
       } else {
