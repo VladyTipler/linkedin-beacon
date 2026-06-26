@@ -19,7 +19,9 @@ import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
 import { ChromeWindows } from '@/adapters/ChromeWindows'
 import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
 import { engagementLimit } from '@lib/autopilot/engagementLimit'
-import { decideAutopilotStart, runLoopModules } from '@lib/autopilot/startGate'
+import { decideAutopilotStart, enabledModules, runLoopModules } from '@lib/autopilot/startGate'
+import { HumanDelay } from '@lib/engagement/HumanDelay'
+import { runConnectStep } from './connectHandlers'
 import { loadContentSettings } from '@lib/content/settings'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
@@ -139,7 +141,11 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
     }
     return false
   }
+  const connectEnabled = enabledModules(modulesState).some((m) => m.id === 'smart_connect')
   const launch = async () => {
+    if (tabId && connectEnabled) {
+      await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
+    }
     if (await startLoop()) return
     // Couldn't reach the page — roll back so the UI doesn't show a phantom "running".
     const s = await autopilotState()
@@ -405,6 +411,37 @@ async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefin
       return undefined
     }
   }
+}
+
+/** Navigate the LinkedIn tab to a URL and wait until its content script answers PING. */
+async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
+  await chrome.tabs.update(tabId, { url })
+  for (let i = 0; i < 20; i++) {
+    await sleep(500)
+    const pong = await chrome.tabs.sendMessage(tabId, { type: 'PING' }).catch(() => null)
+    if (pong) return
+  }
+}
+
+/** Run the Smart Connect step against `tabId`, then return the tab to the feed. */
+async function runConnectsThen(tabId: number, afterUrl: string): Promise<void> {
+  const rng = new MathRandomRng()
+  const pacer = new HumanDelay(rng)
+  await runConnectStep({
+    store, clock, rng,
+    navigate: (url) => navigateLinkedInTab(tabId, url),
+    harvest: async () =>
+      (await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE' }).catch(() => [])) ?? [],
+    connect: (c) =>
+      chrome.tabs
+        .sendMessage(tabId, {
+          type: 'EXECUTE_ACTION',
+          action: { type: 'connect', target: { url: c.profileUrl, meta: { memberId: c.memberId, name: c.name } } }
+        })
+        .catch(() => undefined),
+    pace: () => sleep(pacer.nextMs(8000, 30000))
+  })
+  await navigateLinkedInTab(tabId, afterUrl)
 }
 
 async function reinjectContentScript(tabId: number): Promise<boolean> {
