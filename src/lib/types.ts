@@ -228,6 +228,8 @@ export interface Draft {
   text: string
   /** ISO timestamp. */
   createdAt: string
+  /** Human approved this draft for auto-publish (undefined = not approved). */
+  approved?: boolean
 }
 
 /** Targeting criteria: who/what to engage with (design-spec §4.1, §9 TargetProfile). */

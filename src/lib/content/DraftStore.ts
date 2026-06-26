@@ -33,4 +33,8 @@ export class DraftStore {
     await this.store.set(DRAFTS_KEY, next)
   }
 
+  async setApproved(id: string, approved: boolean): Promise<void> {
+    const next = (await this.all()).map((d) => (d.id === id ? { ...d, approved } : d))
+    await this.store.set(DRAFTS_KEY, next)
+  }
 }

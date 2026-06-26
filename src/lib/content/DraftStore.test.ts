@@ -39,4 +39,19 @@ describe('DraftStore', () => {
     const s = new DraftStore(memStore({ 'content:drafts': { 0: d } }))
     expect(await s.all()).toEqual([d])
   })
+
+  it('sets and clears the approved flag, round-tripping through storage', async () => {
+    const s = new DraftStore(memStore())
+    await s.add(d)
+    await s.setApproved('1', true)
+    expect((await s.all())[0].approved).toBe(true)
+    await s.setApproved('1', false)
+    expect((await s.all())[0].approved).toBe(false)
+  })
+
+  it('setApproved on an unknown id is a no-op', async () => {
+    const s = new DraftStore(memStore())
+    await s.setApproved('nope', true) // must not throw
+    expect(await s.all()).toEqual([])
+  })
 })
