@@ -41,7 +41,7 @@ export interface Guardrails {
   lenRange: [number, number]
 }
 
-export type ModuleId = 'engagement' | 'smart_connect' | 'content' | 'auto_apply'
+export type ModuleId = 'engagement' | 'smart_connect' | 'content' | 'profile_views'
 
 export interface ModuleState {
   id: ModuleId

@@ -52,4 +52,12 @@ describe('useModules', () => {
     expect(c.enabled).toBe(false)
     expect(c.dailyLimit).toBe(5)
   })
+
+  it('default roster has profile_views (40/day) and no auto_apply', () => {
+    const ids = defaultModules().map((m) => m.id)
+    expect(ids).toContain('profile_views')
+    expect(ids).not.toContain('auto_apply')
+    const pv = defaultModules().find((m) => m.id === 'profile_views')!
+    expect(pv).toMatchObject({ enabled: false, available: true, dailyLimit: 40 })
+  })
 })

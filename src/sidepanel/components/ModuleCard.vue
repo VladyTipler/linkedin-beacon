@@ -6,7 +6,7 @@ defineProps<{
   module: ModuleState
   title: string
   desc: string
-  /** When set, render a daily-limit input (omit for modules without a budget, e.g. auto_apply). */
+  /** When set, render a daily-limit input (omit for modules without a budget). */
   limitLabel?: string
   recommended?: string
 }>()

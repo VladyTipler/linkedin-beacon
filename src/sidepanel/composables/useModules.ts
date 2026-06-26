@@ -12,7 +12,7 @@ export function defaultModules(): ModuleState[] {
     { id: 'engagement', enabled: true, automationLevel: 'manual', available: true, dailyLimit: 35 },
     { id: 'smart_connect', enabled: false, automationLevel: 'manual', available: true, dailyLimit: 100 },
     { id: 'content', enabled: false, automationLevel: 'manual', available: true, dailyLimit: 5 },
-    { id: 'auto_apply', enabled: false, automationLevel: 'manual', available: false, dailyLimit: 0 }
+    { id: 'profile_views', enabled: false, automationLevel: 'manual', available: true, dailyLimit: 40 }
   ]
 }
 

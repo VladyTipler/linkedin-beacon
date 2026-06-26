@@ -127,21 +127,6 @@ function toggleRegion(r: string) {
         Включи модуль и запусти автопилот на Dash — идеи появятся во вкладке «Контент». Публикация постов — отдельно, позже.
       </div>
     </ModuleCard>
-
-    <ModuleCard
-      :module="byId(modules, 'auto_apply')"
-      title="Авто-отклики"
-      desc="Easy Apply + cover letter (свой движок или через Job Radar)"
-      @toggle="$emit('toggle', 'auto_apply')"
-    >
-      <template #icon>
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4z" stroke="#ff8a5c" stroke-width="1.8" stroke-linejoin="round" /><path d="M4 7v6l8 4 8-4V7M9 14v4" stroke="#ff8a5c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
-      </template>
-      <div class="note" style="border-style:dashed">
-        <div class="lbl">Статус</div>
-        Появится после ядра V1. Решение об интеграции с <b>Job Radar</b> отложено — от ядра не зависит.
-      </div>
-    </ModuleCard>
   </section>
 </template>
 
