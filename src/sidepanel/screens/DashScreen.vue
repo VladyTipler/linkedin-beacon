@@ -33,6 +33,7 @@ const emit = defineEmits<{
   refresh: []
   startAutopilot: []
   stopAutopilot: []
+  pauseAll: []
   openAudit: []
 }>()
 
@@ -86,11 +87,11 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
       {{ refreshing ? 'Считываю /sales/ssi…' : 'Обновить SSI со страницы' }}
     </button>
 
-    <div class="sect-lbl">Автопилот</div>
-    <div v-if="autopilotRunning" class="ap-live" data-testid="ap-running">
+    <div class="sect-lbl">Автопилот · сегодня</div>
+    <div class="ap-live" :class="{ idle: !autopilotRunning }" data-testid="ap-running">
       <div class="ap-stage">
-        <span class="ap-dot" aria-hidden="true"></span>
-        <span class="ap-stage-lbl">{{ autopilotStage || 'Запускаюсь…' }}</span>
+        <span class="ap-dot" :class="{ off: !autopilotRunning }" aria-hidden="true"></span>
+        <span class="ap-stage-lbl">{{ autopilotRunning ? (autopilotStage || 'Запускаюсь…') : 'Не запущен' }}</span>
       </div>
       <div class="ap-tally">
         <div v-for="m in tally" :key="m.label" class="ap-metric" :class="{ zero: m.value === 0 }">
@@ -99,7 +100,7 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
         </div>
       </div>
     </div>
-    <div v-else class="banner" style="margin-bottom:10px">
+    <div v-if="!autopilotRunning" class="banner" style="margin-bottom:10px">
       Один прогон проходит весь цикл по всем <b>включённым и настроенным модулям</b>: ищет людей и шлёт коннекты, листает ленту, ставит лайки и комментарии, публикует одобренные посты — в безопасном темпе, в этой вкладке. Держи вкладку LinkedIn активной (фоновые троттлятся), можно вынести на второй монитор.
     </div>
 
@@ -112,6 +113,9 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
       {{ pending
         ? (autopilotRunning ? 'Останавливаю…' : 'Запускаю…')
         : (autopilotRunning ? 'Остановить' : 'Запустить') }}
+    </button>
+    <button class="ghost" data-testid="pause-all" @click="emit('pauseAll')" style="margin-top:8px;width:100%">
+      Пауза всех модулей
     </button>
 
     <div
@@ -145,6 +149,16 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
   border: 1px solid rgba(196, 255, 77, 0.3);
   border-radius: 10px;
   background: rgba(196, 255, 77, 0.04);
+}
+/* Idle (not running): tally is always visible, but the widget reads "at rest" — muted border. */
+.ap-live.idle {
+  border-color: rgba(130, 148, 184, 0.25);
+  background: transparent;
+}
+.ap-dot.off {
+  background: var(--mut);
+  box-shadow: none;
+  animation: none;
 }
 .ap-stage {
   display: flex;

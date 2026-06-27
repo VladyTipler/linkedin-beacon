@@ -3,8 +3,6 @@ import TopBar from './components/TopBar.vue'
 import BottomNav from './components/BottomNav.vue'
 import DashScreen from './screens/DashScreen.vue'
 import ModulesScreen from './screens/ModulesScreen.vue'
-import InboxScreen from './screens/InboxScreen.vue'
-import SafetyScreen from './screens/SafetyScreen.vue'
 import ReportsScreen from './screens/ReportsScreen.vue'
 import SettingsScreen from './screens/SettingsScreen.vue'
 import ContentScreen from './screens/ContentScreen.vue'
@@ -12,15 +10,12 @@ import ProfileAuditScreen from './screens/ProfileAuditScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
 import { useModules } from './composables/useModules'
-import { useEngagement } from './composables/useEngagement'
 import { useAutopilot } from './composables/useAutopilot'
 import { enabledModules } from '@lib/autopilot/startGate'
-import { DEMO_LEADS } from './lib/demo'
 
 const { active, go } = useNavigation()
 const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
 const { modules, toggle, setLimit } = useModules()
-const { quarantined, cancel } = useEngagement()
 const {
   status: autopilotStatus,
   stage: autopilotStage,
@@ -53,6 +48,7 @@ function pauseAll() {
         @refresh="refresh"
         @start-autopilot="startAutopilot"
         @stop-autopilot="stopAutopilot"
+        @pause-all="pauseAll"
         @open-audit="go('v-profile')"
       />
       <ModulesScreen
@@ -61,16 +57,9 @@ function pauseAll() {
         @toggle="toggle"
         @set-limit="setLimit"
       />
-      <InboxScreen v-else-if="active === 'v-inbox'" :leads="DEMO_LEADS" />
       <ReportsScreen v-else-if="active === 'v-reports'" :reports="reports" />
       <SettingsScreen v-else-if="active === 'v-settings'" />
       <ContentScreen v-else-if="active === 'v-content'" />
-      <SafetyScreen
-        v-else
-        :quarantined="quarantined"
-        @pause-all="pauseAll"
-        @cancel="cancel"
-      />
     </main>
     <BottomNav :active="active" @go="go" />
   </div>

@@ -29,20 +29,6 @@ describe('App (side panel)', () => {
     expect(w.text()).toContain('Модули автоматизации')
   })
 
-  it('switches to the Inbox screen', async () => {
-    const w = await mountApp()
-    await w.find('[data-testid="nav-v-inbox"]').trigger('click')
-    expect(w.find('#v-inbox').exists()).toBe(true)
-    expect(w.text()).toContain('написали тебе')
-  })
-
-  it('switches to the Safety screen', async () => {
-    const w = await mountApp()
-    await w.find('[data-testid="nav-v-set"]').trigger('click')
-    expect(w.find('#v-set').exists()).toBe(true)
-    expect(w.text()).toContain('Защита аккаунта')
-  })
-
   it('toggles a module off and on', async () => {
     const w = await mountApp()
     await w.find('[data-testid="nav-v-auto"]').trigger('click')

@@ -1,6 +1,54 @@
-# Beacon — Gotchas (hard-won, 2026-06-24..26)
+# Beacon — Gotchas (hard-won, 2026-06-24..27)
 
 Non-obvious traps discovered live. Each cost real debugging.
+
+## Smart Connect — connect PER-PAGE + SW pace eviction (2026-06-27)
+
+- **A candidate's Connect anchor exists only on ITS search page.** `harvestPeoplePaginated`
+  walks pages 1..N collecting ~30 candidates, but `executeConnect` clicks
+  `a[componentkey*="member:ID_connect"]` on the CURRENT (last) page. Anchors of candidates
+  from earlier pages are gone from the DOM → `connect_anchor_not_found` on every one → 0
+  invites even though harvest found 34. Yesterday worked because 1 page was enough; today
+  4 pages → desync. **FIX: connect per-page** — harvest ONE page (`HARVEST_PEOPLE_PAGE`),
+  connect its candidates, THEN `PEOPLE_NEXT_PAGE`. Never "harvest-all-then-connect".
+- **Pace (anti-ban sleep) MUST live in the content script, not the SW.** `runConnectsThen`
+  did `sleep(8–30s)` IN the service worker → MV3 evicts the idle SW mid-pause → the loop
+  dies, the tab stays on /search, the overlay pill is stuck, STOP is lost (`running` stayed
+  true because `stopAutopilot` never ran). FIX: pace via a `SLEEP` message to the content
+  script; the SW `await`s the sendResponse, which KEEPS THE SW ALIVE. Bonus: the SLEEP
+  handler runs `countdownActivity` → live "Пауза 22с" pill on the page.
+- **`cancelled()` inversion trap.** When wiring "STOP interrupts the per-candidate loop",
+  pass `isCancelled = async () => !await isRunning()`, NOT `isRunning`. `isRunning`
+  returns true when ACTIVE → the loop thought every active run was "cancelled" and broke
+  on candidate #1 → 0 invites, reason 'cancelled'. Found only via SW `console.trace`
+  (showed `isRunning()->true` then `cancelled()=true` in the same breath).
+
+## Comments — engage the topic, not the stack (2026-06-27)
+
+- **SSI grows through feed ACTIVITY, so don't filter comments to your narrow stack.**
+  `COMMENT_THRESHOLD=0.5` (RelevanceScorer vs `target.stack`) dropped most posts → rarely
+  commented. Reworked: comment on any LIKED post (the LikeFilter already removed junk),
+  prompt = ONE clarifying QUESTION about the post's topic, `CommentJudge` kept (anti-slop),
+  `rollComment(rng, 1/3)` so only ~1/3 of liked posts attempt a comment (spread across the
+  feed, not the first N in a row); `commentsPerDay` cap still bounds the total.
+- **`CommentDraftService` `maxTokens:160` starves reasoning models** (same family as
+  IdeaExtractor 600 / DraftGenerator 800) — gemini-3.x spends the budget on a reasoning
+  phase BEFORE the content → empty/truncated → judge rejects → 0 comments. RULE (now 3×):
+  **no `maxTokens` cap on generators; bound length via the PROMPT.**
+
+## Run-outcome visibility — a 0 run must never be silent (2026-06-27)
+
+- Every pre-loop step (views/connect/publish) returns a **machine reason** (disabled /
+  no_keywords / nav_failed / empty_search / not_ready / none_fresh / not_publish_day /
+  weekly_cap / cancelled / done / …) surfaced in the run report via `buildReportModules`.
+  A do-nothing run printed `done` + 0 before — indistinguishable from a clean empty
+  harvest. `reasonLabels.ts` → Russian hints in ReportsScreen. **If a module did 0, the
+  report says WHY.**
+- `navigateLinkedInTab` returns `boolean` (true only on status:complete + url + PING); a
+  failed nav reports `nav_failed` instead of a silent empty harvest. `launch()` checks
+  `isRunning()` BETWEEN steps so a STOP during views doesn't let connect/publish/loop run.
+- `STOP_AUTOPILOT` now `sendResponse` and the panel `stop()` does PING-warmup + retry — a
+  fire-and-forget STOP was silently lost when the SW was evicted on idle.
 
 ## Post composer (Content Layer 2) — SHADOW DOM + Quill (recon 2026-06-26)
 
@@ -14,129 +62,91 @@ Non-obvious traps discovered live. Each cost real debugging.
   inserts into the DOM, **but Quill commits its model ASYNCHRONOUSLY** (MutationObserver):
   right after typing, `ql-blank` is still present and the Post button is still `disabled`;
   after a tick they clear. **Poll `!postBtn.disabled` before clicking — never read it
-  synchronously after typing.** (Trigger to open: `[aria-label="Start a post"]` in the
-  LIGHT dom; close: shadow `[aria-label="Dismiss"]` → confirm `Discard`.)
-- **Held node references go stale across a re-render.** artdeco/Ember may REPLACE the Post
-  button node on the disabled→enabled transition. If you capture `const post = ...` once and
-  keep it, `post.disabled` can read a stale `true` forever → false `post_button_disabled`.
-  **Re-query via `findComposer(root)` on every poll AND at click time.** (Recon hid this
-  because it re-queried each read; the first adapter held the ref — advisor caught it.)
-- **Selection inside a shadow root:** `shadowRoot.getSelection()` (Chrome supports it;
-  fall back to `window.getSelection()`). `execCommand`/selection are DOM ops on the SHARED
-  DOM, so they behave the same in the content-script isolated world as in MAIN world — the
-  only world-specific thing (the page's Quill JS instance) is NOT used by the adapter.
-- Capture method: `agent-browser --cdp 9222`, read-only (typed throwaway → cleared →
-  Discard). Never published during recon.
+  synchronously after typing.** (Trigger: `[aria-label="Start a post"]` light-DOM; close:
+  shadow `[aria-label="Dismiss"]` → confirm `Discard`.)
+- **Held node references go stale across a re-render.** Re-query via `findComposer(root)`
+  on every poll AND at click time.
 - **Live-verified 2026-06-26:** the adapter publishes a real post end-to-end from the
-  content-script isolated world ("Post successful" toast, post found in feed, then
-  deleted). The held-vs-requery probe showed artdeco does NOT replace the Post node in
-  this build (`sameNode:true`), so the re-query fix is defensive, not load-bearing — keep it.
+  content-script isolated world, then deleted.
 
-## Live-testing the publish via CDP — throttling will fake a "hang" (2026-06-26)
+## Live-testing via CDP — throttling will fake a "hang" (2026-06-26)
 
-- **A backgrounded / OS-occluded LinkedIn tab throttles `setTimeout`**, so the composer
-  adapter (which paces typing + polls via `sleep`) crawls to minutes and LOOKS hung.
-  Driving Chrome headless from WSL, the window is OS-occluded → the feed tab throttles
-  even though `document.visibilityState === 'visible'`. Symptom seen: `EXECUTE_ACTION`
-  /`PUBLISH_POST` "never returns" in a 40 s poll, draft not consumed, no post.
-- **Fix for tests:** attach a CDP session to the LinkedIn page (`Target.attachToTarget`)
-  and/or re-`Target.activateTarget` it each second — a debugger-attached page is not
-  throttled. With that, the full SW→content→adapter→real-post chain returns `{ok:true}`
-  in ~6 s. **In production this is a non-issue:** the side panel is docked next to the
-  user's genuinely-foreground LinkedIn tab, so timers run at full speed.
-- **crxjs SW first-message race:** the MV3 service-worker entry is an async loader, so a
-  message sent to a freshly-woken SW before its `onMessage` registers is lost (returns
-  `undefined`). Warm it with a `PING` first when scripting. (Same family as the orphaned-
-  content-script reload gotcha.)
-- **Test-harness artifact, not a product bug:** `--load-extension` + opening the feed URL
-  in the SAME launch can race so the content script never injects (`"Receiving end does
-  not exist"`). A page reload (manifest auto-inject) fixes it. In real use the user opens
-  LinkedIn AFTER the extension is installed, so injection is normal.
-- **Deleting a test post via CDP:** the post's ⋯ menu → "Delete post" → a light-DOM
-  confirm modal with `Cancel`/`Delete` (NOT in the interop shadow root). On the home feed
-  your own fresh post may drop out after reload; find it on `…/in/me/recent-activity/all/`.
+- **A backgrounded / OS-occluded LinkedIn tab throttles `setTimeout`** → adapter crawls to
+  minutes and LOOKS hung. Fix for tests: attach a CDP session / re-`Target.activateTarget`
+  each second — a debugger-attached page is not throttled. In production (panel docked next
+  to a foreground tab) this is a non-issue.
+- **crxjs SW first-message race:** the SW entry is an async loader; a message to a
+  freshly-woken SW before `onMessage` registers is lost. Warm with a `PING` first.
+- **`--load-extension` + opening the feed URL in the SAME launch** can race so the content
+  script never injects (`"Receiving end does not exist"`). A page reload fixes it.
 
 ## LinkedIn DOM (new hashed-class build)
 
-- **No `data-urn`, no `role=article`, no semantic classes.** Old `feed-shared-update-v2`
-  selectors are DEAD. Anchor off aria-labels + `[componentkey]` + `data-testid`. Full
-  map in `docs/linkedin-dom-anchors.md`. Re-confirm if LinkedIn ships a new build.
-- **Each post renders ~3× under different `componentkey`s:** a base key + `expanded<base>` +
+- **No `data-urn`, no `role=article`, no semantic classes.** Anchor off aria-labels +
+  `[componentkey]` + `data-testid`. Full map in `docs/linkedin-dom-anchors.md`. Re-confirm
+  if LinkedIn ships a new build.
+- **Each post renders ~3× under different `componentkey`s:** base + `expanded<base>` +
   `expanded<base>FeedType_MAIN_FEED_RELEVANCE`. Normalise: strip `^expanded` and
-  `FeedType_.*$`. Dedup on the normalised base, or you triple-count. (Synthetic fixtures
-  hide this — only the live cross-check caught it.)
+  `FeedType_.*$`. Dedup on the normalised base.
 - **The feed scrolls an inner `<main>` (overflow-y:scroll), NOT the window.**
-  `window.scrollBy/scrollTo` moves nothing and lazy-load never fires (harvest stuck at
-  ~7 posts). Find the scrollable ancestor of a post and set its `scrollTop`. Then it
-  loads 11→16→…→35.
+  `window.scrollBy/scrollTo` moves nothing; find the scrollable ancestor of a post and set
+  its `scrollTop`.
 - **Comment editor is TipTap/ProseMirror** (`[data-testid="ui-core-tiptap-text-editor-wrapper"]`
-  → `[contenteditable][role=textbox]`). Setting `textContent` does NOT update editor
-  state. `document.execCommand('insertText', false, char)` IS accepted (validated live).
-- **like dedup:** read `button[aria-label^="Reaction button state"]` — `!== "...: no reaction"`
-  means already liked. After `executeLike`, the button flips to "...: Like" immediately,
-  so re-harvest naturally filters it out. Also keep a local `actedUrns` set so a *failed*
-  like isn't retried forever (else infinite loop).
+  → `[contenteditable][role=textbox]`). `textContent` does NOT update editor state;
+  `document.execCommand('insertText', false, char)` IS accepted (validated live).
+- **like dedup:** `button[aria-label^="Reaction button state"]` — `!== "...: no reaction"`
+  means already liked. Keep a local `actedUrns` set so a *failed* like isn't retried forever.
+- **people-search "No results found" empty-state** = `/no results found/i` on body — use as
+  the harvest `isEmptyState` sentinel to tell a dead search (`empty`) from a page that
+  never rendered (`not_ready`).
 
 ## chrome.storage serialises Vue reactive arrays as objects
 
-- `useModules` persisted the Vue **reactive** array; `chrome.storage` stored it as
-  `{0:..,1:..}` (array-like object), which read back non-array → `.find` crashed AND the
-  level bridge silently fell back to `manual` (so `full_auto` was ignored).
-- **Fix both sides:** persist a PLAIN array (`.map(m=>({...m}))`), and read with `asArray()`
-  (`Object.values` for array-like) in `src/lib/engagement/settings.ts`. All array reads
-  from storage use `Array.isArray`/`asArray` guards now (QuarantineQueue, orchestrator,
-  RunReportStore, **DraftStore**). **Rule: never trust the shape of a chrome.storage value.**
+- Persisting the Vue **reactive** array → stored as `{0:..,1:..}` → read back non-array →
+  `.find` crashes AND silent fallbacks. Fix both sides: persist a PLAIN array
+  (`.map(m=>({...m}))`), read with `asArray()` (`Object.values` for array-like). **Rule:
+  never trust the shape of a chrome.storage value.** `publishDays`/`targetRegions` hit the
+  same family.
 
 ## MV3 service worker + content script
 
 - **Reloading the unpacked extension orphans content scripts in already-open tabs**
-  ("Receiving end does not exist", harvest returns 0). Fixes: F5 the feed tab, OR the SW
-  re-injects via `chrome.scripting.executeScript({files})` where `files` is read from the
-  LIVE manifest (`chrome.runtime.getManifest().content_scripts[0].js`) — the crxjs loader
-  filename is hashed and changes every build, so never hardcode it.
+  ("Receiving end does not exist", harvest returns 0). Fixes: F5 the feed tab, OR
+  re-inject via `chrome.scripting.executeScript({files})` where `files` is read from the
+  LIVE manifest (crxjs loader filename is hashed, changes every build).
 - **Find the LinkedIn tab by URL** (`chrome.tabs.query({url:'*://*.linkedin.com/*'})`), not
-  `{active:true,currentWindow:true}` — the active-tab query is flaky from the SW.
-- **SW is evicted on idle**; `setTimeout` for long pauses is unreliable there. So the
-  autopilot continuous loop lives in the CONTENT script (alive while its tab is open) and
-  asks the SW per-action; the SW rehydrates state from storage each tick.
-- **Background tabs are throttled** → lazy-load stalls. The worker-window host keeps the
-  feed tab `visible` (active in its own window) so the loop doesn't degrade (spec §2.3).
+  `{active:true,currentWindow:true}` (flaky from the SW).
+- **SW is evicted on idle**; `setTimeout` for long pauses is unreliable there. The
+  autopilot continuous loop lives in the CONTENT script; SW rehydrates state from storage
+  each tick. (Pre-loop steps' pace also moved to content via `SLEEP` — see above.)
 - **The content switch over `BeaconMessage` is EXHAUSTIVE (`assertNever` default).** Every
-  NEW message variant (even sidepanel→SW-only ones like `LIST_MODELS`/`GENERATE_*`) MUST
-  get a no-op `case` in `src/content/index.ts` (grouped with the other `return false`
-  cases) or `vue-tsc` fails. SW switch uses `default: return false` so it's lenient.
+  NEW message variant (even sidepanel/SW-only ones like `LIST_MODELS`/`AUTOPILOT_STAGE`)
+  MUST get a no-op `case` in `src/content/index.ts` or `vue-tsc` fails. SW switch uses
+  `default: return false`.
 
 ## LLM / BYOK layer (Content module)
 
-- **`listModels` returns a non-empty fallback on ANY failure, and OpenRouter's list is
-  keyless.** So a "models loaded" signal is NOT a key-validity signal — it's green for any
-  key. Real key-invalidity only surfaces at generation time (provider HTTP error in the
-  error banner). If you ever need a true validity light, make `listModels` return
-  `{models, fromFallback}` and drive the indicator off `fromFallback`.
-- **`HttpGet` is a separate narrow port in `llm/contracts.ts`** (NOT a widened
-  `HttpClient`). `FetchHttpClient` structurally satisfies `HttpClient & HttpGet`. Keeps ISP.
-- **Boundary tests for SW content handlers** (`contentHandlers.test.ts`) inject a fake
-  `HttpClient & HttpGet` that returns the REAL OpenRouter shape `{choices:[{message:
-  {content}}]}`, so `createLlmProvider` → `OpenRouterProvider` → the real mapper runs.
-  That genuinely crosses the LLM boundary (CLAUDE.md's iron rule) without a live call.
-- **`e.message` from a failed LLM call IS surfaced to the UI** (kept deliberately — it
-  aids BYOK debugging: the user sees e.g. "HTTP 401 …"). Safe because `FetchHttpClient`
-  error strings are `status + statusText + response body`, NOT the URL — so the Gemini
-  key (which lives in the URL query) never leaks into the message.
+- **`listModels` returns a non-empty fallback on ANY failure** — a "models loaded" signal
+  is NOT a key-validity signal. Real key-invalidity only surfaces at generation time.
+- **`HttpGet` is a separate narrow port in `llm/contracts.ts`** (NOT a widened `HttpClient`).
+  `FetchHttpClient` structurally satisfies `HttpClient & HttpGet`.
+- **Boundary tests** inject a fake `HttpClient & HttpGet` returning the REAL OpenRouter
+  shape `{choices:[{message:{content}}]}` → real mapper runs (crosses the LLM boundary
+  without a live call).
+- **`e.message` from a failed LLM call IS surfaced to the UI** (aids BYOK debugging).
+  Safe: `FetchHttpClient` error strings are `status + statusText + body`, NOT the URL →
+  the Gemini key (in the URL query) never leaks.
 
 ## Workflow / process
 
 - **Todoist API is v1** — v2 returns "deprecated". Results under `.results`.
-- **Spec→plan→TDD per increment** (superpowers brainstorming → writing-plans →
-  executing-plans / subagent-driven-development). Pure units first (full TDD); SW message
-  WIRING verified by build, but extract handler LOGIC into an injectable module
-  (`contentHandlers.ts`) so it gets real unit/boundary tests instead of "build-only".
-- Call **advisor** before edge-wiring and before "done" — it caught the burst-once-per-batch
-  risk gap, the infinite-loop-on-empty-feed, the "daily budget isn't daily", and the
-  expertise-RMW-clobber / harvest-type-mismatch issues this slice.
-- **Subagent-driven gotcha (2026-06-25):** an implementer subagent fixed two test fakes
-  (added `listModels` to inline `LlmProvider` fakes) but **forgot to `git add` them**.
-  Every later task's build passed because it ran against the DIRTY working tree — the
-  uncommitted fix masked a broken committed state (a clean checkout would fail `vue-tsc`).
-  **After each subagent task AND at slice end, run `git status` — it MUST be clean.** A
-  dangling modified file = the history is broken even though the suite is "green".
+- **Spec→plan→TDD per increment.** Pure units first; SW message WIRING verified by build,
+  but extract handler LOGIC into an injectable module so it gets real unit/boundary tests.
+- Call **advisor** before edge-wiring and before "done".
+- **Subagent-driven gotcha:** an implementer subagent that fixes test fakes but forgets to
+  `git add` them → every later task's build passes against the DIRTY tree, masking a broken
+  committed state. **After each subagent task AND at slice end, `git status` MUST be clean.**
+- **Debugging by live CDP trace > guessing.** When a step returns 0 silently, add
+  `console.trace`/log at the SW decision points and listen via the SW CDP target (warm it
+  with a PING first — it's evicted on idle). This caught the `cancelled()` inversion and
+  the per-page anchor desync in minutes after hours of wrong hypotheses.

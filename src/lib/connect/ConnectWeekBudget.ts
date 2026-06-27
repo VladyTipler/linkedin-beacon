@@ -70,7 +70,10 @@ export function connectRunCap(
   rng: Rng
 ): number {
   const dailyShare = dailyConnectCap(perWeek)
-  const maxDown = Math.ceil(dailyShare * 0.4)
+  // Soft jitter: cut at most 20% off the daily share (was 40%) — stable ≈ dailyShare with a
+  // small human variance. weekly cap + human pace + warmup are the real anti-ban levers; the
+  // daily share (~14 at perWeek 100) is itself a safe rhythm for an established account.
+  const maxDown = Math.ceil(dailyShare * 0.2)
   const jittered = dailyShare - Math.floor((1 - rng.next()) * (maxDown + 1)) // [dailyShare-(maxDown+1), dailyShare]
   return Math.max(0, Math.min(weeklyRemaining, dailyRemaining, jittered))
 }

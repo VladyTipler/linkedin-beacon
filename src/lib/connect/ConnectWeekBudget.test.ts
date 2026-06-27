@@ -29,11 +29,12 @@ describe('ConnectWeekBudget', () => {
     expect(connectsPerWeek({ 0: { id: 'smart_connect', dailyLimit: 25 } })).toBe(25) // array-like guard
   })
 
-  it('per-run cap = min(weeklyRemaining, dailyRemaining, dailyShare) with downward-only jitter', () => {
-    // perWeek 100 → dailyShare 14 (round(100/7)). rng=1 → no jitter; rng=0 → max downward jitter.
+  it('per-run cap = min(weeklyRemaining, dailyRemaining, dailyShare) with SOFT downward jitter', () => {
+    // perWeek 100 → dailyShare 14. Soft jitter cuts at most 20% (ceil(14*0.2)=3 → maxDown+1=4) → [10,14].
+    // rng=1 → no jitter (full 14); rng=0 → max downward (10, not the old 8 at 40%).
     expect(connectRunCap(100, 14, 100, rng(1))).toBe(14)
-    expect(connectRunCap(100, 14, 100, rng(0))).toBeLessThan(14)
-    expect(connectRunCap(100, 14, 100, rng(0))).toBeGreaterThanOrEqual(0)
+    expect(connectRunCap(100, 14, 100, rng(0))).toBe(10)
+    expect(connectRunCap(100, 14, 100, rng(0.5))).toBeGreaterThanOrEqual(11) // mid jitter stays high
     // never exceeds the weekly remaining
     expect(connectRunCap(3, 14, 100, rng(1))).toBe(3)
     // never exceeds the day's remaining allowance (the daily ceiling)

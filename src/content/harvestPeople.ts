@@ -41,7 +41,7 @@ export async function harvestPeoplePage(
   harvest: () => PersonCandidate[],
   sleepMs: (ms: number) => Promise<void>,
   isEmptyState: () => boolean,
-  attempts = 24,
+  attempts = 40,
   intervalMs = 500
 ): Promise<HarvestResult> {
   for (let i = 0; i < attempts; i++) {

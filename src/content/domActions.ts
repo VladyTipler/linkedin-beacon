@@ -56,10 +56,9 @@ export async function executeComment(
   editor.focus()
   placeCaretAtEnd(editor)
 
-  for (const char of [...text]) {
-    document.execCommand('insertText', false, char)
-    await sleep(delay.nextMs(40, 160))
-  }
+  // Paste the whole comment at once (same fix as the post composer): faster + no newline bug.
+  document.execCommand('insertText', false, text)
+  await sleep(delay.nextMs(300, 900))
 
   const submit = findSubmit(post)
   if (!submit) return { ok: false, reason: 'submit_not_found' }
@@ -123,10 +122,11 @@ export async function executeComposerPost(
 
   editor.focus()
   placeCaretAtEnd(editor, shadow)
-  for (const char of [...text]) {
-    root.execCommand('insertText', false, char)
-    await sleep(delay.nextMs(40, 160))
-  }
+  // Paste the whole text at once (like pasting from a draft), NOT char-by-char. Faster, and
+  // avoids the newline bug where per-char insertText pushed a new paragraph ABOVE the old one.
+  // Quill/ProseMirror accept execCommand('insertText') with multi-line text in one shot.
+  root.execCommand('insertText', false, text)
+  await sleep(delay.nextMs(300, 900)) // brief human pause before the Post button enables
 
   // Quill registers via MutationObserver → the Post button enables on a later tick.
   // Re-query the button each poll/click via findComposer: artdeco/Ember may REPLACE
