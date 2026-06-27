@@ -126,6 +126,9 @@ async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader
   const policy = new ScrollHarvestPolicy({ maxStaleRounds: 3, maxRounds: 20 })
   let staleRounds = 0
   for (let round = 0; ; round++) {
+    // A STOP during a previous tick must abort the harvest immediately — without this the
+    // loop keeps scrolling + sleeping 1.5–3s per round for up to ~45s after the user stopped.
+    if (!autopilotRunning) break
     const added = acc.add(feed.parse(document))
     staleRounds = added > 0 ? 0 : staleRounds + 1
     if (policy.shouldStop({ collected: acc.size(), target, staleRounds, round })) break
@@ -252,11 +255,13 @@ async function runAutopilotLoop(modules: {
             }
           }
           const paceMs = delay.nextMs(8000, 45000)
-          await countdownActivity(paceMs, pauseLabel) // live "Пауза 11с → 10с → …" + waits paceMs
+          // shouldAbort lets STOP interrupt an 8–45s anti-ban pace mid-wait (otherwise the
+          // overlay keeps counting down after the run is already halted).
+          await countdownActivity(paceMs, pauseLabel, () => !autopilotRunning)
           const breakMs = humanBreak.nextBreakMs(actionsSinceBreak, new MathRandomRng())
           if (breakMs > 0) {
             actionsSinceBreak = 0
-            await countdownActivity(breakMs, breakCountdownLabel) // live "Перерыв 2:09 ☕"
+            await countdownActivity(breakMs, breakCountdownLabel, () => !autopilotRunning)
           }
         }
       } else {
@@ -272,10 +277,12 @@ async function runAutopilotLoop(modules: {
       }
     }
   } finally {
-    // Catch-up: ALWAYS attempt one extraction at run end if we never did mid-run —
-    // even a small buffer is worth banking, and it guarantees ideas:lastRun is written
-    // every content-enabled run (so a 0-result run is visible on the Content tab, not silent).
-    if (wantIdeas && !extractedThisRun) {
+    // Catch-up: attempt one extraction at run end if we never did mid-run — even a small
+    // buffer is worth banking, and it guarantees ideas:lastRun is written every content-enabled
+    // run (so a 0-result run is visible on the Content tab, not silent). BUT skip it after a
+    // STOP: the user halted, an extra LLM call would keep the loop alive (and the overlay up)
+    // for seconds after they pressed stop — exactly the "still scanning after Stop" bug.
+    if (autopilotRunning && wantIdeas && !extractedThisRun) {
       await ask({ type: 'EXTRACT_RUN_IDEAS', posts: runBuffer.items() })
     }
     autopilotRunning = false
@@ -297,6 +304,12 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'STOP_AUTOPILOT':
       autopilotRunning = false
+      // Kill the overlay IMMEDIATELY — don't leave the lime border + "Генерирую идеи" pill
+      // hanging while a mid-flight LLM call (EXTRACT_RUN_IDEAS / COMMENT_ON_POST) or a
+      // harvest scroll finishes. finally→hideActivity only fires after those await; the user
+      // pressed STOP, the page must look stopped now. refcount stays balanced: the loop's
+      // finally still calls hideActivity (idempotent via Math.max(0,...)).
+      hideActivity()
       return false
 
     case 'REQUEST_FEED_HARVEST': {

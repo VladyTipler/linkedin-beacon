@@ -60,14 +60,21 @@ export async function executeComment(
   document.execCommand('insertText', false, text)
   await sleep(delay.nextMs(300, 900))
 
-  const submit = findSubmit(post)
+  // ProseMirror commits the pasted text into its model ASYNCHRONOUSLY (MutationObserver), so
+  // the Comment button stays disabled for a few ticks. Poll findSubmit (re-query each poll —
+  // artdeco may REPLACE the button node on the disabled→enabled re-render, so a captured
+  // reference would read stale `disabled=true` forever) until it enables, like executeComposerPost.
+  const submit = await waitForValue(() => findSubmit(post), 4000)
   if (!submit) return { ok: false, reason: 'submit_not_found' }
   submit.click()
   return { ok: true }
 }
 
-/** The enabled comment-submit button (label confirmed in field test). */
-function findSubmit(post: Element): HTMLElement | null {
+/** The enabled comment-submit button (label confirmed in field test). Filters `disabled`
+ *  because Quill/ProseMirror commit the typed text into their model ASYNCHRONOUSLY — the
+ *  button stays disabled until the MutationObserver fires, so a one-shot query returns null
+ *  and the comment never gets submitted (the "text pasted but Comment not clicked" bug). */
+export function findSubmit(post: Element): HTMLElement | null {
   const buttons = Array.from(post.querySelectorAll<HTMLButtonElement>('button[aria-label]'))
   return (
     buttons.find(

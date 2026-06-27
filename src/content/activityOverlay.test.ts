@@ -85,4 +85,26 @@ describe('activityOverlay', () => {
       vi.useRealTimers()
     }
   })
+
+  it('countdownActivity resolves immediately when shouldAbort returns true (STOP mid-pause)', async () => {
+    vi.useFakeTimers()
+    try {
+      showActivity(document)
+      const label = () => document.getElementById('beacon-activity-label')!.textContent
+      let stopped = false
+      const done = countdownActivity(45000, pauseLabel, () => stopped)
+      expect(label()).toBe('Пауза 45с')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(label()).toBe('Пауза 44с')
+      stopped = true // user pressed STOP
+      let resolved = false
+      void done.then(() => { resolved = true })
+      await vi.advanceTimersByTimeAsync(1000) // next tick sees abort → resolves
+      expect(resolved).toBe(true)
+      // advancing well past the original 45s deadline must NOT fire again (timer cleared)
+      await vi.advanceTimersByTimeAsync(60000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

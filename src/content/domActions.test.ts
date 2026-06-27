@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { executeLike, findComposer } from './domActions'
+import { executeLike, findComposer, findSubmit } from './domActions'
 
 // Same real anchors as FeedReader: post root [componentkey] + reaction button.
 const FIXTURE = `
@@ -82,5 +82,35 @@ describe('findComposer', () => {
     document.body.innerHTML = `<div id="interop-outlet"></div>`
     ;(document.querySelector('#interop-outlet') as HTMLElement).attachShadow({ mode: 'open' })
     expect(findComposer(document)).toBeNull()
+  })
+})
+
+// The comment submit button is Quill/ProseMirror-backed: it stays `disabled` until the
+// editor commits the typed text into its model ASYNCHRONOUSLY (via MutationObserver).
+// findSubmit must filter disabled — executeComment polls it until it returns a button.
+describe('findSubmit', () => {
+  // A post with ONLY the comment-submit button (the editor opener is exercised live via
+  // CDP — its DOM relationship to the submit is not stable enough to fixture here).
+  function postWith(submit: string): Element {
+    const root = document.createElement('div')
+    root.innerHTML = `<div componentkey="POST_X">${submit}</div>`
+    return root.querySelector('[componentkey="POST_X"]')!
+  }
+
+  it('returns null while the submit button is still disabled (text not committed yet)', () => {
+    const post = postWith(`<button aria-label="Comment" disabled>Comment</button>`)
+    expect(findSubmit(post)).toBeNull()
+  })
+
+  it('returns the enabled Comment submit once the editor commits the model', () => {
+    const post = postWith(`<button aria-label="Comment">Comment</button>`)
+    const submit = findSubmit(post)
+    expect(submit).not.toBeNull()
+    expect(submit!.textContent).toBe('Comment')
+  })
+
+  it('also matches the Post label (LinkedIn A/B variant of the comment submit)', () => {
+    const post = postWith(`<button aria-label="Post">Post</button>`)
+    expect(findSubmit(post)?.getAttribute('aria-label')).toBe('Post')
   })
 })

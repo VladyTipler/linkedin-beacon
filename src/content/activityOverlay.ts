@@ -78,20 +78,31 @@ export function setActivityLabel(text: string, doc: Document = document): void {
  * timer, not frozen text), then resolve after the full duration — a drop-in for `await sleep(ms)`.
  * A backgrounded tab throttles this interval AND the real pacing identically, so the visible
  * countdown stays in sync with the actual wait; docked next to a foreground tab it ticks at 1 Hz.
+ *
+ * `shouldAbort` (optional): if it returns true on a tick, resolve immediately. Used by the
+ * autopilot loop to break out of an 8–45s pause/break the instant the user presses STOP —
+ * without it the overlay stays up counting down while the run is already halted.
  */
 export function countdownActivity(
   ms: number,
   label: (remainingMs: number) => string,
+  shouldAbort?: () => boolean,
   doc: Document = document
 ): Promise<void> {
   setActivityLabel(label(ms), doc)
   return new Promise((resolve) => {
     const deadline = Date.now() + ms
     const tick = setInterval(() => {
+      if (shouldAbort?.()) {
+        clearInterval(tick)
+        clearTimeout(timer)
+        resolve()
+        return
+      }
       const remaining = deadline - Date.now()
       if (remaining > 0) setActivityLabel(label(remaining), doc)
     }, 1000)
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       clearInterval(tick)
       resolve()
     }, ms)
