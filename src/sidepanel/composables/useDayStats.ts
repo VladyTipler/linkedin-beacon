@@ -22,7 +22,10 @@ export interface DayStats {
   posts: number
 }
 
-const LIKE_BUDGET_KEY = 'engagement:budget:like'
+// Likes are bumped live in autopilot:state.used (service-worker s.used += 1 per like).
+// The engagement:budget:* keys belong to the unwired EngagementOrchestrator prototype —
+// nothing writes them in the live loop, so reading likes from there showed 0 on the Dash.
+const LIKE_KEY = 'autopilot:state'
 const COMMENT_BUDGET_KEY = 'comments:budget'
 const REPORTS_KEY = 'autopilot:reports'
 
@@ -48,7 +51,7 @@ export function useDayStats() {
       store.get<{ day: string; used: number }>('views:daily'),
       store.get<{ day: string; used: number }>('connects:daily'),
       store.get<{ day: string; used: number }>('ideas:budget'),
-      store.get<{ day: string; used: number }>(LIKE_BUDGET_KEY),
+      store.get<{ day: string; used: number }>(LIKE_KEY),
       store.get<{ day: string; used: number }>(COMMENT_BUDGET_KEY),
       store.get<RunReport[]>(REPORTS_KEY)
     ])
