@@ -372,6 +372,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'AUTOPILOT_RISK':
     case 'AUTOPILOT_ENDED':
     case 'AUTOPILOT_STATUS':
+    case 'AUTOPILOT_STAGE':
     case 'AUTOPILOT_REPORT':
     case 'LIST_REPORTS':
     case 'LIST_MODELS':

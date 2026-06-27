@@ -331,6 +331,8 @@ export type BeaconMessage =
   | { type: 'COMMENT_ON_POST'; post: FeedPost }
   /** SW → sidepanel: live autopilot status (broadcast). */
   | { type: 'AUTOPILOT_STATUS'; status: AutopilotStatus }
+  /** SW → sidepanel: the run's CURRENT step label (broadcast) — "Добавляю в сеть…" etc. */
+  | { type: 'AUTOPILOT_STAGE'; label: string }
   /** SW → sidepanel: a run finished and was recorded (broadcast). */
   | { type: 'AUTOPILOT_REPORT'; report: RunReport }
   /** sidepanel → SW: list run reports; SW replies RunReport[] via sendResponse. */

@@ -23,6 +23,7 @@ const { modules, toggle, setLimit } = useModules()
 const { quarantined, cancel } = useEngagement()
 const {
   status: autopilotStatus,
+  stage: autopilotStage,
   reports,
   startHint,
   start: startAutopilot,
@@ -47,6 +48,7 @@ function pauseAll() {
         :is-real="isReal"
         :refreshing="refreshing"
         :autopilot-running="autopilotStatus?.running ?? false"
+        :autopilot-stage="autopilotStage"
         :start-hint="startHint"
         @refresh="refresh"
         @start-autopilot="startAutopilot"

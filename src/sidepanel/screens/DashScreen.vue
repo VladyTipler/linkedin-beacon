@@ -5,6 +5,7 @@ import type { PillarView } from '../lib/ssiView'
 import { weeklyGoal } from '@lib/ssi/weeklyGoal'
 import SsiGauge from '../components/SsiGauge.vue'
 import PillarBar from '../components/PillarBar.vue'
+import { useDayStats } from '../composables/useDayStats'
 
 const props = defineProps<{
   snapshot: SsiSnapshot
@@ -13,8 +14,21 @@ const props = defineProps<{
   isReal: boolean
   refreshing: boolean
   autopilotRunning?: boolean
+  /** Live run step label ("Добавляю в сеть…") — broadcast by the SW. */
+  autopilotStage?: string | null
   startHint?: string | null
 }>()
+
+// Today's action tally — refreshed live as the run progresses.
+const { stats } = useDayStats()
+const tally = computed(() => [
+  { label: 'Просмотрено', value: stats.value.views },
+  { label: 'Коннектов', value: stats.value.connects },
+  { label: 'Лайков', value: stats.value.likes },
+  { label: 'Комментариев', value: stats.value.comments },
+  { label: 'Идей', value: stats.value.ideas },
+  { label: 'Постов', value: stats.value.posts }
+])
 const emit = defineEmits<{
   refresh: []
   startAutopilot: []
@@ -73,8 +87,17 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
     </button>
 
     <div class="sect-lbl">Автопилот</div>
-    <div v-if="autopilotRunning" class="banner" style="margin-bottom:10px;border-color:rgba(196,255,77,.3)" data-testid="ap-running">
-      ● Автопилот работает… <span style="color:var(--mut)">статус — на ленте</span>
+    <div v-if="autopilotRunning" class="ap-live" data-testid="ap-running">
+      <div class="ap-stage">
+        <span class="ap-dot" aria-hidden="true"></span>
+        <span class="ap-stage-lbl">{{ autopilotStage || 'Запускаюсь…' }}</span>
+      </div>
+      <div class="ap-tally">
+        <div v-for="m in tally" :key="m.label" class="ap-metric" :class="{ zero: m.value === 0 }">
+          <span class="ap-num">{{ m.value }}</span>
+          <span class="ap-mlbl">{{ m.label }}</span>
+        </div>
+      </div>
     </div>
     <div v-else class="banner" style="margin-bottom:10px">
       Один прогон проходит весь цикл по всем <b>включённым и настроенным модулям</b>: ищет людей и шлёт коннекты, листает ленту, ставит лайки и комментарии, публикует одобренные посты — в безопасном темпе, в этой вкладке. Держи вкладку LinkedIn активной (фоновые троттлятся), можно вынести на второй монитор.
@@ -113,3 +136,68 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
     </div>
   </section>
 </template>
+
+<style scoped>
+/* Live run widget: pulsing lime dot = "the bot is alive", mono tally = today's work. */
+.ap-live {
+  margin-bottom: 10px;
+  padding: 11px 12px 9px;
+  border: 1px solid rgba(196, 255, 77, 0.3);
+  border-radius: 10px;
+  background: rgba(196, 255, 77, 0.04);
+}
+.ap-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.ap-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow: 0 0 10px rgba(196, 255, 77, 0.8);
+  flex-shrink: 0;
+  animation: ap-pulse 1.4s ease-in-out infinite;
+}
+.ap-stage-lbl {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--txt);
+}
+.ap-tally {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 6px;
+}
+.ap-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ap-num {
+  font-family: 'Spline Sans Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--txt);
+}
+.ap-mlbl {
+  font-size: 10.5px;
+  color: var(--mut);
+  line-height: 1.2;
+}
+/* A zero reads quietly — it's not an alarm, just "nothing yet". */
+.ap-metric.zero .ap-num {
+  color: var(--dim);
+}
+@keyframes ap-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-dot { animation: none; }
+}
+</style>

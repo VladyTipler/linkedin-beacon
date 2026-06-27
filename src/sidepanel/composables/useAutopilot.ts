@@ -10,6 +10,8 @@ export function useAutopilot() {
   const status = ref<AutopilotStatus | null>(null)
   const reports = ref<RunReport[]>([])
   const startHint = ref<string | null>(null)
+  /** The run's current step label ("Добавляю в сеть…") — broadcast by the SW as it moves. */
+  const stage = ref<string | null>(null)
 
   const loadReports = async () => {
     reports.value = (await panelBus.request<RunReport[]>({ type: 'LIST_REPORTS' })) ?? []
@@ -42,11 +44,15 @@ export function useAutopilot() {
   onMounted(() => {
     void loadReports()
     off = panelBus.onMessage((m) => {
-      if (m.type === 'AUTOPILOT_STATUS') status.value = m.status
+      if (m.type === 'AUTOPILOT_STATUS') {
+        status.value = m.status
+        if (!m.status.running) stage.value = null // run ended — drop the stale step label
+      }
+      if (m.type === 'AUTOPILOT_STAGE') stage.value = m.label
       if (m.type === 'AUTOPILOT_REPORT') void loadReports()
     })
   })
   onUnmounted(() => off())
 
-  return { status, reports, startHint, start, stop, loadReports }
+  return { status, stage, reports, startHint, start, stop, loadReports }
 }

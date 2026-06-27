@@ -33,7 +33,7 @@ import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
 import { buildReportModules } from '@lib/autopilot/runOutcomes'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
-import { GENERATING_IDEAS, PUBLISHING, SEARCHING_PEOPLE, CONNECTING, VIEWING_PROFILES } from '@lib/autopilot/statusLabels'
+import { GENERATING_IDEAS, PUBLISHING, SEARCHING_PEOPLE, CONNECTING, VIEWING_PROFILES, SCANNING, COLLECTING_IDEAS } from '@lib/autopilot/statusLabels'
 import type {
   AutopilotHost,
   AutopilotState,
@@ -203,7 +203,10 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
       // Also don't start a do-nothing loop: if neither likes nor ideas are enabled, there is
       // nothing for the loop to do (it would just scroll the feed in circles until feed_exhausted).
       const loopHasWork = loopModules.engagement || loopModules.content
-      if (loopHasWork && await isRunning() && await startLoop()) return
+      if (loopHasWork && await isRunning()) {
+        setStage(tabId, loopModules.engagement ? SCANNING : COLLECTING_IDEAS)
+        if (await startLoop()) return
+      }
       // Stopped mid-launch OR couldn't reach the page — roll back so the UI shows no phantom "running".
       const s = await autopilotState()
       if (s?.running) {
@@ -440,6 +443,16 @@ function broadcast(message: BeaconMessage): void {
   chrome.runtime.sendMessage(message).catch(() => {})
 }
 
+/**
+ * Set the current run step BOTH on the page (overlay/border) AND in the side panel
+ * (Dash "Автопилот работает… <stage>"). The panel can't see the content-script overlay,
+ * so without this broadcast the Dash shows a stale "на ленте" while the bot is connecting.
+ */
+function setStage(tabId: number | undefined, label: string): void {
+  if (tabId) chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label }).catch(() => {})
+  broadcast({ type: 'AUTOPILOT_STAGE', label })
+}
+
 async function forwardToLinkedInTab(message: BeaconMessage): Promise<void> {
   const tab = await activeLinkedInTab()
   if (tab?.id) chrome.tabs.sendMessage(tab.id, message).catch(() => {})
@@ -489,8 +502,7 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
   const settings = await loadConnectSettings(store)
   if (!settings.searchKeywords.trim()) return { executed: 0, reason: 'no_keywords' }
   const searchUrl = peopleSearchUrl(settings.searchKeywords, geoUrnsForRegions(settings.targetRegions))
-  const setActivity = (label: string) =>
-    chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label }).catch(() => {})
+  const setActivity = (label: string) => setStage(tabId, label)
   const res = await runViewStep({
     store, clock, rng, searchUrl,
     navigate: async (url) => {
@@ -536,8 +548,7 @@ async function nextPeoplePageFrom(tabId: number): Promise<boolean> {
 async function runConnectsThen(tabId: number, afterUrl: string, cancelled: () => Promise<boolean>): Promise<ModuleOutcome> {
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
-  const setActivity = (label: string) =>
-    chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label }).catch(() => {})
+  const setActivity = (label: string) => setStage(tabId, label)
   const res = await runConnectStep({
     store, clock, rng,
     navigate: async (url) => {
@@ -591,7 +602,7 @@ async function publishApprovedThen(tabId: number): Promise<ModuleOutcome> {
     clock,
     prepare: async () => {
       await navigateLinkedInTab(tabId, 'https://www.linkedin.com/feed/')
-      await chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label: PUBLISHING }).catch(() => {})
+      setStage(tabId, PUBLISHING)
     },
     publish: (text) =>
       chrome.tabs
