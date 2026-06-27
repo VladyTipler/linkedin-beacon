@@ -10,7 +10,6 @@ import { DraftStore } from '@lib/content/DraftStore'
 import { loadSettings } from '@lib/engagement/settings'
 import { CommentDraftService } from '@lib/engagement/CommentDraftService'
 import { CommentJudge } from '@lib/engagement/CommentJudge'
-import { RelevanceScorer } from '@lib/engagement/RelevanceScorer'
 import { enabledModules } from '@lib/autopilot/startGate'
 import { IdeaExtractor } from '@lib/ideas/IdeaExtractor'
 import { IdeaBank } from '@lib/ideas/IdeaBank'
@@ -176,8 +175,7 @@ export async function extractRunIdeas(
 }
 
 const COMMENT_BUDGET_KEY = 'comments:budget'
-/** Comments are narrow + judged → a stricter relevance bar than the broad like filter. */
-const COMMENT_THRESHOLD = 0.5
+/** Anti-slop guardrails for the CommentJudge (length + banned generic praise). */
 const COMMENT_GUARDRAILS = {
   minConfidence: 0,
   bannedPhrases: [],
@@ -206,11 +204,10 @@ export async function commentOnPost(
   if (!settings.commentsEnabled) return { ok: false, reason: 'disabled' }
   const cfg = await loadLlmConfig(deps.store)
   if (!cfg.apiKey.trim()) return { ok: false, reason: 'no_key' }
-  const { expertise, target } = await loadSettings(deps.store)
+  const { expertise } = await loadSettings(deps.store)
   if (!expertise.headline.trim()) return { ok: false, reason: 'no_expertise' }
-  if (!new RelevanceScorer().isRelevant(post, target, COMMENT_THRESHOLD)) {
-    return { ok: false, reason: 'not_relevant' }
-  }
+  // No stack-relevance gate: SSI grows through feed ACTIVITY, so we engage any liked post's
+  // topic with a clarifying question (the LikeFilter already dropped junk before the like).
   const today = deps.clock.now().toISOString().slice(0, 10)
   const budget = rolloverIdeaDay((await deps.store.get<IdeaDay>(COMMENT_BUDGET_KEY)) ?? null, today)
   if (remainingIdeas(budget, settings.commentsPerDay) <= 0) return { ok: false, reason: 'budget' }

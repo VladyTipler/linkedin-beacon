@@ -217,13 +217,13 @@ describe('commentOnPost (LLM boundary)', () => {
     expect((await commentOnPost({ store, http: fakeHttp('x'), clock: fixedClock }, RELEVANT_POST)).ok).toBe(false)
   })
 
-  it('skips an off-target post (not relevant)', async () => {
+  it('comments on an OFF-target post too — engagement over niche relevance (SSI = activity)', async () => {
+    // No stack-relevance gate anymore: any liked post gets a clarifying-question comment.
     const store = memStore({ ...COMMENT_CFG })
     const offtopic: FeedPost = { urn: 'o', authorName: 'B', text: 'nice weather today everyone' }
-    expect(await commentOnPost({ store, http: fakeHttp('x'), clock: fixedClock }, offtopic)).toEqual({
-      ok: false,
-      reason: 'not_relevant'
-    })
+    const res = await commentOnPost({ store, http: fakeHttp(COMMENT_TEXT), clock: fixedClock }, offtopic)
+    expect(res.ok).toBe(true)
+    expect(res.reason).not.toBe('not_relevant')
   })
 
   it('skips when the daily comment budget is exhausted', async () => {

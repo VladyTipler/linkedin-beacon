@@ -7,6 +7,7 @@ import { FeedReader } from '@lib/feed/FeedReader'
 import { FeedAccumulator } from '@lib/feed/FeedAccumulator'
 import { ScrollHarvestPolicy } from '@lib/feed/ScrollHarvestPolicy'
 import { LikeFilter } from '@lib/engagement/LikeFilter'
+import { rollComment } from '@lib/engagement/commentRoll'
 import { HumanBreakPolicy } from '@lib/autopilot/HumanBreakPolicy'
 import type { RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
@@ -34,6 +35,7 @@ const feed = new FeedReader()
 const delay = new HumanDelay(new MathRandomRng())
 const likeFilter = new LikeFilter()
 const humanBreak = new HumanBreakPolicy()
+const commentRng = new MathRandomRng()
 
 function parseAndReport(): void {
   const root = source.getRoot()
@@ -241,7 +243,7 @@ async function runAutopilotLoop(modules: {
           if (res.ok) actionsSinceBreak += 1
           // Comment implies a like (we just liked it). The SW gates relevance +
           // budget + quality-judge; we only execute what it approves (full-auto).
-          if (res.ok && wantComments) {
+          if (res.ok && wantComments && rollComment(commentRng)) {
             setActivityLabel(COMMENTING)
             const c = await ask<{ ok: boolean; text?: string }>({ type: 'COMMENT_ON_POST', post })
             if (c?.ok && c.text) {

@@ -35,14 +35,27 @@ describe('CommentDraftService', () => {
     expect(out).toBe('In our Vue SSR work we gate hydration on idle.')
   })
 
-  it('feeds the post text, the user expertise and the tone to the model', async () => {
+  it('asks a clarifying QUESTION about the post topic (not a stack-specific take)', async () => {
+    const { provider, calls } = fakeProvider('ok')
+    await new CommentDraftService(provider).draft(input)
+    const sys = (calls[0].messages.find((m) => m.role === 'system')?.content ?? '').toLowerCase()
+    expect(sys).toContain('question') // engage the topic with a question, not a niche expert take
+  })
+
+  it('feeds the post text, the user voice and the tone to the model', async () => {
     const { provider, calls } = fakeProvider('ok')
     await new CommentDraftService(provider).draft(input)
     const joined = calls[0].messages.map((m) => m.content).join('\n').toLowerCase()
     expect(joined).toContain('ssr hydration mismatches')
-    expect(joined).toContain('vue')
+    expect(joined).toContain('vue') // voice only — not a relevance gate
     expect(joined).toContain('expert')
     expect(joined).toContain('english')
+  })
+
+  it('does NOT cap maxTokens (reasoning models spend budget before the content)', async () => {
+    const { provider, calls } = fakeProvider('ok')
+    await new CommentDraftService(provider).draft(input)
+    expect(calls[0].maxTokens).toBeUndefined()
   })
 
   it('sends a system instruction (anti-slop framing) plus the user prompt', async () => {
