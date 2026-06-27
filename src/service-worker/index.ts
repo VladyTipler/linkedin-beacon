@@ -31,6 +31,7 @@ import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
 import { AutopilotGatekeeper } from '@lib/autopilot/AutopilotGatekeeper'
 import { RunReportStore } from '@lib/autopilot/RunReportStore'
+import { buildReportModules } from '@lib/autopilot/runOutcomes'
 import { resolveDailyBudget } from '@lib/autopilot/resolveDailyBudget'
 import { GENERATING_IDEAS, PUBLISHING, SEARCHING_PEOPLE, CONNECTING, VIEWING_PROFILES } from '@lib/autopilot/statusLabels'
 import type {
@@ -38,6 +39,9 @@ import type {
   AutopilotState,
   BeaconMessage,
   FeedPost,
+  HarvestResult,
+  ModuleId,
+  ModuleOutcome,
   RunReport,
   StartAutopilotResult,
   StopReason
@@ -145,47 +149,72 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
     }
     return false
   }
-  const connectEnabled = enabledModules(modulesState).some((m) => m.id === 'smart_connect')
-  const viewsEnabled = enabledModules(modulesState).some((m) => m.id === 'profile_views')
-  const launch = async () => {
-    if (tabId && viewsEnabled) {
-      try {
-        const viewed = await runViewsThen(tabId)
-        if (viewed) {
-          const s = await autopilotState()
-          if (s) { s.viewsExecuted = viewed; await saveAutopilot(s) }
-        }
-      } catch {
-        // Views step threw — fall through to the rest of the run.
-      }
-    }
-    if (tabId && connectEnabled) {
-      try {
-        const executed = await runConnectsThen(tabId, 'https://www.linkedin.com/feed/')
-        const s = await autopilotState()
-        if (s) { s.connectsExecuted = executed; await saveAutopilot(s) }
-      } catch {
-        // Connect step threw (tab gone, storage error, etc.) — fall through to the engagement loop.
-      }
-    }
-    if (tabId) {
-      try {
-        const published = await publishApprovedThen(tabId)
-        if (published) {
-          const s = await autopilotState()
-          if (s) { s.postsPublished = published; await saveAutopilot(s) }
-        }
-      } catch {
-        // Publish step threw (tab gone, composer error) — fall through to the engagement loop.
-      }
-    }
-    if (await startLoop()) return
-    // Couldn't reach the page — roll back so the UI doesn't show a phantom "running".
+  const enabledIds = new Set(enabledModules(modulesState).map((m) => m.id))
+  const connectEnabled = enabledIds.has('smart_connect')
+  const viewsEnabled = enabledIds.has('profile_views')
+  // Persist each module's outcome (count + reason) as it finishes, so the final report can
+  // name WHY every module did what it did — a do-nothing run is never silent again.
+  const recordOutcome = async (id: ModuleId, outcome: ModuleOutcome) => {
     const s = await autopilotState()
-    if (s) {
-      s.running = false
-      await saveAutopilot(s)
-      broadcastStatus(s)
+    if (s) { s.moduleOutcomes = { ...s.moduleOutcomes, [id]: outcome }; await saveAutopilot(s) }
+  }
+  // True while the run is live. STOP_AUTOPILOT flips state.running=false; launch + the
+  // per-candidate loops poll this so a stop actually interrupts (not just the content loop).
+  const isRunning = async (): Promise<boolean> => (await autopilotState())?.running === true
+  // Inverse of isRunning — true when the run was STOPPED. Passed to the per-candidate
+  // loops as `cancelled` so they abort on STOP. (Inverting isRunning here, NOT in the
+  // loop, keeps the ConnectDeps contract honest: `cancelled` = "the run was stopped".)
+  const isCancelled = async (): Promise<boolean> => !(await isRunning())
+  const clearActivity = () => {
+    if (tabId) chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: false }).catch(() => {})
+  }
+  const launch = async () => {
+    try {
+      // Kill any ORPHAN content-script loop left over from a previous run. If the user
+      // reloaded the extension but did NOT F5 the LinkedIn tab, the old content script
+      // (and its still-running loop) is alive — its AUTOPILOT_ENDED would flip running=false
+      // mid-step and cancel this run. Stop it before any step runs.
+      if (tabId) {
+        await chrome.tabs.sendMessage(tabId, { type: 'STOP_AUTOPILOT' }).catch(() => {})
+        await sleep(300)
+      }
+      // Engagement runs in the content-script loop; seed its reason now, reconcile the count at stop.
+      await recordOutcome('engagement', { executed: 0, reason: enabledIds.has('engagement') ? 'done' : 'disabled' })
+      // Each step checks isRunning() before starting — a STOP during the previous step must
+      // NOT let the next step run (that was the "переход в ленту после стопа" bug).
+      if (tabId && viewsEnabled && await isRunning()) {
+        try { await recordOutcome('profile_views', await runViewsThen(tabId, isCancelled)) }
+        catch { await recordOutcome('profile_views', { executed: 0, reason: 'error' }) }
+      } else {
+        await recordOutcome('profile_views', { executed: 0, reason: 'disabled' })
+      }
+      if (tabId && connectEnabled && await isRunning()) {
+        try { await recordOutcome('smart_connect', await runConnectsThen(tabId, 'https://www.linkedin.com/feed/', isCancelled)) }
+        catch { await recordOutcome('smart_connect', { executed: 0, reason: 'error' }) }
+      } else {
+        await recordOutcome('smart_connect', { executed: 0, reason: 'disabled' })
+      }
+      if (tabId && await isRunning()) {
+        // publishApprovedDrafts self-reports 'disabled' when content is off, so always call it.
+        try { await recordOutcome('content', await publishApprovedThen(tabId)) }
+        catch { await recordOutcome('content', { executed: 0, reason: 'error' }) }
+      }
+      // Don't kick the engagement loop if the user stopped — would relaunch liking after a stop.
+      // Also don't start a do-nothing loop: if neither likes nor ideas are enabled, there is
+      // nothing for the loop to do (it would just scroll the feed in circles until feed_exhausted).
+      const loopHasWork = loopModules.engagement || loopModules.content
+      if (loopHasWork && await isRunning() && await startLoop()) return
+      // Stopped mid-launch OR couldn't reach the page — roll back so the UI shows no phantom "running".
+      const s = await autopilotState()
+      if (s?.running) {
+        s.running = false
+        await saveAutopilot(s)
+        broadcastStatus(s)
+      }
+    } finally {
+      // ALWAYS drop the on-page "agent is working" overlay — a stop or a launch failure must
+      // never leave the border/pill stuck on (the user reloads the extension to escape it today).
+      clearActivity()
     }
   }
   // A freshly-created window needs a moment to load the content script.
@@ -213,23 +242,17 @@ async function stopAutopilot(reason: StopReason): Promise<void> {
   s.running = false
   await saveAutopilot(s)
   if (s.tabId) chrome.tabs.sendMessage(s.tabId, { type: 'STOP_AUTOPILOT' }).catch(() => {})
-  const modules: RunReport['modules'] = [{ id: 'engagement', executed: s.used, skipped: 0, failed: 0 }]
-  if (s.viewsExecuted) {
-    modules.push({ id: 'profile_views', executed: s.viewsExecuted, skipped: 0, failed: 0 })
-  }
-  if (s.connectsExecuted) {
-    modules.push({ id: 'smart_connect', executed: s.connectsExecuted, skipped: 0, failed: 0 })
-  }
-  if (s.postsPublished) {
-    modules.push({ id: 'content', executed: s.postsPublished, skipped: 0, failed: 0 })
-  }
+  // Reconcile engagement's executed from the live like counter; every touched module
+  // (incl. 0-executed ones) keeps its reason so the report explains a do-nothing run.
+  const outcomes: Partial<Record<ModuleId, ModuleOutcome>> = { ...s.moduleOutcomes }
+  outcomes.engagement = { executed: s.used, reason: outcomes.engagement?.reason ?? (s.used > 0 ? 'done' : 'disabled') }
   const report: RunReport = {
     id: randomId(),
     startedAt: s.startedAt,
     endedAt: clock.now().toISOString(),
     host: s.host,
     stopReason: reason,
-    modules
+    modules: buildReportModules(outcomes)
   }
   await reportsStore.add(report)
   broadcast({ type: 'AUTOPILOT_REPORT', report })
@@ -336,8 +359,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return true
 
     case 'STOP_AUTOPILOT':
-      void stopAutopilot('manual')
-      return false
+      // Respond when stopped so the side panel can await + retry on a cold/evicted SW
+      // (a fire-and-forget STOP is silently lost when the SW was evicted on idle).
+      void stopAutopilot('manual').then(() => sendResponse({ ok: true }))
+      return true // async sendResponse
 
     case 'AUTOPILOT_RISK':
       sessionRisk.push(message.marker)
@@ -444,7 +469,7 @@ async function sendToLinkedInTab<T>(message: BeaconMessage): Promise<T | undefin
  * to be destroyed → "message channel closed" → empty harvest. So gate on the tab being
  * `status:'complete'` on the target URL FIRST, then confirm the (new) content script pings.
  */
-async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
+async function navigateLinkedInTab(tabId: number, url: string): Promise<boolean> {
   await chrome.tabs.update(tabId, { url })
   const target = url.split('?')[0]
   for (let i = 0; i < 30; i++) {
@@ -452,37 +477,63 @@ async function navigateLinkedInTab(tabId: number, url: string): Promise<void> {
     const tab = await chrome.tabs.get(tabId).catch(() => null)
     if (!tab || tab.status !== 'complete' || !(tab.url ?? '').startsWith(target)) continue
     const pong = await chrome.tabs.sendMessage(tabId, { type: 'PING' }).catch(() => null)
-    if (pong) return
+    if (pong) return true
   }
+  return false // never confirmed loaded — caller reports nav_failed, not a silent empty harvest
 }
 
-/** Run the Profile Views step against `tabId`, return the tab to the feed, report count viewed. */
-async function runViewsThen(tabId: number): Promise<number> {
+/** Run the Profile Views step against `tabId`, return the tab to the feed, report outcome. */
+async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): Promise<ModuleOutcome> {
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
   const settings = await loadConnectSettings(store)
-  if (!settings.searchKeywords.trim()) return 0
+  if (!settings.searchKeywords.trim()) return { executed: 0, reason: 'no_keywords' }
   const searchUrl = peopleSearchUrl(settings.searchKeywords, geoUrnsForRegions(settings.targetRegions))
   const setActivity = (label: string) =>
     chrome.tabs.sendMessage(tabId, { type: 'SET_ACTIVITY', active: true, label }).catch(() => {})
   const res = await runViewStep({
     store, clock, rng, searchUrl,
     navigate: async (url) => {
-      await navigateLinkedInTab(tabId, url)
+      const ok = await navigateLinkedInTab(tabId, url)
       await setActivity(VIEWING_PROFILES) // re-assert overlay (nav destroys the content script)
+      return ok
     },
-    harvest: async () =>
-      (await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE' }).catch(() => [])) ?? [],
+    harvest: () => harvestPeopleFrom(tabId),
     dwell: async () =>
       chrome.tabs.sendMessage(tabId, { type: 'DWELL_PROFILE' }).catch(() => undefined),
-    pace: () => sleep(pacer.nextMs(8000, 30000))
+    pace: () => contentSleep(tabId, pacer.nextMs(8000, 30000)),
+    cancelled
   })
   await navigateLinkedInTab(tabId, 'https://www.linkedin.com/feed/')
-  return res.executed
+  return { executed: res.executed, reason: res.reason }
 }
 
-/** Run the Smart Connect step against `tabId`, return the tab to the feed, report count sent. */
-async function runConnectsThen(tabId: number, afterUrl: string): Promise<number> {
+/**
+ * Ask the content script to harvest the people-search. A failed send (content missing /
+ * channel closed) is reported as `not_ready` — the SAME signal as "page didn't render" —
+ * so the step can say `nav_failed`/`not_ready` instead of a silent empty array.
+ */
+async function harvestPeopleFrom(tabId: number): Promise<HarvestResult> {
+  const r = await chrome.tabs
+    .sendMessage(tabId, { type: 'HARVEST_PEOPLE' })
+    .catch(() => null)
+  return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
+}
+
+/** Harvest ONE search page (no pagination) — Smart Connect connects per-page. */
+async function harvestPeoplePageFrom(tabId: number): Promise<HarvestResult> {
+  const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE_PAGE' }).catch(() => null)
+  return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
+}
+
+/** Advance the people-search one page; false if there is no next page (or content unreachable). */
+async function nextPeoplePageFrom(tabId: number): Promise<boolean> {
+  const r = await chrome.tabs.sendMessage(tabId, { type: 'PEOPLE_NEXT_PAGE' }).catch(() => false)
+  return r === true
+}
+
+/** Run the Smart Connect step against `tabId`, return the tab to the feed, report outcome. */
+async function runConnectsThen(tabId: number, afterUrl: string, cancelled: () => Promise<boolean>): Promise<ModuleOutcome> {
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
   const setActivity = (label: string) =>
@@ -490,13 +541,14 @@ async function runConnectsThen(tabId: number, afterUrl: string): Promise<number>
   const res = await runConnectStep({
     store, clock, rng,
     navigate: async (url) => {
-      await navigateLinkedInTab(tabId, url)
+      const ok = await navigateLinkedInTab(tabId, url)
       // Each navigation destroys the content script + its overlay/pill — re-assert it
       // on the freshly-loaded page so the "agent is working" UI stays consistent.
       await setActivity(SEARCHING_PEOPLE)
+      return ok
     },
-    harvest: async () =>
-      (await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE' }).catch(() => [])) ?? [],
+    harvest: () => harvestPeoplePageFrom(tabId),
+    nextPage: () => nextPeoplePageFrom(tabId),
     connect: async (c) => {
       await setActivity(CONNECTING)
       return chrome.tabs
@@ -506,10 +558,20 @@ async function runConnectsThen(tabId: number, afterUrl: string): Promise<number>
         })
         .catch(() => undefined)
     },
-    pace: () => sleep(pacer.nextMs(8000, 30000))
+    pace: () => contentSleep(tabId, pacer.nextMs(8000, 30000)),
+    cancelled
   })
   await navigateLinkedInTab(tabId, afterUrl)
-  return res.executed
+  return { executed: res.executed, reason: res.reason }
+}
+
+/**
+ * Sleep INSIDE the content script (not the SW). The SW `await`s the sendResponse, which
+ * keeps the MV3 service worker alive — a long setTimeout in the SW itself gets evicted
+ * mid-pause, killing the connect/views loop (the "завис на добавлении" + lost-STOP bug).
+ */
+async function contentSleep(tabId: number, ms: number): Promise<void> {
+  await chrome.tabs.sendMessage(tabId, { type: 'SLEEP', ms }).catch(() => {})
 }
 
 /**
@@ -523,7 +585,7 @@ async function runConnectsThen(tabId: number, afterUrl: string): Promise<number>
  * quarantine / AUTOPILOT_MAY_ACT). The substitute gate for this irreversible public action is:
  * an explicit per-post human «Одобрить» + publishDays + the weekly postsPerWeek cap + one/run.
  */
-async function publishApprovedThen(tabId: number): Promise<number> {
+async function publishApprovedThen(tabId: number): Promise<ModuleOutcome> {
   const res = await content.publishApprovedDrafts({
     store,
     clock,
@@ -539,7 +601,7 @@ async function publishApprovedThen(tabId: number): Promise<number> {
         })
         .catch(() => undefined)
   })
-  return res.published
+  return { executed: res.published, reason: res.reason ?? 'done' }
 }
 
 async function reinjectContentScript(tabId: number): Promise<boolean> {

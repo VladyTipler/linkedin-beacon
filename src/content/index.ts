@@ -111,6 +111,12 @@ async function goToNextPeoplePage(): Promise<boolean> {
   return false
 }
 
+// People-search "No results found" empty-state (verified live 2026-06-27). Distinguishes
+// a genuinely-empty search from a page that simply hasn't rendered its cards yet.
+function isPeopleSearchEmpty(): boolean {
+  return /no results found/i.test(document.body?.innerText ?? '')
+}
+
 async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader['parse']>> {
   const acc = new FeedAccumulator()
   // LinkedIn lazy-loads on scroll and can be slow: generous read pauses (1.5–3s,
@@ -307,10 +313,23 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'HARVEST_PEOPLE':
       // No infinite scroll: wait for each page to render, harvest it, then paginate.
+      // isPeopleSearchEmpty lets harvest tell a dead search ('empty') from a page that
+      // never rendered ('not_ready') — the SW surfaces these as different run reasons.
       void harvestPeoplePaginated(
-        () => harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms)),
+        () => harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms), isPeopleSearchEmpty),
         () => goToNextPeoplePage()
       ).then(sendResponse)
+      return true // async sendResponse
+
+    case 'HARVEST_PEOPLE_PAGE':
+      // ONE page only (no pagination) — Smart Connect connects per-page, so it harvests the
+      // current page, connects its candidates, then asks PEOPLE_NEXT_PAGE to advance.
+      void harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms), isPeopleSearchEmpty)
+        .then(sendResponse)
+      return true // async sendResponse
+
+    case 'PEOPLE_NEXT_PAGE':
+      void goToNextPeoplePage().then(sendResponse)
       return true // async sendResponse
 
     case 'EXECUTE_ACTION':
@@ -319,6 +338,15 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'DWELL_PROFILE':
       void executeProfileView(document, delay).then(sendResponse)
+      return true // async sendResponse
+
+    case 'SLEEP':
+      // Sleep HERE (content script is alive while its tab is open). The SW awaits the
+      // sendResponse, which keeps the MV3 service worker from being evicted mid-pause —
+      // a long setTimeout in the SW itself gets killed and orphans the run.
+      // Live "Пауза 22с → 21с → …" pill so the user sees the anti-ban gap (not a freeze)
+      // during connect/views pacing — same countdown the engagement loop uses.
+      void countdownActivity(message.ms, pauseLabel).then(() => sendResponse({ ok: true }))
       return true // async sendResponse
 
     case 'PING':

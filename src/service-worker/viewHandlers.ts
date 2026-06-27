@@ -1,6 +1,6 @@
 // SW-side Profile Views orchestration. Deps injected → unit-testable with fakes.
 import type { KeyValueStore, Clock, Rng } from '@lib/ports'
-import type { ModuleState, PersonCandidate } from '@lib/types'
+import type { HarvestResult, ModuleState } from '@lib/types'
 import { asArray } from '@lib/engagement/settings'
 import { selectCandidates } from '@lib/connect/selectCandidates'
 import {
@@ -14,16 +14,23 @@ export interface ViewDeps {
   clock: Clock
   rng: Rng
   searchUrl: string
-  navigate: (url: string) => Promise<void>
-  harvest: () => Promise<PersonCandidate[]>
+  /** Navigate to a URL; resolves true only if the page actually loaded. */
+  navigate: (url: string) => Promise<boolean>
+  harvest: () => Promise<HarvestResult>
   dwell: () => Promise<{ ok: boolean } | undefined>
   pace: () => Promise<void>
+  /** True if the run was stopped (STOP_AUTOPILOT) — the per-profile loop MUST abort. */
+  cancelled: () => Promise<boolean>
 }
 
 export interface ViewStepResult {
   executed: number
   skipped: number
-  reason?: string
+  /**
+   * Why the step did what it did — surfaced in the run report. One of: disabled |
+   * budget | nav_failed | empty_search | not_ready | none_fresh | done.
+   */
+  reason: string
 }
 
 function dayKey(clock: Clock): string {
@@ -41,13 +48,21 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
   const cap = viewRunCap(remaining, dailyLimit, deps.rng)
   if (cap <= 0) return { executed: 0, skipped: 0, reason: 'budget' }
 
-  await deps.navigate(deps.searchUrl)
-  const harvested = await deps.harvest()
+  const navOk = await deps.navigate(deps.searchUrl)
+  if (!navOk) return { executed: 0, skipped: 0, reason: 'nav_failed' }
+  const { candidates: harvested, outcome } = await deps.harvest()
+  if (outcome === 'empty') return { executed: 0, skipped: 0, reason: 'empty_search' }
+  if (outcome === 'not_ready') return { executed: 0, skipped: 0, reason: 'not_ready' }
   const seen = new Set(asArray<string>(await deps.store.get(VIEW_SEEN_KEY)))
   const selected = selectCandidates(harvested, seen, cap)
+  if (selected.length === 0) return { executed: 0, skipped: harvested.length, reason: 'none_fresh' }
 
   const records: ViewRecord[] = []
+  let cancelled = false
   for (const c of selected) {
+    // STOP must interrupt a long views pass — without this a stop mid-pass keeps opening +
+    // dwelling on every remaining profile, ignoring the user.
+    if (await deps.cancelled()) { cancelled = true; break }
     await deps.navigate(c.profileUrl)
     const r = await deps.dwell()
     if (r?.ok) {
@@ -68,5 +83,5 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
       deps.store.set(VIEW_DAY_BUDGET_KEY, recordViewDay(day, records.length))
     ])
   }
-  return { executed: records.length, skipped: selected.length - records.length }
+  return { executed: records.length, skipped: selected.length - records.length, reason: cancelled ? 'cancelled' : 'done' }
 }

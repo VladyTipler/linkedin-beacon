@@ -50,7 +50,7 @@ describe('useModules', () => {
     const c = defaultModules().find((m) => m.id === 'content')!
     expect(c.available).toBe(true)
     expect(c.enabled).toBe(false)
-    expect(c.dailyLimit).toBe(5)
+    expect(c.dailyLimit).toBe(10)
   })
 
   it('default roster has profile_views (40/day) and no auto_apply', () => {

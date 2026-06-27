@@ -59,6 +59,14 @@ describe('IdeaExtractor', () => {
     expect(joined).toContain('do not copy') // anti-slop framing
   })
 
+  it('instructs the model to write topic/angle/claim in Russian (quote kept verbatim)', async () => {
+    const { provider, calls } = fakeProvider('[]')
+    await new IdeaExtractor(provider).extract(posts, expertise)
+    const sys = (calls[0].messages.find((m) => m.role === 'system')?.content ?? '').toLowerCase()
+    expect(sys).toContain('russian') // idea descriptions are read by a Russian-speaking user
+    expect(sys).toContain('verbatim') // the source quote is evidence — not translated
+  })
+
   it('does not starve reasoning models with a tiny output cap', async () => {
     // Reasoning models (e.g. gemini-3.5-flash) spend tokens on a reasoning phase BEFORE
     // the content. A small max-tokens cap (was 600) is consumed by reasoning → `content`

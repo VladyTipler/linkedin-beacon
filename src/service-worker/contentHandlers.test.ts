@@ -268,7 +268,7 @@ describe('publishApprovedDrafts', () => {
       prepare: async () => { prepared = true },
       publish: async () => ({ ok: true })
     })
-    expect(r.published).toBe(1)
+    expect(r).toMatchObject({ published: 1, reason: 'done' })
     expect(prepared).toBe(true)
     expect(await new DraftStore(store).all()).toEqual([])                 // consumed
     expect((await store.get('posts:budget') as any).used).toBe(1)        // week recorded
@@ -278,20 +278,29 @@ describe('publishApprovedDrafts', () => {
     const store = memStore({ ...CONTENT_MODS, 'content:settings': { publishDays: [], postsPerWeek: 3 }, 'content:drafts': [approvedDraft] })
     let prepared = false
     const r = await publishApprovedDrafts({ store, clock, prepare: async () => { prepared = true }, publish: async () => ({ ok: true }) })
-    expect(r.published).toBe(0); expect(prepared).toBe(false)
+    expect(r).toEqual({ published: 0, reason: 'not_publish_day' }); expect(prepared).toBe(false)
     expect((await new DraftStore(store).all()).length).toBe(1)           // kept
   })
 
   it('skips when there is no approved draft', async () => {
     const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [{ ...approvedDraft, approved: false }] })
     const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => ({ ok: true }) })
-    expect(r.published).toBe(0)
+    expect(r).toEqual({ published: 0, reason: 'no_approved_draft' })
   })
 
   it('skips when the weekly cap is exhausted', async () => {
     const store = memStore({ ...CONTENT_MODS, ...allDays, 'content:drafts': [approvedDraft], 'posts:budget': { week: isoWeekKey(clock.now()), used: 3 } })
     const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => ({ ok: true }) })
-    expect(r.published).toBe(0)
+    expect(r).toEqual({ published: 0, reason: 'weekly_cap' })
+  })
+
+  it('skips with reason disabled when the content module is off', async () => {
+    const store = memStore({
+      'modules:state': [{ id: 'content', enabled: false, available: true, automationLevel: 'manual', dailyLimit: 5 }],
+      ...allDays, 'content:drafts': [approvedDraft]
+    })
+    const r = await publishApprovedDrafts({ store, clock, prepare: async () => {}, publish: async () => ({ ok: true }) })
+    expect(r).toEqual({ published: 0, reason: 'disabled' })
   })
 
   it('keeps the draft + reports reason when the composer publish fails', async () => {

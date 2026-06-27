@@ -80,6 +80,19 @@ export interface PersonCandidate {
   profileUrl: string
 }
 
+/**
+ * Why a people-search harvest produced what it did — lets the run distinguish
+ * "rendered, genuinely 0 results" (`empty`) from "page never rendered in time"
+ * (`not_ready`). Without this the SW only sees an empty array and can't tell a
+ * dead search from a slow/failed navigation (see run-report reasons).
+ */
+export type HarvestOutcome = 'ok' | 'empty' | 'not_ready'
+
+export interface HarvestResult {
+  candidates: PersonCandidate[]
+  outcome: HarvestOutcome
+}
+
 export type ActionStatus =
   | 'pending' // awaiting manual approval
   | 'quarantined' // approved, sends after the cancel window unless cancelled
@@ -105,6 +118,13 @@ export interface StartAutopilotResult {
   reason?: 'no-modules'
 }
 
+/** What one module did in a run: how many actions it executed and WHY (machine code). */
+export interface ModuleOutcome {
+  executed: number
+  /** Machine reason code (done | disabled | no_keywords | empty_search | not_ready | …). */
+  reason: string
+}
+
 /** A persisted record of one autopilot run (design-spec §2.3 reports). */
 export interface RunReport {
   id: string
@@ -112,7 +132,8 @@ export interface RunReport {
   endedAt: string
   host: AutopilotHost
   stopReason: StopReason
-  modules: { id: ModuleId; executed: number; skipped: number; failed: number }[]
+  /** `reason` is the per-module outcome code (older reports may lack it). */
+  modules: { id: ModuleId; executed: number; skipped: number; failed: number; reason?: string }[]
 }
 
 /** SW-owned persisted autopilot state. */
@@ -129,12 +150,12 @@ export interface AutopilotState {
   actionsSinceBreak: number
   manualStop: boolean
   startedAt: string
-  /** Connects sent by the Smart Connect step of this run (for the run report). */
-  connectsExecuted?: number
-  /** Approved posts auto-published by the content step of this run (for the run report). */
-  postsPublished?: number
-  /** Profiles viewed by the Smart-Views step of this run (for the run report). */
-  viewsExecuted?: number
+  /**
+   * Per-module outcome (executed + reason) recorded as each pre-loop step runs, so the
+   * final run report can name WHY every module did what it did — never a silent 0.
+   * Engagement's executed is reconciled from `used` at stop time.
+   */
+  moduleOutcomes?: Partial<Record<ModuleId, ModuleOutcome>>
 }
 
 export interface AutopilotStatus {
@@ -320,10 +341,23 @@ export type BeaconMessage =
   | { type: 'GENERATE_DRAFT'; idea: Idea }
   /** sidepanel → SW: harvest feed → extract ideas → bank; replies { ideas, error? }. */
   | { type: 'GENERATE_IDEAS' }
-  /** SW → content: harvest connect candidates from the current page; replies PersonCandidate[]. */
+  /** SW → content: harvest connect candidates from the current page; replies HarvestResult. */
   | { type: 'HARVEST_PEOPLE' }
+  /**
+   * SW → content: harvest ONLY the currently-loaded people-search page (no pagination) —
+   * connect must run per-page (a candidate's Connect anchor is only in the DOM on its page).
+   * Replies HarvestResult.
+   */
+  | { type: 'HARVEST_PEOPLE_PAGE' }
+  /** SW → content: advance the people-search to the next page; replies boolean (false = none). */
+  | { type: 'PEOPLE_NEXT_PAGE' }
   /** SW → content: human-dwell on the current (already-navigated) profile; replies ActionResult. */
   | { type: 'DWELL_PROFILE' }
+  /**
+   * SW → content: sleep `ms` then reply. The SW `await`s the reply to stay alive — a long
+   * setTimeout IN the SW gets the worker evicted mid-pause (kills the connect/views loop).
+   */
+  | { type: 'SLEEP'; ms: number }
   | { type: 'PING' }
   | { type: 'PONG' }
 

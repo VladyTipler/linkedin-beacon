@@ -1,6 +1,6 @@
 // SW-side Smart Connect orchestration. Deps injected → unit-testable with fakes.
 import type { Clock, KeyValueStore, Rng } from '@lib/ports'
-import type { PersonCandidate } from '@lib/types'
+import type { HarvestResult, PersonCandidate } from '@lib/types'
 import { asArray } from '@lib/engagement/settings'
 import { enabledModules } from '@lib/autopilot/startGate'
 import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
@@ -21,23 +21,39 @@ export interface ConnectDeps {
   store: KeyValueStore
   clock: Clock
   rng: Rng
-  navigate: (url: string) => Promise<void>
-  harvest: () => Promise<PersonCandidate[]>
+  /** Navigate to the people-search; resolves true only if the page actually loaded. */
+  navigate: (url: string) => Promise<boolean>
+  /** Harvest the CURRENTLY-loaded search page only (NOT paginated) — a candidate's Connect
+   * anchor is only in the DOM while its page is loaded, so we must connect per-page. */
+  harvest: () => Promise<HarvestResult>
+  /** Advance the people-search to the next page; false if there is no next page. */
+  nextPage: () => Promise<boolean>
   connect: (c: PersonCandidate) => Promise<{ ok: boolean; reason?: string } | undefined>
   pace: () => Promise<void>
+  /** True if the run was stopped (STOP_AUTOPILOT) — the per-candidate loop MUST abort. */
+  cancelled: () => Promise<boolean>
 }
 
 export interface ConnectStepResult {
   executed: number
   skipped: number
-  reason?: string
+  /**
+   * Machine code for WHY the step did what it did — surfaced in the run report so a
+   * zero-connect run is never silent. One of: disabled | budget | no_keywords |
+   * nav_failed | empty_search | not_ready | none_fresh | done.
+   */
+  reason: string
 }
 
+/** Max search pages to walk in one connect pass (safety bound; cap usually stops us first). */
+const CONNECT_MAX_PAGES = 5
+
 /**
- * One Smart Connect pass inside the run: gate on module + weekly budget + keywords,
- * navigate to the people-search, harvest, select (dedup vs sent-set + per-run cap bounded
- * by BOTH the week's and the day's remaining), send bare invites with human pacing, persist
- * the week + day usage + sent-set.
+ * One Smart Connect pass: gate on module + weekly/daily budget + keywords, navigate to the
+ * people-search, then PER PAGE harvest → connect its fresh candidates → advance. Connecting
+ * per-page is load-bearing: a candidate's Connect `<a>` exists in the DOM only while ITS page
+ * is loaded, so harvesting across pagination then connecting later misses every anchor that
+ * isn't on the current page (the connect_anchor_not_found bug). Persist week + day + sent-set.
  */
 export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResult> {
   const modulesState = await deps.store.get('modules:state')
@@ -57,34 +73,61 @@ export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResu
   )
   const dailyRemaining = remainingDailyConnects(dayBudget, dailyConnectCap(perWeek))
   const cap = connectRunCap(weeklyRemaining, dailyRemaining, perWeek, deps.rng)
-  if (cap <= 0) return { executed: 0, skipped: 0 }
+  if (cap <= 0) return { executed: 0, skipped: 0, reason: 'budget' }
 
   const { searchKeywords, targetRegions } = await loadConnectSettings(deps.store)
   if (!searchKeywords.trim()) return { executed: 0, skipped: 0, reason: 'no_keywords' }
 
-  await deps.navigate(peopleSearchUrl(searchKeywords, geoUrnsForRegions(targetRegions)))
-  const harvested = await deps.harvest()
+  const navOk = await deps.navigate(peopleSearchUrl(searchKeywords, geoUrnsForRegions(targetRegions)))
+  if (!navOk) return { executed: 0, skipped: 0, reason: 'nav_failed' }
   const sent = new Set(asArray<string>(await deps.store.get<string[]>(CONNECT_SENT_KEY)))
-  const chosen = selectCandidates(harvested, sent, cap)
 
   const sentRecords: ConnectRecord[] = []
-  for (const c of chosen) {
-    const res = await deps.connect(c)
-    if (res?.ok) {
-      sentRecords.push({
-        memberId: c.memberId, name: c.name, headline: c.headline,
-        profileUrl: c.profileUrl, sentAt: deps.clock.now().toISOString()
-      })
+  let lastFailReason: string | null = null
+  let sawUndefined = false
+  let cancelled = false
+  let sawAnyCandidate = false
+  for (let page = 0; page < CONNECT_MAX_PAGES; page++) {
+    if (await deps.cancelled()) { cancelled = true; break }
+    const { candidates, outcome } = await deps.harvest()
+    if (outcome === 'empty') return { executed: 0, skipped: 0, reason: 'empty_search' }
+    if (outcome === 'not_ready') return { executed: 0, skipped: 0, reason: 'not_ready' }
+    sawAnyCandidate = sawAnyCandidate || candidates.length > 0
+    const fresh = selectCandidates(candidates, sent, cap - sentRecords.length)
+    for (const c of fresh) {
+      if (await deps.cancelled()) { cancelled = true; break }
+      const res = await deps.connect(c)
+      if (res?.ok) {
+        sentRecords.push({
+          memberId: c.memberId, name: c.name, headline: c.headline,
+          profileUrl: c.profileUrl, sentAt: deps.clock.now().toISOString()
+        })
+        sent.add(c.memberId)
+      } else if (res === undefined) {
+        sawUndefined = true
+      } else if (res?.reason) {
+        lastFailReason = res.reason
+      }
+      await deps.pace()
     }
-    await deps.pace()
+    if (cancelled) break
+    if (sentRecords.length >= cap) break
+    if (!(await deps.nextPage())) break // no more pages
   }
   if (sentRecords.length) {
-    const ids = sentRecords.map((r) => r.memberId)
-    await deps.store.set(CONNECT_SENT_KEY, [...sent, ...ids])
+    await deps.store.set(CONNECT_SENT_KEY, [...sent])
     await deps.store.set(CONNECT_WEEK_BUDGET_KEY, recordConnectWeek(budget, sentRecords.length))
     await deps.store.set(CONNECT_DAY_BUDGET_KEY, recordConnectDay(dayBudget, sentRecords.length))
-    // History: who was added + when, for the reports view.
     await deps.store.set(CONNECT_HISTORY_KEY, appendConnectHistory(await deps.store.get(CONNECT_HISTORY_KEY), sentRecords))
   }
-  return { executed: sentRecords.length, skipped: harvested.length - sentRecords.length }
+  // Reason precedence: cancelled → done (≥1 sent) → none_fresh (page had people, all already sent)
+  // → a named executeConnect failure → unreachable (no response from content) → done fallback.
+  const reason = cancelled
+    ? 'cancelled'
+    : sentRecords.length > 0
+      ? 'done'
+      : !sawAnyCandidate
+        ? 'empty_search'
+        : lastFailReason ?? (sawUndefined ? 'unreachable' : 'none_fresh')
+  return { executed: sentRecords.length, skipped: 0, reason }
 }

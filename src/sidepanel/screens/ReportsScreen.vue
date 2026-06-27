@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import type { RunReport, ModuleId } from '@lib/types'
+import type { RunReport } from '@lib/types'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { CONNECT_HISTORY_KEY, type ConnectRecord } from '@lib/connect/ConnectHistory'
 import { VIEW_HISTORY_KEY, type ViewRecord } from '@lib/views/ViewHistory'
 import { asArray } from '@lib/engagement/settings'
+import { moduleLabel, reasonHint } from '@lib/autopilot/reasonLabels'
 import { panelBus } from '../lib/panelBus'
 
 defineProps<{ reports: RunReport[] }>()
@@ -16,7 +17,6 @@ const REASON: Record<RunReport['stopReason'], string> = {
   feed_exhausted: 'лента кончилась'
 }
 const fmt = (iso: string) => new Date(iso).toLocaleString()
-const moduleExecuted = (r: RunReport, id: ModuleId) => r.modules.find((m) => m.id === id)?.executed ?? 0
 
 // Detailed connect history (who was added + when) — read straight from storage.
 const connects = ref<ConnectRecord[]>([])
@@ -40,9 +40,10 @@ onMounted(async () => {
         {{ fmt(r.startedAt) }} · {{ r.host === 'window' ? 'окно-воркер' : 'вкладка' }} ·
         {{ REASON[r.stopReason] }}
       </div>
-      Лайки: <b>{{ moduleExecuted(r, 'engagement') }}</b> ·
-      Коннекты: <b>{{ moduleExecuted(r, 'smart_connect') }}</b> ·
-      Просмотры: <b>{{ moduleExecuted(r, 'profile_views') }}</b>
+      <div v-for="m in r.modules" :key="m.id" class="mrow">
+        {{ moduleLabel(m.id) }}: <b>{{ m.executed }}</b>
+        <span v-if="reasonHint(m.reason)" class="why">— {{ reasonHint(m.reason) }}</span>
+      </div>
     </div>
 
     <div class="sect-lbl">Добавленные контакты · {{ connects.length }}</div>
@@ -62,3 +63,14 @@ onMounted(async () => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.mrow {
+  line-height: 1.55;
+}
+/* Muted "why this module did nothing" hint — informative, not alarming. */
+.why {
+  opacity: 0.6;
+  font-size: 0.85em;
+}
+</style>

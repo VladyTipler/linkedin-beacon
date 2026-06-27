@@ -25,6 +25,10 @@ export class IdeaExtractor {
       '[{"topic": string, "angle": string, "sourceIndex": number, "claim": string, "quote": string}].',
       'sourceIndex = the 1-based number of the post that sparked it. claim = its point/tension worth a take.',
       'quote = a short (<140 char) snippet from that post.',
+      // The user reads topic/angle/claim in their own language to pick what to post — the
+      // POST itself is generated separately in its own language, so the idea language is
+      // independent. quote is evidence from the (English) source, so keep it untranslated.
+      'Write "topic", "angle" and "claim" in RUSSIAN. Keep "quote" VERBATIM from the source post — do NOT translate it.',
       'CRITICAL: your ENTIRE reply must be the raw JSON array — it MUST start with "[" and end',
       'with "]". No prose, no explanation, no markdown, no code fences before or after.'
     ].join(' ')

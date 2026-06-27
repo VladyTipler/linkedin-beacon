@@ -9,7 +9,7 @@ import {
   POST_WEEK_BUDGET_KEY,
   type PostWeek
 } from '@lib/content/PostWeekBudget'
-import { shouldPublishToday, pickOldestApproved } from '@lib/content/publishPolicy'
+import { pickOldestApproved } from '@lib/content/publishPolicy'
 import { enabledModules } from '@lib/autopilot/startGate'
 import type { Clock, KeyValueStore } from '@lib/ports'
 
@@ -37,13 +37,11 @@ export async function publishApprovedDrafts(
   const budget = rolloverPostWeek(rawBudget ?? null, isoWeekKey(now))
   const draft = pickOldestApproved(all)
 
-  const ok = shouldPublishToday({
-    weekday: now.getDay(),
-    publishDays,
-    remainingPosts: remainingPosts(budget, postsPerWeek),
-    hasApproved: draft !== null
-  })
-  if (!ok || !draft) return { published: 0 }
+  // Granular gate so a no-publish run names its reason in the report (never silent):
+  // not_publish_day | weekly_cap | no_approved_draft. Precedence is "most global first".
+  if (!publishDays.includes(now.getDay())) return { published: 0, reason: 'not_publish_day' }
+  if (remainingPosts(budget, postsPerWeek) <= 0) return { published: 0, reason: 'weekly_cap' }
+  if (!draft) return { published: 0, reason: 'no_approved_draft' }
 
   await deps.prepare()
   const res = await deps.publish(draft.text)
@@ -62,5 +60,5 @@ export async function publishApprovedDrafts(
 
   await drafts.remove(draft.id)
   await deps.store.set(POST_WEEK_BUDGET_KEY, recordPostWeek(budget, 1))
-  return { published: 1 }
+  return { published: 1, reason: 'done' }
 }

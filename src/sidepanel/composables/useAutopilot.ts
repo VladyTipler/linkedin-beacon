@@ -25,7 +25,18 @@ export function useAutopilot() {
       startHint.value = 'Нет включённых модулей — включи хотя бы один в «Модулях».'
     }
   }
-  const stop = () => panelBus.send({ type: 'STOP_AUTOPILOT' })
+  const stop = async () => {
+    // The MV3 SW can be evicted on idle when the user clicks Stop — a fire-and-forget
+    // sendMessage is then silently lost (the run keeps going). Warm it with a PING first
+    // (the crxjs loader imports the SW entry async), then await STOP's sendResponse and
+    // retry a couple of times if the SW was cold. Confirms the stop actually landed.
+    await panelBus.request({ type: 'PING' })
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await panelBus.request<{ ok?: boolean }>({ type: 'STOP_AUTOPILOT' })
+      if (res?.ok) return
+      await new Promise((r) => setTimeout(r, 250))
+    }
+  }
 
   let off = () => {}
   onMounted(() => {

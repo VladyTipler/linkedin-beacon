@@ -5,19 +5,22 @@ import { CONNECT_HISTORY_KEY, type ConnectRecord } from '@lib/connect/ConnectHis
 import { CONNECT_SENT_KEY } from './connectHandlers'
 import type { PersonCandidate } from '@lib/types'
 
+const cand = (id: string): PersonCandidate => ({ memberId: id, name: id, headline: 'Recruiter', profileUrl: `/in/${id}` })
+
 function deps(over: Partial<Record<string, unknown>> = {}) {
   const m = new Map<string, unknown>()
   m.set('modules:state', [{ id: 'smart_connect', enabled: true, available: true, automationLevel: 'manual', dailyLimit: 100 }])
   m.set('connect:settings', { searchKeywords: 'frontend recruiter' })
-  const cand = (id: string): PersonCandidate => ({ memberId: id, name: id, headline: 'Recruiter', profileUrl: `/in/${id}` })
   return {
     store: { get: async <T>(k: string) => (m.get(k) as T) ?? null, set: async (k: string, v: unknown) => void m.set(k, v) },
     clock: { now: () => new Date('2026-06-26T00:00:00Z') },
     rng: { next: () => 1 }, // no downward jitter → dailyShare = 14
-    navigate: vi.fn(async () => {}),
-    harvest: vi.fn(async () => [cand('1'), cand('2')]),
+    navigate: vi.fn(async () => true),
+    harvest: vi.fn(async () => ({ candidates: [cand('1'), cand('2')], outcome: 'ok' as const })),
+    nextPage: vi.fn(async () => false),
     connect: vi.fn(async () => ({ ok: true })),
     pace: vi.fn(async () => {}),
+    cancelled: vi.fn(async () => false),
     _m: m,
     ...over
   }
@@ -31,6 +34,7 @@ describe('runConnectStep', () => {
     expect(d.navigate).toHaveBeenCalledWith('https://www.linkedin.com/search/results/people/?keywords=frontend%20recruiter&geoUrn=%5B%22103644278%22%5D&origin=FACETED_SEARCH')
     expect(d.connect).toHaveBeenCalledTimes(2)
     expect(res.executed).toBe(2)
+    expect(res.reason).toBe('done')
     expect(d._m.get(CONNECT_WEEK_BUDGET_KEY)).toMatchObject({ used: 2 })
     expect(d._m.get(CONNECT_DAY_BUDGET_KEY)).toMatchObject({ used: 2 })
     expect(d._m.get(CONNECT_SENT_KEY)).toEqual(['1', '2'])
@@ -80,5 +84,83 @@ describe('runConnectStep', () => {
     d._m.set('connect:settings', { searchKeywords: '' })
     const res = await runConnectStep(d)
     expect(res.reason).toBe('no_keywords')
+  })
+
+  it('reports nav_failed when the search page never confirmed loaded', async () => {
+    const d = deps({ navigate: vi.fn(async () => false) })
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 0, reason: 'nav_failed' })
+    expect(d.harvest).not.toHaveBeenCalled()
+    expect(d.connect).not.toHaveBeenCalled()
+  })
+
+  it('reports empty_search when the people-search rendered zero results', async () => {
+    const d = deps({ harvest: vi.fn(async () => ({ candidates: [], outcome: 'empty' as const })) })
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 0, reason: 'empty_search' })
+    expect(d.connect).not.toHaveBeenCalled()
+  })
+
+  it('reports not_ready when the search page never rendered its cards', async () => {
+    const d = deps({ harvest: vi.fn(async () => ({ candidates: [], outcome: 'not_ready' as const })) })
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 0, reason: 'not_ready' })
+  })
+
+  it('reports none_fresh when everyone harvested was already invited', async () => {
+    const d = deps()
+    d._m.set(CONNECT_SENT_KEY, ['1', '2'])
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 0, reason: 'none_fresh' })
+    expect(d.connect).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the executeConnect failure reason when every invite attempt fails', async () => {
+    const d = deps({ connect: vi.fn(async () => ({ ok: false, reason: 'send_button_not_found' })) })
+    const res = await runConnectStep(d)
+    expect(d.connect).toHaveBeenCalledTimes(2) // it DID try
+    expect(res).toMatchObject({ executed: 0, reason: 'send_button_not_found' })
+    expect(d._m.get(CONNECT_SENT_KEY)).toBeUndefined() // nothing persisted
+  })
+
+  it('reports unreachable when the connect action gets no response', async () => {
+    const d = deps({ connect: vi.fn(async () => undefined) })
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 0, reason: 'unreachable' })
+  })
+
+  it('reports done when at least one invite succeeds (mixed results)', async () => {
+    let n = 0
+    const d = deps({ connect: vi.fn(async () => (++n === 1 ? { ok: true } : { ok: false, reason: 'modal_did_not_close' })) })
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 1, reason: 'done' })
+  })
+
+  it('paginates: harvests+connects page 1, then page 2 (anchors are only on the CURRENT page)', async () => {
+    // The whole point of per-page: a candidate's Connect anchor exists only while its page
+    // is in the DOM. Harvest one page, connect its fresh candidates, THEN advance.
+    let page = 0
+    const pages = [[cand('1'), cand('2')], [cand('3')]]
+    const d = deps({
+      harvest: vi.fn(async () => ({ candidates: pages[page] ?? [], outcome: 'ok' as const })),
+      nextPage: vi.fn(async () => { page++; return page < pages.length })
+    })
+    const res = await runConnectStep(d)
+    expect(d.harvest).toHaveBeenCalledTimes(2)        // page 1 then page 2
+    expect(d.nextPage).toHaveBeenCalledTimes(2)       // advanced after page 1 (true) + page 2 (false → stop)
+    expect(d.connect).toHaveBeenCalledTimes(3)        // 1,2 on page 1; 3 on page 2
+    expect(res).toMatchObject({ executed: 3, reason: 'done' })
+  })
+
+  it('STOPS mid-loop when the run is cancelled (STOP must interrupt a long connect pass)', async () => {
+    const d = deps()
+    let calls = 0
+    d.connect = vi.fn(async () => { calls++; return { ok: true } })
+    // cancel after the first successful connect
+    d.cancelled = vi.fn(async () => calls >= 1)
+    const res = await runConnectStep(d)
+    expect(res.executed).toBe(1)       // sent one, then stopped — did NOT process the 2nd candidate
+    expect(d.connect).toHaveBeenCalledTimes(1)
+    expect(res.reason).toBe('cancelled')
   })
 })
