@@ -25,6 +25,7 @@ import { runConnectStep } from './connectHandlers'
 import { runViewStep } from './viewHandlers'
 import { loadConnectSettings } from '@lib/connect/settings'
 import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
+import { geoUrnsForRegions } from '@lib/connect/regions'
 import { loadContentSettings } from '@lib/content/settings'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
@@ -500,7 +501,7 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
   const pacer = new HumanDelay(rng)
   const settings = await loadConnectSettings(store)
   if (!settings.searchKeywords.trim()) return { executed: 0, reason: 'no_keywords' }
-  const searchUrl = peopleSearchUrl(settings.searchKeywords)
+  const searchUrl = peopleSearchUrl(settings.searchKeywords, geoUrnsForRegions(settings.targetRegions))
   const setActivity = (label: string) => setStage(tabId, label)
   const res = await runViewStep({
     store, clock, rng, searchUrl,
