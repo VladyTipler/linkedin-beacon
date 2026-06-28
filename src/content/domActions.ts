@@ -64,25 +64,37 @@ export async function executeComment(
   // the Comment button stays disabled for a few ticks. Poll findSubmit (re-query each poll —
   // artdeco may REPLACE the button node on the disabled→enabled re-render, so a captured
   // reference would read stale `disabled=true` forever) until it enables, like executeComposerPost.
-  const submit = await waitForValue(() => findSubmit(post), 4000)
+  // Scope from the editor: the submit lives in the editor's comment-box block, NOT in the post node.
+  const submit = await waitForValue(() => findSubmit(editor), 4000)
   if (!submit) return { ok: false, reason: 'submit_not_found' }
   submit.click()
   return { ok: true }
 }
 
-/** The enabled comment-submit button (label confirmed in field test). Filters `disabled`
- *  because Quill/ProseMirror commit the typed text into their model ASYNCHRONOUSLY — the
- *  button stays disabled until the MutationObserver fires, so a one-shot query returns null
- *  and the comment never gets submitted (the "text pasted but Comment not clicked" bug). */
-export function findSubmit(post: Element): HTMLElement | null {
-  const buttons = Array.from(post.querySelectorAll<HTMLButtonElement>('button[aria-label]'))
-  return (
-    buttons.find(
-      (b) =>
-        !b.disabled &&
-        /^(comment|post|reply)$/i.test((b.getAttribute('aria-label') ?? '').trim())
-    ) ?? null
-  )
+/**
+ * Find the comment submit button, scoped from the open tiptap editor.
+ *
+ * LinkedIn renders the submit OUTSIDE the [componentkey] post node, in the comment-box
+ * block that also holds the editor — so a `post.querySelector` never sees it (the comment
+ * "was typed but never sent" bug). The submit has NO aria-label, only `textContent`
+ * "Comment"; the OPENER is `button[aria-label="Comment"]` whose textContent is the comment
+ * COUNT. We walk up from the editor to the block, match by textContent, and prefer the
+ * button WITHOUT aria-label — otherwise we'd grab the opener and re-toggle the editor
+ * instead of posting. Filters `disabled` (ProseMirror commits the pasted text async).
+ */
+export function findSubmit(editor: Element): HTMLElement | null {
+  let node: Element | null = editor
+  for (let i = 0; i < 8 && node; i++) {
+    const matched = Array.from(node.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (b) => !b.disabled && /^(comment|post|reply)$/i.test((b.textContent ?? '').trim())
+    )
+    if (matched.length) {
+      // submit has no aria-label; the opener does — prefer the unlabeled one.
+      return matched.find((b) => !b.getAttribute('aria-label')) ?? matched[0]
+    }
+    node = node.parentElement
+  }
+  return null
 }
 
 export interface ComposerHandle {

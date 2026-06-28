@@ -85,32 +85,53 @@ describe('findComposer', () => {
   })
 })
 
-// The comment submit button is Quill/ProseMirror-backed: it stays `disabled` until the
-// editor commits the typed text into its model ASYNCHRONOUSLY (via MutationObserver).
-// findSubmit must filter disabled — executeComment polls it until it returns a button.
+// The comment submit lives in the same block as the tiptap editor, BUT NOT inside the
+// [componentkey] post node — and it has NO aria-label (only textContent "Comment"). The
+// opener, by contrast, is button[aria-label="Comment"] with textContent = the comment
+// COUNT. So findSubmit scopes from the open editor, walks up to the comment-box block,
+// and matches by textContent — preferring the button WITHOUT aria-label (the submit) over
+// the opener (which would re-toggle the editor instead of posting).
 describe('findSubmit', () => {
-  // A post with ONLY the comment-submit button (the editor opener is exercised live via
-  // CDP — its DOM relationship to the submit is not stable enough to fixture here).
-  function postWith(submit: string): Element {
+  // editor + its sibling submit, inside a shared comment-box block (real LinkedIn shape).
+  function editorBlock(opts: { submit?: string; opener?: string; editor?: string }): {
+    editor: HTMLElement
+    block: HTMLElement
+  } {
     const root = document.createElement('div')
-    root.innerHTML = `<div componentkey="POST_X">${submit}</div>`
-    return root.querySelector('[componentkey="POST_X"]')!
+    root.innerHTML = `<div class="comment-box">
+      <div class="tiptap ProseMirror" contenteditable="true" data-editor="1">${opts.editor ?? ''}</div>
+      <div class="actions">
+        ${opts.opener ?? ''}
+        ${opts.submit ?? ''}
+      </div>
+    </div>`
+    return {
+      editor: root.querySelector('[data-editor="1"]')!,
+      block: root.querySelector('.comment-box')!,
+    }
   }
 
-  it('returns null while the submit button is still disabled (text not committed yet)', () => {
-    const post = postWith(`<button aria-label="Comment" disabled>Comment</button>`)
-    expect(findSubmit(post)).toBeNull()
+  it('returns null while the submit is still disabled (ProseMirror has not committed the text)', () => {
+    const { editor } = editorBlock({ submit: `<button disabled>Comment</button>` })
+    expect(findSubmit(editor)).toBeNull()
   })
 
-  it('returns the enabled Comment submit once the editor commits the model', () => {
-    const post = postWith(`<button aria-label="Comment">Comment</button>`)
-    const submit = findSubmit(post)
+  it('finds the enabled submit by textContent, walking up from the editor to its block', () => {
+    const { editor } = editorBlock({ submit: `<button>Comment</button>` })
+    const submit = findSubmit(editor)
     expect(submit).not.toBeNull()
-    expect(submit!.textContent).toBe('Comment')
+    expect(submit!.textContent!.trim()).toBe('Comment')
   })
 
-  it('also matches the Post label (LinkedIn A/B variant of the comment submit)', () => {
-    const post = postWith(`<button aria-label="Post">Post</button>`)
-    expect(findSubmit(post)?.getAttribute('aria-label')).toBe('Post')
+  it('prefers the submit (no aria-label) over the opener (aria-label="Comment" + count), never clicks the opener', () => {
+    // opener = aria-label="Comment", textContent = the count "5"; submit = no aria-label, text "Comment"
+    const { editor, block } = editorBlock({
+      opener: `<button aria-label="Comment">5</button>`,
+      submit: `<button>Comment</button>`,
+    })
+    const submit = findSubmit(editor)
+    expect(submit).not.toBeNull()
+    expect(submit!.getAttribute('aria-label')).toBeNull() // the submit, not the opener
+    expect(block.contains(submit!)).toBe(true)
   })
 })
