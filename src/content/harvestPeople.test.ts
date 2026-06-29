@@ -99,4 +99,33 @@ describe('harvestPeoplePaginated (accumulate across pagination)', () => {
     )
     expect(res.outcome).toBe('not_ready')
   })
+
+  // Profile Views needs FRESH (unseen) people: a static search returns the same faces,
+  // so counting total-harvested toward the target stalls at the first page while every
+  // candidate is already seen. isFresh makes the target count FRESH, so it pages deeper.
+  it('pages past an all-seen page until it has `target` FRESH candidates', async () => {
+    const seen = new Set(['1', '2'])
+    const pages = [ok([c('1'), c('2')]), ok([c('3'), c('4')])] // page0 all seen, page1 fresh
+    let p = 0
+    let nexts = 0
+    const res = await harvestPeoplePaginated(
+      async () => pages[p],
+      async () => { nexts++; p++; return p < pages.length },
+      { target: 2, maxPages: 5, isFresh: (x) => !seen.has(x.memberId) }
+    )
+    expect(res.candidates.map((x) => x.memberId).sort()).toEqual(['1', '2', '3', '4'])
+    expect(nexts).toBe(1) // advanced past the all-seen page0 to reach the 2 fresh on page1
+  })
+
+  it('counts FRESH not total toward the target — does not over-paginate', async () => {
+    const seen = new Set<string>() // everyone fresh
+    let nexts = 0
+    const res = await harvestPeoplePaginated(
+      async () => ok([c('1'), c('2'), c('3')]),
+      async () => { nexts++; return true },
+      { target: 2, maxPages: 5, isFresh: (x) => !seen.has(x.memberId) }
+    )
+    expect(res.candidates).toHaveLength(3)
+    expect(nexts).toBe(0) // 3 fresh on page0 already ≥ target 2
+  })
 })

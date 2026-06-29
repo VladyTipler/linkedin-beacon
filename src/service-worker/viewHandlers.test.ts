@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { runViewStep } from './viewHandlers'
 import { VIEW_DAY_BUDGET_KEY, VIEW_SEEN_KEY } from '../lib/views/ViewDayBudget'
 import { VIEW_HISTORY_KEY } from '../lib/views/ViewHistory'
-import type { PersonCandidate } from '../lib/types'
+import type { HarvestResult, PersonCandidate } from '../lib/types'
 
 function fakeStore(initial: Record<string, unknown> = {}) {
   const data = { ...initial }
@@ -18,62 +18,83 @@ const people: PersonCandidate[] = [
   { memberId: 'a', name: 'A', headline: 'Recruiter', profileUrl: 'https://l/in/a' },
   { memberId: 'b', name: 'B', headline: 'Eng', profileUrl: 'https://l/in/b' }
 ]
+const ok = (candidates: PersonCandidate[]): HarvestResult => ({ candidates, outcome: 'ok' })
 
 const baseDeps = (store: ReturnType<typeof fakeStore>) => ({
   store, clock, rng,
   searchUrl: 'https://l/search/people',
   navigate: async () => true,
-  harvest: async () => ({ candidates: people, outcome: 'ok' as const }),
+  harvestPage: async () => ok(people), // one page; nextPage:false ⇒ no pagination
+  nextPage: async () => false,
   dwell: async () => ({ ok: true }),
   pace: async () => {},
   cancelled: async () => false
 })
 
 describe('runViewStep', () => {
+  const enabled = { 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] }
+
   it('skips when profile_views disabled', async () => {
     const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: false, dailyLimit: 40 }] })
     const res = await runViewStep(baseDeps(store))
     expect(res).toEqual({ executed: 0, skipped: 0, reason: 'disabled' })
   })
 
-  it('views up to the daily cap, records history + day budget + seen-set', async () => {
-    const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] })
+  it('views the fresh profiles, records history + day budget + seen-set', async () => {
+    const store = fakeStore(enabled)
     const res = await runViewStep(baseDeps(store))
     expect(res.executed).toBe(2)
-    expect(res.reason).toBe('done')
+    // only 2 fresh exist but the cap is 40 → honest "pool ran dry below the cap"
+    expect(res.reason).toBe('pool_dry')
     expect((store.data[VIEW_HISTORY_KEY] as unknown[]).length).toBe(2)
     expect(store.data[VIEW_DAY_BUDGET_KEY]).toMatchObject({ day: '2026-06-26', used: 2 })
     expect(store.data[VIEW_SEEN_KEY]).toEqual(['a', 'b'])
   })
 
   it('dedups already-seen profiles', async () => {
-    const store = fakeStore({
-      'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }],
-      [VIEW_SEEN_KEY]: ['a']
-    })
+    const store = fakeStore({ ...enabled, [VIEW_SEEN_KEY]: ['a'] })
     const res = await runViewStep(baseDeps(store))
     expect(res.executed).toBe(1) // only 'b' is fresh
   })
 
-  it('honors a near-exhausted daily budget', async () => {
+  it('pages past an all-seen page to fill the cap with FRESH profiles', async () => {
     const store = fakeStore({
-      'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }],
-      [VIEW_DAY_BUDGET_KEY]: { day: '2026-06-26', used: 39 }
+      'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 2 }],
+      [VIEW_SEEN_KEY]: ['a', 'b']
     })
+    const pages: HarvestResult[] = [
+      ok(people), // page0: a,b — both already seen
+      ok([
+        { memberId: 'c', name: 'C', headline: '', profileUrl: 'https://l/in/c' },
+        { memberId: 'd', name: 'D', headline: '', profileUrl: 'https://l/in/d' }
+      ])
+    ]
+    let p = 0
+    let nexts = 0
+    const res = await runViewStep({
+      ...baseDeps(store),
+      harvestPage: async () => pages[p],
+      nextPage: async () => { nexts++; p++; return p < pages.length }
+    })
+    expect(res.executed).toBe(2) // viewed c + d (fresh on page1), not a/b (seen on page0)
+    expect(nexts).toBeGreaterThanOrEqual(1) // advanced past the all-seen first page
+    expect(res.reason).toBe('done') // filled the cap of 2 fresh
+  })
+
+  it('honors a near-exhausted daily budget', async () => {
+    const store = fakeStore({ ...enabled, [VIEW_DAY_BUDGET_KEY]: { day: '2026-06-26', used: 39 } })
     const res = await runViewStep(baseDeps(store))
     expect(res.executed).toBe(1) // only 1 left today
   })
 
   it('persists NOTHING when every dwell fails (persist-only-on-success)', async () => {
-    const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] })
+    const store = fakeStore(enabled)
     const res = await runViewStep({ ...baseDeps(store), dwell: async () => ({ ok: false }) })
     expect(res).toMatchObject({ executed: 0, skipped: 2 })
     expect(store.data[VIEW_HISTORY_KEY]).toBeUndefined()
     expect(store.data[VIEW_DAY_BUDGET_KEY]).toBeUndefined()
     expect(store.data[VIEW_SEEN_KEY]).toBeUndefined()
   })
-
-  const enabled = { 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] }
 
   it('reports nav_failed when the search page never confirmed loaded', async () => {
     const store = fakeStore(enabled)
@@ -83,13 +104,13 @@ describe('runViewStep', () => {
 
   it('reports empty_search when the people-search rendered zero results', async () => {
     const store = fakeStore(enabled)
-    const res = await runViewStep({ ...baseDeps(store), harvest: async () => ({ candidates: [], outcome: 'empty' as const }) })
+    const res = await runViewStep({ ...baseDeps(store), harvestPage: async () => ({ candidates: [], outcome: 'empty' }) })
     expect(res).toMatchObject({ executed: 0, reason: 'empty_search' })
   })
 
   it('reports not_ready when the search page never rendered its cards', async () => {
     const store = fakeStore(enabled)
-    const res = await runViewStep({ ...baseDeps(store), harvest: async () => ({ candidates: [], outcome: 'not_ready' as const }) })
+    const res = await runViewStep({ ...baseDeps(store), harvestPage: async () => ({ candidates: [], outcome: 'not_ready' }) })
     expect(res).toMatchObject({ executed: 0, reason: 'not_ready' })
   })
 

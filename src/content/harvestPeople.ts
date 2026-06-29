@@ -62,19 +62,27 @@ export async function harvestPeoplePage(
  * If the FIRST page is not `ok` (empty search / never rendered) propagate that outcome
  * without paginating — there's nothing to page through, and the reason matters upstream.
  * `harvestPage`/`nextPage` are injected so the loop is unit-testable without a live DOM.
+ *
+ * `isFresh` (optional): when given, the target counts only FRESH candidates (e.g. profiles
+ * not yet viewed). A static search returns the same faces, so without this the loop stalls
+ * on page 1 once every card is already-seen; with it, it pages deeper until it has `target`
+ * fresh people (or runs out of pages) — the fix for "viewed 3 of 40". Smart Connect omits it
+ * (counts all), so its behaviour is unchanged.
  */
 export async function harvestPeoplePaginated(
   harvestPage: () => Promise<HarvestResult>,
   nextPage: () => Promise<boolean>,
-  opts: { target?: number; maxPages?: number } = {}
+  opts: { target?: number; maxPages?: number; isFresh?: (c: PersonCandidate) => boolean } = {}
 ): Promise<HarvestResult> {
-  const { target = 30, maxPages = 5 } = opts
+  const { target = 30, maxPages = 5, isFresh } = opts
   const first = await harvestPage()
   if (first.outcome !== 'ok') return first
   const acc = new Map<string, PersonCandidate>()
   for (const p of first.candidates) acc.set(p.memberId, p)
+  const collected = (): number =>
+    isFresh ? [...acc.values()].filter(isFresh).length : acc.size
   for (let page = 1; page < maxPages; page++) {
-    if (acc.size >= target) break
+    if (collected() >= target) break
     if (!(await nextPage())) break
     for (const p of (await harvestPage()).candidates) if (!acc.has(p.memberId)) acc.set(p.memberId, p)
   }

@@ -510,7 +510,10 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
       await setActivity(VIEWING_PROFILES) // re-assert overlay (nav destroys the content script)
       return ok
     },
-    harvest: () => harvestPeopleFrom(tabId),
+    // Per-page harvest (NOT the all-at-once HARVEST_PEOPLE): runViewStep walks pages until it
+    // has `cap` FRESH profiles, so it drives pagination itself with the seen-set in hand.
+    harvestPage: () => harvestPeoplePageFrom(tabId),
+    nextPage: () => nextPeoplePageFrom(tabId),
     dwell: async () =>
       chrome.tabs.sendMessage(tabId, { type: 'DWELL_PROFILE' }).catch(() => undefined),
     pace: () => contentSleep(tabId, pacer.nextMs(8000, 30000)),
@@ -520,19 +523,7 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
   return { executed: res.executed, reason: res.reason }
 }
 
-/**
- * Ask the content script to harvest the people-search. A failed send (content missing /
- * channel closed) is reported as `not_ready` — the SAME signal as "page didn't render" —
- * so the step can say `nav_failed`/`not_ready` instead of a silent empty array.
- */
-async function harvestPeopleFrom(tabId: number): Promise<HarvestResult> {
-  const r = await chrome.tabs
-    .sendMessage(tabId, { type: 'HARVEST_PEOPLE' })
-    .catch(() => null)
-  return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
-}
-
-/** Harvest ONE search page (no pagination) — Smart Connect connects per-page. */
+/** Harvest ONE search page (no pagination) — Smart Connect + Profile Views drive pagination. */
 async function harvestPeoplePageFrom(tabId: number): Promise<HarvestResult> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE_PAGE' }).catch(() => null)
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }

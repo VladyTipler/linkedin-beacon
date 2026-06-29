@@ -3,11 +3,17 @@ import type { KeyValueStore, Clock, Rng } from '@lib/ports'
 import type { HarvestResult, ModuleState } from '@lib/types'
 import { asArray } from '@lib/engagement/settings'
 import { selectCandidates } from '@lib/connect/selectCandidates'
+import { harvestPeoplePaginated } from '@/content/harvestPeople'
 import {
   VIEW_DAY_BUDGET_KEY, VIEW_SEEN_KEY, rolloverViewDay, recordViewDay,
   remainingDailyViews, viewRunCap, DEFAULT_VIEWS_PER_DAY
 } from '@lib/views/ViewDayBudget'
 import { VIEW_HISTORY_KEY, appendViewHistory, type ViewRecord } from '@lib/views/ViewHistory'
+
+// Page deep enough to refill the cap with FRESH faces (a static search repeats people,
+// so the first pages saturate the seen-set fast), but bounded — LinkedIn's free search has
+// finite depth + a monthly commercial-use limit, and pagination stops at the last page anyway.
+const VIEW_HARVEST_MAX_PAGES = 20
 
 export interface ViewDeps {
   store: KeyValueStore
@@ -16,7 +22,10 @@ export interface ViewDeps {
   searchUrl: string
   /** Navigate to a URL; resolves true only if the page actually loaded. */
   navigate: (url: string) => Promise<boolean>
-  harvest: () => Promise<HarvestResult>
+  /** Harvest the CURRENT people-search page (no pagination). */
+  harvestPage: () => Promise<HarvestResult>
+  /** Advance to the next results page; false when there is none. */
+  nextPage: () => Promise<boolean>
   dwell: () => Promise<{ ok: boolean } | undefined>
   pace: () => Promise<void>
   /** True if the run was stopped (STOP_AUTOPILOT) — the per-profile loop MUST abort. */
@@ -27,8 +36,8 @@ export interface ViewStepResult {
   executed: number
   skipped: number
   /**
-   * Why the step did what it did — surfaced in the run report. One of: disabled |
-   * budget | nav_failed | empty_search | not_ready | none_fresh | done.
+   * Why the step did what it did — surfaced in the run report. One of: disabled | budget |
+   * nav_failed | empty_search | not_ready | none_fresh | pool_dry | cancelled | done.
    */
   reason: string
 }
@@ -50,10 +59,17 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
 
   const navOk = await deps.navigate(deps.searchUrl)
   if (!navOk) return { executed: 0, skipped: 0, reason: 'nav_failed' }
-  const { candidates: harvested, outcome } = await deps.harvest()
+
+  // Load the seen-set BEFORE harvesting so pagination keeps walking pages until it has `cap`
+  // FRESH (unseen) profiles — the fix for "viewed 3 of 40": the search pool is largely static,
+  // so the first page is mostly already-seen and a blind harvest stalls there.
+  const seen = new Set(asArray<string>(await deps.store.get(VIEW_SEEN_KEY)))
+  const { candidates: harvested, outcome } = await harvestPeoplePaginated(
+    deps.harvestPage, deps.nextPage,
+    { target: cap, maxPages: VIEW_HARVEST_MAX_PAGES, isFresh: (c) => !seen.has(c.memberId) }
+  )
   if (outcome === 'empty') return { executed: 0, skipped: 0, reason: 'empty_search' }
   if (outcome === 'not_ready') return { executed: 0, skipped: 0, reason: 'not_ready' }
-  const seen = new Set(asArray<string>(await deps.store.get(VIEW_SEEN_KEY)))
   const selected = selectCandidates(harvested, seen, cap)
   if (selected.length === 0) return { executed: 0, skipped: harvested.length, reason: 'none_fresh' }
 
@@ -83,5 +99,8 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
       deps.store.set(VIEW_DAY_BUDGET_KEY, recordViewDay(day, records.length))
     ])
   }
-  return { executed: records.length, skipped: selected.length - records.length, reason: cancelled ? 'cancelled' : 'done' }
+  // `pool_dry`: we found fewer fresh profiles than the cap (the search pool ran out) — an
+  // honest "viewed 3, not 40" reason in the report, so an under-cap run is never silent.
+  const reason = cancelled ? 'cancelled' : selected.length < cap ? 'pool_dry' : 'done'
+  return { executed: records.length, skipped: selected.length - records.length, reason }
 }

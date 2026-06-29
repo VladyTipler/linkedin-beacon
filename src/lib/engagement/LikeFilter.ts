@@ -27,7 +27,11 @@ export interface LikeVerdict {
 export class LikeFilter {
   private readonly scorer = new RelevanceScorer()
 
-  worthLiking(post: FeedPost): LikeVerdict {
+  worthLiking(post: FeedPost, ownerName?: string): LikeVerdict {
+    // Never like/comment your OWN posts. Matching by author NAME (from the control-menu
+    // anchor) is immune to the componentkey churn that defeated urn-dedup live, where an
+    // auto-published post got self-liked + commented ×3 (2026-06-29).
+    if (ownerName && post.authorName === ownerName) return { ok: false, reason: 'own_post' }
     if (post.alreadyLiked) return { ok: false, reason: 'already_liked' }
     const text = post.text.trim()
     if (text.length < MIN_TEXT) return { ok: false, reason: 'empty' }
@@ -39,12 +43,13 @@ export class LikeFilter {
 
   select(
     posts: FeedPost[],
-    profile?: TargetProfile
+    profile?: TargetProfile,
+    ownerName?: string
   ): { likeable: FeedPost[]; skipped: { urn: string; reason: string }[] } {
     const likeable: FeedPost[] = []
     const skipped: { urn: string; reason: string }[] = []
     for (const post of posts) {
-      const verdict = this.worthLiking(post)
+      const verdict = this.worthLiking(post, ownerName)
       if (verdict.ok) likeable.push(post)
       else skipped.push({ urn: post.urn, reason: verdict.reason ?? 'skip' })
     }

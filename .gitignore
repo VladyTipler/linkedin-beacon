@@ -8,3 +8,6 @@ coverage
 *.zip
 stats.html
 2026-06-28-*.txt
+
+# local session transcripts (never commit)
+*chat-history.md

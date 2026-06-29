@@ -38,6 +38,34 @@ describe('LikeFilter', () => {
     )
   })
 
+  it('skips the owner’s OWN post (never like/comment yourself)', () => {
+    // The live bug: an auto-published post sat atop the feed and got self-liked +
+    // commented ×3. Matching by author NAME is immune to the componentkey churn that
+    // defeated urn-dedup (every render of the post carries the same control-menu author).
+    expect(filter.worthLiking(post({ authorName: 'Vladislav Kanev' }), 'Vladislav Kanev')).toEqual({
+      ok: false,
+      reason: 'own_post'
+    })
+  })
+
+  it('still likes other people’s posts when an owner name is given', () => {
+    expect(filter.worthLiking(post({ authorName: 'Jane Recruiter' }), 'Vladislav Kanev').ok).toBe(true)
+  })
+
+  it('select drops every own-authored post, keeps the rest', () => {
+    const out = filter.select(
+      [
+        post({ urn: '1', authorName: 'Jane Recruiter' }),
+        post({ urn: '2', authorName: 'Vladislav Kanev' }),
+        post({ urn: '3', authorName: 'Acme Corp' })
+      ],
+      undefined,
+      'Vladislav Kanev'
+    )
+    expect(out.likeable.map((p) => p.urn)).toEqual(['1', '3'])
+    expect(out.skipped).toContainEqual({ urn: '2', reason: 'own_post' })
+  })
+
   it('select splits likeable/skipped and orders stack-relevant first', () => {
     const profile: TargetProfile = { stack: ['Vue'], targetRoles: [], geos: [], watchlistCompanies: [] }
     const out = filter.select(

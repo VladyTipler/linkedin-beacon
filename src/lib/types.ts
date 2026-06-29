@@ -343,8 +343,6 @@ export type BeaconMessage =
   | { type: 'GENERATE_DRAFT'; idea: Idea }
   /** sidepanel → SW: harvest feed → extract ideas → bank; replies { ideas, error? }. */
   | { type: 'GENERATE_IDEAS' }
-  /** SW → content: harvest connect candidates from the current page; replies HarvestResult. */
-  | { type: 'HARVEST_PEOPLE' }
   /**
    * SW → content: harvest ONLY the currently-loaded people-search page (no pagination) —
    * connect must run per-page (a candidate's Connect anchor is only in the DOM on its page).

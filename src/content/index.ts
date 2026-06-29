@@ -16,7 +16,8 @@ import { SystemClock } from '@/adapters/SystemClock'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
 import { executeProfileView } from './profileView'
-import { harvestPeople, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
+import { readOwnerName } from './readOwner'
+import { harvestPeople, harvestPeoplePage } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel, countdownActivity } from './activityOverlay'
 import {
   SCANNING,
@@ -190,6 +191,13 @@ async function runAutopilotLoop(modules: {
   const wantIdeas = modules.content
   const wantComments = modules.comments
   const idleLabel = wantLike ? SCANNING : COLLECTING_IDEAS
+  // Read the owner's name ONCE per run so the like/comment gate never acts on your OWN
+  // posts (the self-engagement bug). Fail OPEN on a detection miss — a missed selector
+  // must not block the whole engagement run, just the own-post guard for this run.
+  const ownerName = readOwnerName(document) ?? undefined
+  if (wantLike && !ownerName) {
+    console.warn('[beacon] owner name not detected — own-post filter inactive this run')
+  }
   showActivity(document, idleLabel)
   try {
     while (autopilotRunning) {
@@ -206,7 +214,7 @@ async function runAutopilotLoop(modules: {
       }
 
       if (wantLike) {
-        const { likeable } = likeFilter.select(posts)
+        const { likeable } = likeFilter.select(posts, undefined, ownerName)
         const fresh = likeable.filter((p) => !actedUrns.has(p.urn))
         if (fresh.length === 0) {
           if (++emptyHarvests >= 2) {
@@ -324,16 +332,6 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'REQUEST_FEED_POSTS':
       void harvestByScrolling(message.limit).then(sendResponse)
-      return true // async sendResponse
-
-    case 'HARVEST_PEOPLE':
-      // No infinite scroll: wait for each page to render, harvest it, then paginate.
-      // isPeopleSearchEmpty lets harvest tell a dead search ('empty') from a page that
-      // never rendered ('not_ready') — the SW surfaces these as different run reasons.
-      void harvestPeoplePaginated(
-        () => harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms), isPeopleSearchEmpty),
-        () => goToNextPeoplePage()
-      ).then(sendResponse)
       return true // async sendResponse
 
     case 'HARVEST_PEOPLE_PAGE':
