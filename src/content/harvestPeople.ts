@@ -30,6 +30,37 @@ export function harvestPeople(root: ParentNode): PersonCandidate[] {
 }
 
 /**
+ * Parse ALL people from a people-search results DOM, regardless of connection status —
+ * connectable AND already-invited ("Pending"). Profile Views must visit a profile no matter
+ * its connect state, unlike harvestPeople which keys off the "Invite to connect" anchor and
+ * so goes BLIND once the search pool is mostly already-invited (the "viewed 0 of 40" bug).
+ * Both states keep the member componentkey (`…urn:li:member:<id>_connect|_pending`), so we
+ * anchor on that, then walk up to the card for the profile link + headline — same structural,
+ * jsdom-safe approach as harvestPeople, and the SAME numeric memberId (views:seen stays valid).
+ */
+export function harvestProfiles(root: ParentNode): PersonCandidate[] {
+  const out: PersonCandidate[] = []
+  const seen = new Set<string>()
+  for (const el of root.querySelectorAll('[componentkey*="urn:li:member:"]')) {
+    const member = (el.getAttribute('componentkey') ?? '').match(/urn:li:member:(\d+)/)?.[1]
+    if (!member || seen.has(member)) continue
+    let card: Element | null = el.parentElement
+    while (card && !card.querySelector('a[href*="/in/"]')) card = card.parentElement
+    if (!card) continue
+    const profile = card.querySelector<HTMLAnchorElement>('a[href*="/in/"]')
+    const ps = card.querySelectorAll('p')
+    seen.add(member)
+    out.push({
+      memberId: member,
+      name: (profile?.textContent ?? '').replace(/\s+/g, ' ').split('•')[0].trim(),
+      headline: (ps[1]?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      profileUrl: (profile?.getAttribute('href') ?? '').split('?')[0]
+    })
+  }
+  return out
+}
+
+/**
  * Wait for the current people-search page to render, then harvest it. Results appear a
  * few seconds AFTER the content script is ready, so a single read returns []. Poll until
  * EITHER cards render (`ok`) OR the "No results found" empty-state renders (`empty`,

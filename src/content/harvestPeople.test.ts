@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest'
-import { harvestPeople, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
+import { harvestPeople, harvestProfiles, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
 import { PEOPLE_SEARCH_HTML } from './__fixtures__/people-search-card'
 import type { PersonCandidate } from '@lib/types'
 
@@ -17,6 +17,33 @@ describe('harvestPeople (real card HTML boundary)', () => {
 
   it('excludes Follow-only people (no Connect anchor)', () => {
     expect(harvestPeople(document).some((p) => p.name === 'Shubh Yadav')).toBe(false)
+  })
+
+  // Connect must NOT try to invite an already-pending person (you can't re-invite).
+  it('excludes already-Pending people (no Invite anchor)', () => {
+    expect(harvestPeople(document).some((p) => p.name === 'Yulia O.')).toBe(false)
+  })
+})
+
+// Profile Views must visit ANY profile in the results — including people we've already
+// invited (now "Pending"). Those lost their Connect anchor but keep the member componentkey,
+// so harvestProfiles anchors on that instead. This is THE fix for "viewed 0 of 40": the
+// recruiter pool was mostly already-invited, so the Connect-only harvest saw no one.
+describe('harvestProfiles (any-status people for Profile Views)', () => {
+  beforeEach(() => { document.body.innerHTML = PEOPLE_SEARCH_HTML })
+
+  it('captures BOTH connectable and already-Pending people (the views pool)', () => {
+    const profiles = harvestProfiles(document)
+    expect(profiles).toEqual([
+      { memberId: '1094785181', name: 'Olena Diachenko', headline: 'Frontend Developer | JavaScript | React | TypeScript', profileUrl: 'https://www.linkedin.com/in/olena-diachenko-2a5784266/' },
+      { memberId: '98425817', name: 'Yulia O.', headline: 'IT & Tech Talent Acquisition Specialist', profileUrl: 'https://www.linkedin.com/in/yuliaobukhova/' },
+      { memberId: '579929146', name: 'Predrag Vasic', headline: 'Talent Acquisition Specialist | Technical Recruiter | IT Recruiter', profileUrl: 'https://www.linkedin.com/in/predrag-vasic-18a273142/' }
+    ])
+  })
+
+  it('uses the SAME numeric memberId as harvestPeople (views:seen stays valid)', () => {
+    const olena = harvestProfiles(document).find((p) => p.name === 'Olena Diachenko')
+    expect(olena?.memberId).toBe('1094785181') // identical to the Connect-anchor harvest
   })
 })
 

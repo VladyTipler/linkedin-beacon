@@ -510,9 +510,10 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
       await setActivity(VIEWING_PROFILES) // re-assert overlay (nav destroys the content script)
       return ok
     },
-    // Per-page harvest (NOT the all-at-once HARVEST_PEOPLE): runViewStep walks pages until it
-    // has `cap` FRESH profiles, so it drives pagination itself with the seen-set in hand.
-    harvestPage: () => harvestPeoplePageFrom(tabId),
+    // Per-page harvest of ALL people (incl. already-invited Pending) — Views must visit anyone,
+    // not just connectable, or it goes blind once the search pool is mostly invited. runViewStep
+    // walks pages until it has `cap` FRESH profiles, driving pagination with the seen-set in hand.
+    harvestPage: () => harvestProfilesPageFrom(tabId),
     nextPage: () => nextPeoplePageFrom(tabId),
     dwell: async () =>
       chrome.tabs.sendMessage(tabId, { type: 'DWELL_PROFILE' }).catch(() => undefined),
@@ -523,9 +524,15 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
   return { executed: res.executed, reason: res.reason }
 }
 
-/** Harvest ONE search page (no pagination) — Smart Connect + Profile Views drive pagination. */
+/** Harvest ONE search page of CONNECTABLE people (Smart Connect) — invite anchors only. */
 async function harvestPeoplePageFrom(tabId: number): Promise<HarvestResult> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PEOPLE_PAGE' }).catch(() => null)
+  return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
+}
+
+/** Harvest ONE search page of ALL people incl. already-Pending (Profile Views — visits anyone). */
+async function harvestProfilesPageFrom(tabId: number): Promise<HarvestResult> {
+  const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PROFILES_PAGE' }).catch(() => null)
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
 

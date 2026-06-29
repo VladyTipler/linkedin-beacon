@@ -349,6 +349,12 @@ export type BeaconMessage =
    * Replies HarvestResult.
    */
   | { type: 'HARVEST_PEOPLE_PAGE' }
+  /**
+   * SW → content: harvest the current people-search page for Profile Views — ALL people
+   * regardless of connect status (incl. already-invited "Pending"), not just connectable.
+   * Replies HarvestResult.
+   */
+  | { type: 'HARVEST_PROFILES_PAGE' }
   /** SW → content: advance the people-search to the next page; replies boolean (false = none). */
   | { type: 'PEOPLE_NEXT_PAGE' }
   /** SW → content: human-dwell on the current (already-navigated) profile; replies ActionResult. */

@@ -17,7 +17,7 @@ import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
 import { executeProfileView } from './profileView'
 import { readOwnerName } from './readOwner'
-import { harvestPeople, harvestPeoplePage } from './harvestPeople'
+import { harvestPeople, harvestProfiles, harvestPeoplePage } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel, countdownActivity } from './activityOverlay'
 import {
   SCANNING,
@@ -338,6 +338,13 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       // ONE page only (no pagination) — Smart Connect connects per-page, so it harvests the
       // current page, connects its candidates, then asks PEOPLE_NEXT_PAGE to advance.
       void harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms), isPeopleSearchEmpty)
+        .then(sendResponse)
+      return true // async sendResponse
+
+    case 'HARVEST_PROFILES_PAGE':
+      // Profile Views: harvest ALL people on the page (connectable + already-Pending), so the
+      // views pool doesn't go blind once most of the search is already invited.
+      void harvestPeoplePage(() => harvestProfiles(document), (ms) => sleep(ms), isPeopleSearchEmpty)
         .then(sendResponse)
       return true // async sendResponse
 
