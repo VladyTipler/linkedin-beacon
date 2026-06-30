@@ -43,34 +43,14 @@ describe('CommentDraftService', () => {
     const out = await new CommentDraftService(provider).draft(input)
     expect(out).toBe('Great point about hydration. How do you measure the mismatch rate in production?')
   })
-})
 
-describe('clampComment', () => {
-  it('keeps a 1–2 sentence comment unchanged', () => {
-    expect(clampComment('What metric did you use?')).toBe('What metric did you use?')
-    expect(clampComment('Nice. What metric did you use?')).toBe('Nice. What metric did you use?')
-  })
-
-  it('trims to the first 2 sentences (preserving the question mark)', () => {
-    expect(clampComment('A. B? C! D.')).toBe('A. B?')
-  })
-
-  it('hard-caps a single runaway sentence at a word boundary with an ellipsis', () => {
-    const long = 'word '.repeat(80).trim() + ' end' // ~404 chars, no sentence break
-    const out = clampComment(long)
-    expect(out.length).toBeLessThanOrEqual(281)
-    expect(out.endsWith('…')).toBe(true)
-  })
-
-  it('handles text with no sentence punctuation', () => {
-    expect(clampComment('just a short phrase')).toBe('just a short phrase')
-  })
-
-  it('asks a clarifying QUESTION about the post topic (not a stack-specific take)', async () => {
+  it('allows a short opinion OR a question — not forced into a question', async () => {
     const { provider, calls } = fakeProvider('ok')
     await new CommentDraftService(provider).draft(input)
     const sys = (calls[0].messages.find((m) => m.role === 'system')?.content ?? '').toLowerCase()
-    expect(sys).toContain('question') // engage the topic with a question, not a niche expert take
+    expect(sys).toContain('opinion') // a brief take is allowed…
+    expect(sys).toContain('question') // …or a clarifying question — whichever fits
+    expect(sys).not.toContain('must ask') // no longer hard-forced into a question
   })
 
   it('feeds the post text, the user voice and the tone to the model', async () => {
@@ -94,5 +74,27 @@ describe('clampComment', () => {
     await new CommentDraftService(provider).draft(input)
     expect(calls[0].messages.some((m) => m.role === 'system')).toBe(true)
     expect(calls[0].messages.some((m) => m.role === 'user')).toBe(true)
+  })
+})
+
+describe('clampComment', () => {
+  it('keeps a 1–2 sentence comment unchanged', () => {
+    expect(clampComment('What metric did you use?')).toBe('What metric did you use?')
+    expect(clampComment('Nice. What metric did you use?')).toBe('Nice. What metric did you use?')
+  })
+
+  it('trims to the first 2 sentences (preserving the question mark)', () => {
+    expect(clampComment('A. B? C! D.')).toBe('A. B?')
+  })
+
+  it('hard-caps a single runaway sentence at a word boundary with an ellipsis', () => {
+    const long = 'word '.repeat(80).trim() + ' end' // ~404 chars, no sentence break
+    const out = clampComment(long)
+    expect(out.length).toBeLessThanOrEqual(281)
+    expect(out.endsWith('…')).toBe(true)
+  })
+
+  it('handles text with no sentence punctuation', () => {
+    expect(clampComment('just a short phrase')).toBe('just a short phrase')
   })
 })
