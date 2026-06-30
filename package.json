@@ -1,7 +1,7 @@
 {
   "name": "linkedin-beacon",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Beacon — browser extension for LinkedIn SSI growth (safety-first, pull > push). Standalone V1.",
   "type": "module",
   "scripts": {
