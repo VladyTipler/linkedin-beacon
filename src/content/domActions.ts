@@ -23,6 +23,17 @@ export type ActionResult = { ok: true; already?: boolean } | { ok: false; reason
 
 const reader = new FeedReader()
 
+/**
+ * The comment editor SCOPED to the post matching `urn`. The editor renders INSIDE the post's
+ * (visible/expanded) [componentkey] node — verified live 2026-06-29 — so we re-find the post
+ * and query within it. A global `document.querySelector(EDITOR)` returns the FIRST open editor
+ * on the page, so once one post's composer was open every later comment piled onto it (the
+ * "all 5 comments under one post" bug). Re-finds the post each call → robust to re-render.
+ */
+export function findPostEditor(root: ParentNode, urn: string): HTMLElement | null {
+  return reader.findByUrn(root, urn)?.querySelector<HTMLElement>(EDITOR) ?? null
+}
+
 /** Like a post by urn. No-op (success) if already liked — like dedup. */
 export function executeLike(root: ParentNode, urn: string): ActionResult {
   const post = reader.findByUrn(root, urn)
@@ -51,7 +62,9 @@ export async function executeComment(
   if (!open) return { ok: false, reason: 'comment_button_not_found' }
   open.click()
 
-  const editor = await waitForValue<HTMLElement>(() => document.querySelector<HTMLElement>(EDITOR), 5000)
+  // Scope the editor to THIS post (re-found each poll) — never a global query, which would
+  // grab the first open composer on the page and pile every comment onto one post.
+  const editor = await waitForValue<HTMLElement>(() => findPostEditor(root, urn), 5000)
   if (!editor) return { ok: false, reason: 'editor_not_found' }
   editor.focus()
   placeCaretAtEnd(editor)

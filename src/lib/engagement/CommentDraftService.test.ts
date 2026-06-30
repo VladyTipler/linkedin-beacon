@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CommentDraftService } from './CommentDraftService'
+import { CommentDraftService, clampComment } from './CommentDraftService'
 import type { LlmProvider, LlmRequest } from '@lib/llm/contracts'
 import type { CommentDraftInput } from './CommentDraftService'
 
@@ -33,6 +33,37 @@ describe('CommentDraftService', () => {
     const { provider } = fakeProvider('  In our Vue SSR work we gate hydration on idle.  ')
     const out = await new CommentDraftService(provider).draft(input)
     expect(out).toBe('In our Vue SSR work we gate hydration on idle.')
+  })
+
+  it('clamps an over-long multi-sentence reply to the first 2 sentences', async () => {
+    const { provider } = fakeProvider(
+      'Great point about hydration. How do you measure the mismatch rate in production? ' +
+        'We saw it spike on slow networks. Also, do you preload the critical CSS?'
+    )
+    const out = await new CommentDraftService(provider).draft(input)
+    expect(out).toBe('Great point about hydration. How do you measure the mismatch rate in production?')
+  })
+})
+
+describe('clampComment', () => {
+  it('keeps a 1–2 sentence comment unchanged', () => {
+    expect(clampComment('What metric did you use?')).toBe('What metric did you use?')
+    expect(clampComment('Nice. What metric did you use?')).toBe('Nice. What metric did you use?')
+  })
+
+  it('trims to the first 2 sentences (preserving the question mark)', () => {
+    expect(clampComment('A. B? C! D.')).toBe('A. B?')
+  })
+
+  it('hard-caps a single runaway sentence at a word boundary with an ellipsis', () => {
+    const long = 'word '.repeat(80).trim() + ' end' // ~404 chars, no sentence break
+    const out = clampComment(long)
+    expect(out.length).toBeLessThanOrEqual(281)
+    expect(out.endsWith('…')).toBe(true)
+  })
+
+  it('handles text with no sentence punctuation', () => {
+    expect(clampComment('just a short phrase')).toBe('just a short phrase')
   })
 
   it('asks a clarifying QUESTION about the post topic (not a stack-specific take)', async () => {

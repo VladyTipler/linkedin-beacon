@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { executeLike, findComposer, findSubmit } from './domActions'
+import { executeLike, findComposer, findSubmit, findPostEditor } from './domActions'
 
 // Same real anchors as FeedReader: post root [componentkey] + reaction button.
 const FIXTURE = `
@@ -41,6 +41,39 @@ describe('executeLike', () => {
 
   it('reports when the post is not on the page', () => {
     expect(executeLike(root, 'POST_ZZZ')).toEqual({ ok: false, reason: 'post_not_found' })
+  })
+})
+
+// The "all 5 comments under one post" bug: executeComment found the editor with a GLOBAL
+// document.querySelector, which returns the FIRST open editor on the page — so once one
+// post's composer was open, every later comment typed into it. The editor renders INSIDE the
+// post's [componentkey] node (verified live 2026-06-29), so findPostEditor scopes to the post.
+describe('findPostEditor (scope the comment editor to its own post)', () => {
+  const EDITOR_WRAP = 'ui-core-tiptap-text-editor-wrapper'
+  const twoOpenEditors = `
+    <div componentkey="POST_AAA">
+      <button aria-label="Open control menu for post by Jane">⋯</button>
+      <button aria-label="Reaction button state: no reaction">React</button>
+      <div data-testid="${EDITOR_WRAP}"><div contenteditable="true" data-post="A">a</div></div>
+    </div>
+    <div componentkey="POST_BBB">
+      <button aria-label="Open control menu for post by Acme">⋯</button>
+      <button aria-label="Reaction button state: no reaction">React</button>
+      <div data-testid="${EDITOR_WRAP}"><div contenteditable="true" data-post="B">b</div></div>
+    </div>`
+  let root: HTMLElement
+  beforeEach(() => {
+    root = document.createElement('div')
+    root.innerHTML = twoOpenEditors
+  })
+
+  it('returns the editor of the REQUESTED post, not the first one on the page', () => {
+    expect(findPostEditor(root, 'POST_BBB')?.getAttribute('data-post')).toBe('B')
+    expect(findPostEditor(root, 'POST_AAA')?.getAttribute('data-post')).toBe('A')
+  })
+
+  it('returns null when the post is not present', () => {
+    expect(findPostEditor(root, 'POST_ZZZ')).toBeNull()
   })
 })
 

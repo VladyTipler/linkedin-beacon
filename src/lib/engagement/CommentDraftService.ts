@@ -1,6 +1,25 @@
 import type { LlmProvider } from '../llm/contracts'
 import type { CommentTone, ExpertiseProfile, FeedPost } from '../types'
 
+/**
+ * Bound a generated comment to a short, LinkedIn-appropriate length: at most `maxSentences`
+ * sentences, with a hard char backstop. Models routinely overshoot "1-2 sentences" prompts,
+ * so this is the DETERMINISTIC guarantee (the prompt asks, this enforces). Sentence-boundary
+ * aware so it never cuts a question mid-word; trims to a word boundary + ellipsis only if a
+ * single runaway sentence still exceeds the char cap.
+ */
+export function clampComment(text: string, maxSentences = 2, maxChars = 280): string {
+  const trimmed = text.trim()
+  const sentences = trimmed.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) ?? [trimmed]
+  let out = sentences.slice(0, maxSentences).join('').trim()
+  if (out.length > maxChars) {
+    const cut = out.slice(0, maxChars)
+    const lastSpace = cut.lastIndexOf(' ')
+    out = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim() + '…'
+  }
+  return out
+}
+
 export interface CommentDraftInput {
   post: FeedPost
   expertise: ExpertiseProfile
@@ -37,7 +56,8 @@ export class CommentDraftService {
       'The comment must ask ONE specific clarifying QUESTION about THIS post\'s topic — a question',
       'that shows you read it and moves the discussion forward (SSI grows through engagement).',
       'Do NOT restate or summarise the post. No generic praise ("great post").',
-      'One or two sentences, under 280 characters.',
+      'HARD LIMIT: at most 2 short sentences, under 200 characters. Be terse — ideally just the',
+      'question itself. No preamble, no sign-off, no hashtags.',
       `Voice/tone: ${TONE_HINT[tone]}.`
     ]
       .filter(Boolean)
@@ -51,7 +71,8 @@ export class CommentDraftService {
 
     // No maxTokens cap: reasoning models (e.g. gemini-3.x) spend a reasoning phase BEFORE the
     // content, so a small cap starves the output → empty/truncated → judge rejects → 0 comments.
-    // Bound length via the prompt ("under 280 characters"). Same family fix as Idea/Draft.
+    // Bound length via the prompt + a deterministic clamp (models overshoot the prompt). Same
+    // no-maxTokens family fix as Idea/Draft.
     const completion = await this.provider.complete({
       messages: [
         { role: 'system', content: system },
@@ -59,6 +80,6 @@ export class CommentDraftService {
       ],
       temperature: 0.7
     })
-    return completion.text.trim()
+    return clampComment(completion.text.trim())
   }
 }
