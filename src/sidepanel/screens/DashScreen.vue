@@ -3,14 +3,18 @@ import { computed, ref, watch } from 'vue'
 import type { SsiSnapshot } from '@lib/types'
 import type { PillarView } from '../lib/ssiView'
 import { weeklyGoal } from '@lib/ssi/weeklyGoal'
+import { windowedDelta } from '@lib/ssi/ssiProgress'
+import { deltaArrow, deltaLabel } from '../lib/ssiTrendView'
 import SsiGauge from '../components/SsiGauge.vue'
 import PillarBar from '../components/PillarBar.vue'
+import SsiTrend from '../components/SsiTrend.vue'
 import { useDayStats } from '../composables/useDayStats'
 
 const props = defineProps<{
   snapshot: SsiSnapshot
   pillars: PillarView[]
   total: number
+  history: SsiSnapshot[]
   isReal: boolean
   refreshing: boolean
   autopilotRunning?: boolean
@@ -62,6 +66,14 @@ const chip = computed(() => {
 
 // Week's focus: the weakest SSI pillar + the module that raises it (pure, no LLM).
 const goal = computed(() => weeklyGoal(props.snapshot.pillars))
+
+// Real 14-day delta next to the gauge — null (hidden) until ≥2 days of snapshots,
+// so we never show an invented number.
+const recentDelta = computed(() => windowedDelta(props.history, 14))
+const recentSpan = computed(() => {
+  const d = recentDelta.value?.days ?? 0
+  return d === 1 ? 'за 1 день' : `за ${d} ${d < 5 ? 'дня' : 'дней'}`
+})
 </script>
 
 <template>
@@ -72,8 +84,14 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
         <SsiGauge :score="total" />
         <div class="ssi-meta">
           <div class="t">{{ isReal ? 'Твой индекс' : 'Демо-данные · открой /sales/ssi' }}</div>
-          <div v-if="!isReal" class="delta">
-            ▲ +14 <span style="color:var(--mut);font-weight:500;font-size:12px">за 14 дней</span>
+          <div
+            v-if="recentDelta"
+            class="delta"
+            :class="{ down: recentDelta.delta < 0, flat: recentDelta.delta === 0 }"
+            data-testid="gauge-delta"
+          >
+            {{ deltaArrow(recentDelta.delta) }} {{ deltaLabel(recentDelta.delta) }}
+            <span style="color:var(--mut);font-weight:500;font-size:12px">{{ recentSpan }}</span>
           </div>
           <div v-if="chip" class="chip">{{ chip }}</div>
         </div>
@@ -86,6 +104,9 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
     <button class="ghost" data-testid="refresh-ssi" :disabled="refreshing" @click="$emit('refresh')">
       {{ refreshing ? 'Считываю /sales/ssi…' : 'Обновить SSI со страницы' }}
     </button>
+
+    <div class="sect-lbl">Динамика SSI</div>
+    <SsiTrend :history="history" />
 
     <div class="sect-lbl">Автопилот · сегодня</div>
     <div class="ap-live" :class="{ idle: !autopilotRunning }" data-testid="ap-running">
@@ -214,4 +235,7 @@ const goal = computed(() => weeklyGoal(props.snapshot.pillars))
 @media (prefers-reduced-motion: reduce) {
   .ap-dot { animation: none; }
 }
+/* Gauge delta colour by direction (default lime = up, from global .delta). */
+.ssi-meta .delta.down { color: var(--warm); }
+.ssi-meta .delta.flat { color: var(--mut); }
 </style>
