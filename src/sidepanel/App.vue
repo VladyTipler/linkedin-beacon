@@ -9,12 +9,14 @@ import ContentScreen from './screens/ContentScreen.vue'
 import ProfileAuditScreen from './screens/ProfileAuditScreen.vue'
 import { useNavigation } from './composables/useNavigation'
 import { useSsi } from './composables/useSsi'
+import { useProfileViews } from './composables/useProfileViews'
 import { useModules } from './composables/useModules'
 import { useAutopilot } from './composables/useAutopilot'
 import { enabledModules } from '@lib/autopilot/startGate'
 
 const { active, go } = useNavigation()
 const { snapshot, history, pillars, total, isReal, refreshing, refresh } = useSsi()
+const { history: pvHistory } = useProfileViews()
 const { modules, toggle, setLimit } = useModules()
 const {
   status: autopilotStatus,
@@ -41,6 +43,7 @@ function pauseAll() {
         :pillars="pillars"
         :total="total"
         :history="history"
+        :pv-history="pvHistory"
         :is-real="isReal"
         :refreshing="refreshing"
         :autopilot-running="autopilotStatus?.running ?? false"

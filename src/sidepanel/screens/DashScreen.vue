@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { SsiSnapshot } from '@lib/types'
+import type { ProfileViewsSnapshot, SsiSnapshot } from '@lib/types'
 import type { PillarView } from '../lib/ssiView'
 import { weeklyGoal } from '@lib/ssi/weeklyGoal'
 import { windowedDelta } from '@lib/ssi/ssiProgress'
@@ -8,6 +8,7 @@ import { deltaArrow, deltaLabel } from '../lib/ssiTrendView'
 import SsiGauge from '../components/SsiGauge.vue'
 import PillarBar from '../components/PillarBar.vue'
 import SsiTrend from '../components/SsiTrend.vue'
+import ProfileViewsTrend from '../components/ProfileViewsTrend.vue'
 import { useDayStats } from '../composables/useDayStats'
 
 const props = defineProps<{
@@ -15,6 +16,7 @@ const props = defineProps<{
   pillars: PillarView[]
   total: number
   history: SsiSnapshot[]
+  pvHistory: ProfileViewsSnapshot[]
   isReal: boolean
   refreshing: boolean
   autopilotRunning?: boolean
@@ -107,6 +109,9 @@ const recentSpan = computed(() => {
 
     <div class="sect-lbl">Динамика SSI</div>
     <SsiTrend :history="history" />
+
+    <div class="sect-lbl">Просмотры профиля</div>
+    <ProfileViewsTrend :history="pvHistory" />
 
     <div class="sect-lbl">Автопилот · сегодня</div>
     <div class="ap-live" :class="{ idle: !autopilotRunning }" data-testid="ap-running">

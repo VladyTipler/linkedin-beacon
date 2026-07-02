@@ -1,4 +1,4 @@
-import type { InboundLead, SsiSnapshot } from '@lib/types'
+import type { InboundLead, ProfileViewsSnapshot, SsiSnapshot } from '@lib/types'
 
 /**
  * Seed/placeholder data shown before the first real parse, mirroring the
@@ -44,6 +44,22 @@ export const DEMO_SSI_HISTORY: SsiSnapshot[] = [
     capturedAt: '2026-06-16T00:00:00.000Z'
   },
   DEMO_SSI
+]
+
+/**
+ * Seed incoming profile-views (WVMP) so the dashboard trend renders in demo mode.
+ * Replaced live by the first real PROFILE_VIEWS_SNAPSHOT. NOT real data.
+ */
+export const DEMO_PROFILE_VIEWS: ProfileViewsSnapshot = {
+  count: 45,
+  windowDays: 90,
+  capturedAt: '2026-06-23T00:00:00.000Z'
+}
+
+export const DEMO_PROFILE_VIEWS_HISTORY: ProfileViewsSnapshot[] = [
+  { count: 28, windowDays: 90, capturedAt: '2026-06-09T00:00:00.000Z' },
+  { count: 36, windowDays: 90, capturedAt: '2026-06-16T00:00:00.000Z' },
+  DEMO_PROFILE_VIEWS
 ]
 
 /** Placeholder inbound interest — real detection lands in a later phase. */
