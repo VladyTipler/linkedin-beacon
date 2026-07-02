@@ -57,4 +57,13 @@ describe('SsiRepository', () => {
     expect(history).toHaveLength(3)
     expect(history.map((h) => h.total)).toEqual([2, 3, 4])
   })
+
+  it('keeps one history entry per day — a second same-day save overwrites it', async () => {
+    await repo.save(snap(60, '2026-06-23T08:00:00.000Z'))
+    await repo.save(snap(64, '2026-06-23T21:00:00.000Z')) // same day, later refresh
+    const history = await repo.history()
+    expect(history).toHaveLength(1)
+    expect(history[0].total).toBe(64)
+    expect((await repo.latest())?.total).toBe(64)
+  })
 })
