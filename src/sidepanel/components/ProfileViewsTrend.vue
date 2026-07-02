@@ -3,9 +3,13 @@ import { computed } from 'vue'
 import type { ProfileViewsSnapshot } from '@lib/types'
 import { computeViewsProgress } from '@lib/profileViews/profileViewsProgress'
 // Generic trend-view helpers (shared with SsiTrend).
-import { sparklinePoints, deltaArrow, deltaLabel } from '../lib/ssiTrendView'
+import { sparklinePoints, deltaArrow, deltaLabel, spanLabel as spanLabelFor, daysLabel } from '../lib/ssiTrendView'
 
-const props = defineProps<{ history: ProfileViewsSnapshot[] }>()
+// `isReal` gates honesty: false = seed/demo data (outside the extension or before
+// the first real fetch) → the caption says so, never passing demo off as real.
+const props = withDefaults(defineProps<{ history: ProfileViewsSnapshot[]; isReal?: boolean }>(), {
+  isReal: true
+})
 
 const W = 240
 const H = 30
@@ -24,14 +28,8 @@ const deltaTxt = computed(() => deltaLabel(progress.value.countDelta))
 // an alarming red), unlike SSI where down genuinely means the score fell.
 const deltaCls = computed(() => (progress.value.countDelta > 0 ? 'up' : 'flat'))
 
-const days = (d: number) => `${d} ${d < 5 ? 'дня' : 'дней'}`
-const spanLabel = computed(() => {
-  const d = progress.value.spanDays
-  if (d <= 0) return 'сегодня'
-  if (d === 1) return 'за 1 день'
-  return `за ${days(d)}`
-})
-const windowLabel = computed(() => `за ${days(progress.value.windowDays)}`)
+const spanLabel = computed(() => spanLabelFor(progress.value.spanDays))
+const windowLabel = computed(() => `за ${daysLabel(progress.value.windowDays)}`)
 </script>
 
 <template>
@@ -74,7 +72,9 @@ const windowLabel = computed(() => `за ${days(progress.value.windowDays)}`)
       Динамика появится, когда накопится <b>2 дня</b> данных.
     </div>
 
-    <div class="pv-cap">кто смотрел ваш профиль · скользящее окно</div>
+    <div class="pv-cap" data-testid="pv-cap">
+      {{ isReal ? 'кто смотрел ваш профиль · скользящее окно' : 'Демо-данные · реальные просмотры появятся после обновления' }}
+    </div>
   </div>
 </template>
 

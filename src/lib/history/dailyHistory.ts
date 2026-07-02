@@ -4,6 +4,16 @@
  * `capturedAt` ISO string, so adding a new daily metric never copies this logic.
  */
 
+export const DAY_MS = 86_400_000
+
+/** Whole days between two ISO timestamps (0 if either is unparseable). Pure. */
+export function daysBetween(a: string, b: string): number {
+  const ta = Date.parse(a)
+  const tb = Date.parse(b)
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return 0
+  return Math.max(0, Math.round(Math.abs(tb - ta) / DAY_MS))
+}
+
 /**
  * UTC calendar-day bucket (YYYY-MM-DD) for a snapshot's capturedAt.
  * Invalid dates key by their raw string so corrupt/non-date values stay unique

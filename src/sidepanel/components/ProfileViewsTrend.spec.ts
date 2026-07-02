@@ -29,6 +29,16 @@ describe('ProfileViewsTrend', () => {
     expect(w.find('[data-testid="pv-delta"]').classes()).toContain('up')
   })
 
+  it('HONESTY: labels seed/demo data as demo, never as the real number', () => {
+    const hist = [snap(28, '2026-06-09T00:00:00Z'), snap(45, '2026-07-02T00:00:00Z')]
+    const real = mount(ProfileViewsTrend, { props: { history: hist, isReal: true } })
+    expect(real.find('[data-testid="pv-cap"]').text()).toMatch(/кто смотрел ваш профиль/)
+    expect(real.find('[data-testid="pv-cap"]').text()).not.toMatch(/[Дд]емо/)
+
+    const demo = mount(ProfileViewsTrend, { props: { history: hist, isReal: false } })
+    expect(demo.find('[data-testid="pv-cap"]').text()).toMatch(/[Дд]емо/)
+  })
+
   it('HONESTY: a rolling-window dip stays NEUTRAL, never an alarming red', () => {
     const w = mount(ProfileViewsTrend, {
       props: { history: [snap(50, '2026-06-28T00:00:00Z'), snap(45, '2026-07-02T00:00:00Z')] }

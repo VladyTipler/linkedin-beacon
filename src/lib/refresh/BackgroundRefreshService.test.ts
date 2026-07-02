@@ -4,19 +4,10 @@ import {
   LAST_REFRESH_KEY
 } from './BackgroundRefreshService'
 import { RefreshPolicy } from './RefreshPolicy'
-import type { Clock, KeyValueStore } from '../ports'
+import type { Clock } from '../ports'
 import type { SsiApiClient, RawSnapshot } from '../ssi-api/contracts'
 import { SsiApiError } from '../ssi-api/contracts'
-
-class FakeStore implements KeyValueStore {
-  private data = new Map<string, unknown>()
-  async get<T>(key: string): Promise<T | null> {
-    return (this.data.get(key) as T) ?? null
-  }
-  async set<T>(key: string, value: T): Promise<void> {
-    this.data.set(key, value)
-  }
-}
+import { FakeStore } from '../storage/fakeStore'
 
 class FakeApiClient implements SsiApiClient {
   calls = 0

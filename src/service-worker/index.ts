@@ -298,7 +298,7 @@ async function handleViewsRefresh(result: RefreshResult<ProfileViewsSnapshot>): 
 
 /** Both daily metrics share the trigger but refresh (and fail) independently. */
 function refreshMetricsIfDue(): void {
-  refreshMetricsIfDue()
+  void refresher.refreshIfDue().then(handleRefresh)
   void viewsRefresher.refreshIfDue().then(handleViewsRefresh)
 }
 

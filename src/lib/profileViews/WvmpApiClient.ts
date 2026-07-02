@@ -5,13 +5,14 @@ import { parseWvmpRsc, type RawProfileViews } from './wvmpParser'
 import { WVMP_URL, WVMP_REQUEST_BODY } from './wvmpRequest'
 
 /**
- * Primary WVMP source: POST the SDUI `sduiid=WvmpAnalytics` server-request from
- * the service worker with `credentials:'include'` (browser attaches the HttpOnly
- * session cookies) + the `csrf-token` header (JSESSIONID). Mirrors the SSI API
- * client, but the response is an RSC text payload, so it parses via `parseWvmpRsc`.
+ * WVMP source: POST the SDUI `sduiid=WvmpAnalytics` server-request from the service
+ * worker with `credentials:'include'` (browser attaches the HttpOnly session
+ * cookies) + the `csrf-token` header (JSESSIONID). Mirrors the SSI API client, but
+ * the response is an RSC text payload, so it parses via `parseWvmpRsc`.
  *
  * Throws (never returns a fake 0) when logged out or when the count can't be
- * parsed — the refresh service reports the error and the metric stays unknown.
+ * parsed — the refresh service reports the error and the metric stays unknown
+ * (honest degradation) rather than showing a wrong number.
  */
 export class WvmpApiClient implements SnapshotSource<ProfileViewsSnapshot> {
   constructor(

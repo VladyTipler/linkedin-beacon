@@ -1,6 +1,5 @@
 import type { ProfileViewsSnapshot } from '../types'
-
-const DAY_MS = 86_400_000
+import { daysBetween } from '../history/dailyHistory'
 
 export interface ViewsProgress {
   /** True once there are ≥2 snapshots to compare (otherwise no honest delta). */
@@ -54,11 +53,4 @@ export function computeViewsProgress(history: readonly ProfileViewsSnapshot[]): 
     windowDays: to.windowDays,
     values: history.map((s) => s.count)
   }
-}
-
-function daysBetween(a: string, b: string): number {
-  const ta = Date.parse(a)
-  const tb = Date.parse(b)
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return 0
-  return Math.max(0, Math.round(Math.abs(tb - ta) / DAY_MS))
 }

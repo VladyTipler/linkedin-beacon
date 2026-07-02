@@ -1,17 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SsiRepository } from './SsiRepository'
-import type { KeyValueStore } from '../ports'
 import type { SsiSnapshot } from '../types'
-
-class FakeStore implements KeyValueStore {
-  private data = new Map<string, unknown>()
-  async get<T>(key: string): Promise<T | null> {
-    return (this.data.get(key) as T) ?? null
-  }
-  async set<T>(key: string, value: T): Promise<void> {
-    this.data.set(key, value)
-  }
-}
+import { FakeStore } from './fakeStore'
 
 function snap(total: number, at: string): SsiSnapshot {
   return {

@@ -1,18 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { SnapshotRefreshService, type SnapshotSource } from './BackgroundRefreshService'
 import { RefreshPolicy } from './RefreshPolicy'
-import type { KeyValueStore, Clock } from '../ports'
+import type { Clock } from '../ports'
 import type { ProfileViewsSnapshot } from '../types'
+import { FakeStore } from '../storage/fakeStore'
 
-class FakeStore implements KeyValueStore {
-  data = new Map<string, unknown>()
-  async get<T>(key: string): Promise<T | null> {
-    return (this.data.get(key) as T) ?? null
-  }
-  async set<T>(key: string, value: T): Promise<void> {
-    this.data.set(key, value)
-  }
-}
 const clockAt = (iso: string): Clock => ({ now: () => new Date(iso) })
 const source = (raw: Omit<ProfileViewsSnapshot, 'capturedAt'>): SnapshotSource<ProfileViewsSnapshot> => ({
   fetchSnapshot: async () => raw

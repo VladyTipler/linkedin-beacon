@@ -1,6 +1,5 @@
 import type { SsiSnapshot, SsiPillarKey } from '../types'
-
-const DAY_MS = 86_400_000
+import { DAY_MS, daysBetween } from '../history/dailyHistory'
 
 export interface PillarDelta {
   key: SsiPillarKey
@@ -121,13 +120,6 @@ function diffPillars(from: SsiSnapshot, to: SsiSnapshot): PillarDelta[] {
       delta: round1(p.score - before)
     }
   })
-}
-
-function daysBetween(a: string, b: string): number {
-  const ta = Date.parse(a)
-  const tb = Date.parse(b)
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return 0
-  return Math.max(0, Math.round(Math.abs(tb - ta) / DAY_MS))
 }
 
 function round1(n: number): number {

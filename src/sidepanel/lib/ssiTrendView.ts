@@ -39,3 +39,22 @@ export function deltaLabel(delta: number): string {
   const abs = Math.abs(r)
   return `${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}`
 }
+
+/** Correct Russian plural for "день" — 1 день, 2–4 дня, 5–20 дней, 21 день, 22–24 дня… */
+export function pluralDays(n: number): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return 'день'
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'дня'
+  return 'дней'
+}
+
+/** "3 дня", "21 день", "90 дней" — a count of days with the correct plural. */
+export function daysLabel(n: number): string {
+  return `${n} ${pluralDays(n)}`
+}
+
+/** Span between baseline and latest, e.g. "сегодня", "за 1 день", "за 22 дня". */
+export function spanLabel(spanDays: number): string {
+  return spanDays <= 0 ? 'сегодня' : `за ${daysLabel(spanDays)}`
+}

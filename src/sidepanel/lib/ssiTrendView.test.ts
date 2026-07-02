@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sparklinePoints, deltaArrow, deltaLabel } from './ssiTrendView'
+import { sparklinePoints, deltaArrow, deltaLabel, pluralDays, spanLabel } from './ssiTrendView'
 
 describe('sparklinePoints', () => {
   it('returns empty for no values or bad dimensions', () => {
@@ -39,5 +39,26 @@ describe('deltaLabel', () => {
     expect(deltaLabel(-2)).toBe('−2')
     expect(deltaLabel(0)).toBe('0')
     expect(deltaLabel(0.04)).toBe('0') // rounds to 0
+  })
+})
+
+describe('pluralDays / spanLabel', () => {
+  it('picks the correct Russian plural, including the 11-14 and 21-24 traps', () => {
+    expect(pluralDays(1)).toBe('день')
+    expect(pluralDays(2)).toBe('дня')
+    expect(pluralDays(4)).toBe('дня')
+    expect(pluralDays(5)).toBe('дней')
+    expect(pluralDays(11)).toBe('дней') // trap: 11 is not "день"
+    expect(pluralDays(14)).toBe('дней')
+    expect(pluralDays(21)).toBe('день') // trap: prior "d<5" rule said "дней"
+    expect(pluralDays(22)).toBe('дня')
+    expect(pluralDays(90)).toBe('дней')
+  })
+
+  it('labels the span honestly', () => {
+    expect(spanLabel(0)).toBe('сегодня')
+    expect(spanLabel(1)).toBe('за 1 день')
+    expect(spanLabel(22)).toBe('за 22 дня')
+    expect(spanLabel(90)).toBe('за 90 дней')
   })
 })

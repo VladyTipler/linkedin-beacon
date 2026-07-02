@@ -16,7 +16,7 @@ import { enabledModules } from '@lib/autopilot/startGate'
 
 const { active, go } = useNavigation()
 const { snapshot, history, pillars, total, isReal, refreshing, refresh } = useSsi()
-const { history: pvHistory } = useProfileViews()
+const { history: pvHistory, isReal: pvIsReal } = useProfileViews()
 const { modules, toggle, setLimit } = useModules()
 const {
   status: autopilotStatus,
@@ -44,6 +44,7 @@ function pauseAll() {
         :total="total"
         :history="history"
         :pv-history="pvHistory"
+        :pv-is-real="pvIsReal"
         :is-real="isReal"
         :refreshing="refreshing"
         :autopilot-running="autopilotStatus?.running ?? false"

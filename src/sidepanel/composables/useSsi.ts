@@ -35,7 +35,12 @@ export function useSsi() {
         repo.latest().catch(() => null),
         repo.history().catch(() => [])
       ])
-      if (hist.length) history.value = hist
+      // Mark real BEFORE apply so the loaded persisted history is merged into, not
+      // discarded (apply folds into [] while isReal is still false).
+      if (hist.length) {
+        history.value = hist
+        isReal.value = true
+      }
       if (latest) apply(latest)
       // Opening the panel triggers a background refresh if the daily cadence is
       // due — so data stays fresh regardless of which page the user is on.

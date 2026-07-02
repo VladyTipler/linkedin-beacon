@@ -17,6 +17,7 @@ const props = defineProps<{
   total: number
   history: SsiSnapshot[]
   pvHistory: ProfileViewsSnapshot[]
+  pvIsReal: boolean
   isReal: boolean
   refreshing: boolean
   autopilotRunning?: boolean
@@ -111,7 +112,7 @@ const recentSpan = computed(() => {
     <SsiTrend :history="history" />
 
     <div class="sect-lbl">Просмотры профиля</div>
-    <ProfileViewsTrend :history="pvHistory" />
+    <ProfileViewsTrend :history="pvHistory" :is-real="pvIsReal" />
 
     <div class="sect-lbl">Автопилот · сегодня</div>
     <div class="ap-live" :class="{ idle: !autopilotRunning }" data-testid="ap-running">

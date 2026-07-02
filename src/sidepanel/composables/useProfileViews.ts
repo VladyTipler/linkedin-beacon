@@ -33,7 +33,12 @@ export function useProfileViews() {
         repo.latest().catch(() => null),
         repo.history().catch(() => [])
       ])
-      if (hist.length) history.value = hist
+      // Mark real BEFORE apply so the freshly-loaded persisted history is merged
+      // into, not discarded (apply folds into [] while isReal is still false).
+      if (hist.length) {
+        history.value = hist
+        isReal.value = true
+      }
       if (last) apply(last)
       // The panel's REQUEST_REFRESH (also sent by useSsi) triggers BOTH daily
       // metrics in the SW; policy-gated + single-flight, so a second send is a no-op.

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { SsiSnapshot, SsiPillarKey } from '@lib/types'
 import { computeProgress, pillarSeries } from '@lib/ssi/ssiProgress'
-import { sparklinePoints, deltaArrow, deltaLabel } from '../lib/ssiTrendView'
+import { sparklinePoints, deltaArrow, deltaLabel, spanLabel as spanLabelFor } from '../lib/ssiTrendView'
 
 const props = defineProps<{ history: SsiSnapshot[] }>()
 
@@ -43,12 +43,7 @@ const totalLabel = computed(() => deltaLabel(progress.value.totalDelta))
 const totalCls = computed(() =>
   progress.value.totalDelta > 0 ? 'up' : progress.value.totalDelta < 0 ? 'down' : 'flat'
 )
-const spanLabel = computed(() => {
-  const d = progress.value.spanDays
-  if (d <= 0) return 'сегодня'
-  if (d === 1) return 'за 1 день'
-  return `за ${d} ${d < 5 ? 'дня' : 'дней'}`
-})
+const spanLabel = computed(() => spanLabelFor(progress.value.spanDays))
 </script>
 
 <template>

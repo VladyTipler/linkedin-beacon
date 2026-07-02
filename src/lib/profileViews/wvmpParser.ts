@@ -1,6 +1,6 @@
 import type { ProfileViewsSnapshot } from '../types'
 
-/** Snapshot shape before the capturedAt timestamp is stamped (both sources emit this). */
+/** Snapshot shape before the capturedAt timestamp is stamped. */
 export type RawProfileViews = Omit<ProfileViewsSnapshot, 'capturedAt'>
 
 const LABEL = /profile viewers in the past (\d+) days/i
@@ -13,21 +13,12 @@ function tokenizeRsc(text: string): string[] {
   return [...text.matchAll(CHILDREN_TOKEN)].map((m) => m[1])
 }
 
-/** Tokens from rendered DOM innerText: trimmed non-empty lines. */
-function tokenizeDom(text: string): string[] {
-  return text
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
-
 /**
- * Shared core (SRP/DRY): from an ordered token list, find the WVMP label
- * ("Profile viewers in the past N days") and take the NEAREST PRECEDING
- * pure-number token as the count. This ignores distractor numbers elsewhere on
- * the page (notification badges, "4 recruiters", CSS values). Returns null if
- * the anchor is absent — the caller then leaves the metric unknown rather than
- * inventing a zero. Pure.
+ * From the ordered token list, find the WVMP label ("Profile viewers in the past
+ * N days") and take the NEAREST PRECEDING pure-number token as the count. This
+ * ignores distractor numbers elsewhere on the page (notification badges, "4
+ * recruiters", CSS values). Returns null if the anchor is absent — the caller
+ * then leaves the metric unknown rather than inventing a zero. Pure.
  */
 function extractFromTokens(tokens: string[]): RawProfileViews | null {
   const labelIdx = tokens.findIndex((t) => LABEL.test(t))
@@ -44,16 +35,9 @@ function extractFromTokens(tokens: string[]): RawProfileViews | null {
 
 /**
  * Parse the WVMP count from the SDUI server-request (`sduiid=WvmpAnalytics`) RSC
- * response — the PRIMARY, background source (no tab needed).
+ * response — the metric's only source (LinkedIn exposes no clean JSON endpoint for
+ * it; the number lives in the RSC flight payload next to its label).
  */
 export function parseWvmpRsc(text: string): RawProfileViews | null {
   return extractFromTokens(tokenizeRsc(text))
-}
-
-/**
- * Parse the WVMP count from the rendered analytics page's innerText — the DOM
- * FALLBACK for when the SDUI contract drifts.
- */
-export function parseWvmpDom(innerText: string): RawProfileViews | null {
-  return extractFromTokens(tokenizeDom(innerText))
 }

@@ -1,17 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ProfileViewsRepository } from './ProfileViewsRepository'
-import type { KeyValueStore } from '../ports'
 import type { ProfileViewsSnapshot } from '../types'
-
-class FakeStore implements KeyValueStore {
-  data = new Map<string, unknown>()
-  async get<T>(key: string): Promise<T | null> {
-    return (this.data.get(key) as T) ?? null
-  }
-  async set<T>(key: string, value: T): Promise<void> {
-    this.data.set(key, value)
-  }
-}
+import { FakeStore } from './fakeStore'
 
 function snap(count: number, at: string): ProfileViewsSnapshot {
   return { count, windowDays: 90, capturedAt: at }
