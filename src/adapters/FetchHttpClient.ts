@@ -1,5 +1,6 @@
 import type { HttpClient } from '@lib/llm/contracts'
 import type { JsonHttpGet } from '@lib/ssi-api/contracts'
+import type { HttpPostText } from '@lib/profileViews/contracts'
 
 /**
  * Thin edge adapter: the only place we touch the global `fetch`. No unit tests
@@ -11,7 +12,7 @@ import type { JsonHttpGet } from '@lib/ssi-api/contracts'
  * cookies (li_at etc., which are HttpOnly and unreadable from JS) — this is
  * what lets us call `/sales-api/*` authenticated, with host_permissions granted.
  */
-export class FetchHttpClient implements HttpClient, JsonHttpGet {
+export class FetchHttpClient implements HttpClient, JsonHttpGet, HttpPostText {
   async postJson<TResponse>(
     url: string,
     body: unknown,
@@ -43,5 +44,28 @@ export class FetchHttpClient implements HttpClient, JsonHttpGet {
       throw new Error(`HTTP ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`)
     }
     return (await res.json()) as TResponse
+  }
+
+  /**
+   * Authenticated POST returning the raw text body — for LinkedIn's SDUI
+   * server-request (WVMP), whose response is an RSC flight payload, not JSON.
+   * `credentials: 'include'` attaches the session cookies (host_permissions).
+   */
+  async postText(
+    url: string,
+    headers: Record<string, string>,
+    body: string
+  ): Promise<string> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body,
+      credentials: 'include'
+    })
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      throw new Error(`HTTP ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`)
+    }
+    return res.text()
   }
 }

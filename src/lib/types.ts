@@ -308,6 +308,8 @@ export type BeaconMessage =
   | { type: 'SSI_SNAPSHOT'; payload: SsiSnapshot }
   /** content → SW: page is not an SSI page / parse failed. */
   | { type: 'SSI_PARSE_FAILED'; reason: string }
+  /** SW → sidepanel: a fresh incoming profile-views (WVMP) snapshot. */
+  | { type: 'PROFILE_VIEWS_SNAPSHOT'; payload: ProfileViewsSnapshot }
   /** sidepanel → content: harvest feed posts (read-only). */
   | { type: 'REQUEST_FEED_HARVEST'; limit: number }
   /** content → sidepanel: harvested feed items. */

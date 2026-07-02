@@ -381,6 +381,7 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     // Outbound / SW-only / sidepanel-only — content never handles these.
     case 'SSI_SNAPSHOT':
     case 'SSI_PARSE_FAILED':
+    case 'PROFILE_VIEWS_SNAPSHOT':
     case 'FEED_ITEMS':
     case 'REQUEST_REFRESH':
     case 'FORCE_REFRESH':

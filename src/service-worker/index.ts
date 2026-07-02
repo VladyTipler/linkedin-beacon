@@ -13,7 +13,9 @@ import { ChromeAlarmScheduler } from '@/adapters/ChromeAlarmScheduler'
 import { randomId } from '@/adapters/randomId'
 import { LinkedInSsiApiClient } from '@lib/ssi-api/LinkedInSsiApiClient'
 import { RefreshPolicy } from '@lib/refresh/RefreshPolicy'
-import { BackgroundRefreshService, type RefreshResult } from '@lib/refresh/BackgroundRefreshService'
+import { BackgroundRefreshService, SnapshotRefreshService, type RefreshResult } from '@lib/refresh/BackgroundRefreshService'
+import { ProfileViewsRepository } from '@lib/storage/ProfileViewsRepository'
+import { WvmpApiClient } from '@lib/profileViews/WvmpApiClient'
 import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { QuarantineQueue } from '@lib/gate/QuarantineQueue'
 import { ChromeWindows } from '@/adapters/ChromeWindows'
@@ -42,6 +44,7 @@ import type {
   HarvestResult,
   ModuleId,
   ModuleOutcome,
+  ProfileViewsSnapshot,
   RunReport,
   StartAutopilotResult,
   StopReason
@@ -60,6 +63,18 @@ const refresher = new BackgroundRefreshService({
   apiClient: new LinkedInSsiApiClient(new FetchHttpClient(), new ChromeCookieCsrfProvider()),
   store,
   clock
+})
+
+// Incoming profile-views (WVMP) — same daily cadence as SSI (one analytics touch
+// a day), but an INDEPENDENT instance with its own refresh key, so a WVMP failure
+// never disturbs the SSI refresh.
+const pvRepo = new ProfileViewsRepository(store)
+const viewsRefresher = new SnapshotRefreshService<ProfileViewsSnapshot>({
+  policy: new RefreshPolicy(REFRESH_INTERVAL_MS),
+  apiClient: new WvmpApiClient(new FetchHttpClient(), new ChromeCookieCsrfProvider()),
+  store,
+  clock,
+  lastRefreshKey: 'profileViews:lastRefreshAt'
 })
 
 const quarantine = new QuarantineQueue({
@@ -275,20 +290,32 @@ async function handleRefresh(result: RefreshResult): Promise<void> {
   broadcast({ type: 'SSI_SNAPSHOT', payload: result.snapshot })
 }
 
+async function handleViewsRefresh(result: RefreshResult<ProfileViewsSnapshot>): Promise<void> {
+  if (result.status !== 'refreshed') return
+  await pvRepo.save(result.snapshot)
+  broadcast({ type: 'PROFILE_VIEWS_SNAPSHOT', payload: result.snapshot })
+}
+
+/** Both daily metrics share the trigger but refresh (and fail) independently. */
+function refreshMetricsIfDue(): void {
+  refreshMetricsIfDue()
+  void viewsRefresher.refreshIfDue().then(handleViewsRefresh)
+}
+
 // ── Lifecycle. ──
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
   chrome.alarms.create(REFRESH_ALARM, { periodInMinutes: 6 * 60 })
-  void refresher.refreshIfDue().then(handleRefresh)
+  refreshMetricsIfDue()
 })
 
 chrome.runtime.onStartup.addListener(() => {
-  void refresher.refreshIfDue().then(handleRefresh)
+  refreshMetricsIfDue()
 })
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REFRESH_ALARM) {
-    void refresher.refreshIfDue().then(handleRefresh)
+    refreshMetricsIfDue()
   }
   // QUARANTINE_ALARM_PREFIX branch removed with the campaign orchestrator.
   // Phase-1 quarantine is list/cancel only; execution will be re-wired in Phase 2.
@@ -316,11 +343,12 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       return false
 
     case 'REQUEST_REFRESH':
-      void refresher.refreshIfDue().then(handleRefresh)
+      refreshMetricsIfDue()
       return false
 
     case 'FORCE_REFRESH':
       void refresher.refreshNow().then(handleRefresh)
+      void viewsRefresher.refreshNow().then(handleViewsRefresh)
       return false
 
     case 'LIST_MODELS':
