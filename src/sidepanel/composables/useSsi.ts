@@ -4,7 +4,8 @@ import { SsiRepository } from '@lib/storage/SsiRepository'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
 import { panelBus } from '../lib/panelBus'
 import { pillarsToView } from '../lib/ssiView'
-import { DEMO_SSI } from '../lib/demo'
+import { DEMO_SSI, DEMO_SSI_HISTORY } from '../lib/demo'
+import { upsertDailySnapshot } from '@lib/ssi/ssiHistory'
 
 /**
  * Owns the SSI snapshot lifecycle for the panel: load persisted latest,
@@ -12,6 +13,7 @@ import { DEMO_SSI } from '../lib/demo'
  */
 export function useSsi() {
   const snapshot = ref<SsiSnapshot>(DEMO_SSI)
+  const history = ref<SsiSnapshot[]>(DEMO_SSI_HISTORY)
   const isReal = ref(false)
   const refreshing = ref(false)
 
@@ -20,13 +22,20 @@ export function useSsi() {
 
   const apply = (snap: SsiSnapshot) => {
     snapshot.value = snap
+    // Keep the panel's history in sync with fresh parses (day-bucketed, latest wins),
+    // so the trend updates live without waiting for a reload.
+    history.value = upsertDailySnapshot(isReal.value ? history.value : [], snap)
     isReal.value = true
     refreshing.value = false
   }
 
   onMounted(async () => {
     if (panelBus.available()) {
-      const latest = await repo.latest().catch(() => null)
+      const [latest, hist] = await Promise.all([
+        repo.latest().catch(() => null),
+        repo.history().catch(() => [])
+      ])
+      if (hist.length) history.value = hist
       if (latest) apply(latest)
       // Opening the panel triggers a background refresh if the daily cadence is
       // due — so data stays fresh regardless of which page the user is on.
@@ -50,5 +59,5 @@ export function useSsi() {
   const pillars = computed(() => pillarsToView(snapshot.value))
   const total = computed(() => snapshot.value.total)
 
-  return { snapshot, pillars, total, isReal, refreshing, refresh }
+  return { snapshot, history, pillars, total, isReal, refreshing, refresh }
 }

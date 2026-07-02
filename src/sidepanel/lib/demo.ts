@@ -18,6 +18,34 @@ export const DEMO_SSI: SsiSnapshot = {
   capturedAt: '2026-06-23T00:00:00.000Z'
 }
 
+/**
+ * Seed SSI history so the trend widget is showcased in demo mode (no chrome.storage).
+ * Replaced by real day-bucketed history the moment the extension runs. NOT real data.
+ */
+export const DEMO_SSI_HISTORY: SsiSnapshot[] = [
+  {
+    total: 68,
+    pillars: [
+      { key: 'brand', label: 'Профессиональный бренд', score: 15 },
+      { key: 'people', label: 'Поиск нужных людей', score: 14 },
+      { key: 'insights', label: 'Обмен инсайтами', score: 24 },
+      { key: 'relationships', label: 'Построение связей', score: 15 }
+    ],
+    capturedAt: '2026-06-09T00:00:00.000Z'
+  },
+  {
+    total: 74,
+    pillars: [
+      { key: 'brand', label: 'Профессиональный бренд', score: 17 },
+      { key: 'people', label: 'Поиск нужных людей', score: 15 },
+      { key: 'insights', label: 'Обмен инсайтами', score: 25 },
+      { key: 'relationships', label: 'Построение связей', score: 17 }
+    ],
+    capturedAt: '2026-06-16T00:00:00.000Z'
+  },
+  DEMO_SSI
+]
+
 /** Placeholder inbound interest — real detection lands in a later phase. */
 export const DEMO_LEADS: InboundLead[] = [
   { id: '1', name: 'Anna K.', role: 'Tech Recruiter · Revolut', signal: 'messaged' },

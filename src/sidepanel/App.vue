@@ -14,7 +14,7 @@ import { useAutopilot } from './composables/useAutopilot'
 import { enabledModules } from '@lib/autopilot/startGate'
 
 const { active, go } = useNavigation()
-const { snapshot, pillars, total, isReal, refreshing, refresh } = useSsi()
+const { snapshot, history, pillars, total, isReal, refreshing, refresh } = useSsi()
 const { modules, toggle, setLimit } = useModules()
 const {
   status: autopilotStatus,
@@ -40,6 +40,7 @@ function pauseAll() {
         :snapshot="snapshot"
         :pillars="pillars"
         :total="total"
+        :history="history"
         :is-real="isReal"
         :refreshing="refreshing"
         :autopilot-running="autopilotStatus?.running ?? false"
