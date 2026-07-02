@@ -26,6 +26,21 @@ export interface SsiSnapshot {
   capturedAt: string
 }
 
+/**
+ * Incoming "who viewed my profile" (WVMP) metric — a rolling-window count that
+ * LinkedIn shows free ("Profile viewers in the past N days"). `windowDays` is
+ * kept so the UI can label the number honestly and never paint a rolling-window
+ * dip as a real decline. Distinct from the outgoing `views` action module.
+ */
+export interface ProfileViewsSnapshot {
+  /** Viewers in the rolling window (LinkedIn's headline WVMP number). */
+  count: number
+  /** Rolling window length in days (e.g. 90) — for an honest "за N дней" label. */
+  windowDays: number
+  /** ISO timestamp of when this snapshot was captured. */
+  capturedAt: string
+}
+
 /** Per-module automation trust level (design-spec §5.5). */
 export type AutomationLevel = 'manual' | 'auto_guardrails' | 'full_auto'
 
