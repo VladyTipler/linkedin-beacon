@@ -5,7 +5,7 @@
 import { createSsiParser } from '@lib/ssi/createSsiParser'
 import { FeedReader } from '@lib/feed/FeedReader'
 import { FeedAccumulator } from '@lib/feed/FeedAccumulator'
-import { ScrollHarvestPolicy } from '@lib/feed/ScrollHarvestPolicy'
+import { scrollHarvest } from '@lib/feed/scrollHarvest'
 import { LikeFilter } from '@lib/engagement/LikeFilter'
 import { rollComment } from '@lib/engagement/commentRoll'
 import { HumanBreakPolicy } from '@lib/autopilot/HumanBreakPolicy'
@@ -120,24 +120,23 @@ function isPeopleSearchEmpty(): boolean {
   return /no results found/i.test(document.body?.innerText ?? '')
 }
 
-async function harvestByScrolling(target: number): Promise<ReturnType<FeedReader['parse']>> {
-  const acc = new FeedAccumulator()
-  // LinkedIn lazy-loads on scroll and can be slow: generous read pauses (1.5–3s,
-  // also more human) and 3 empty rounds before concluding the feed is exhausted.
-  const policy = new ScrollHarvestPolicy({ maxStaleRounds: 3, maxRounds: 20 })
-  let staleRounds = 0
-  for (let round = 0; ; round++) {
-    // A STOP during a previous tick must abort the harvest immediately — without this the
-    // loop keeps scrolling + sleeping 1.5–3s per round for up to ~45s after the user stopped.
-    if (!autopilotRunning) break
-    const added = acc.add(feed.parse(document))
-    staleRounds = added > 0 ? 0 : staleRounds + 1
-    if (policy.shouldStop({ collected: acc.size(), target, staleRounds, round })) break
-    const scroller = feedScroller()
-    scroller.scrollTop = scroller.scrollHeight // to the bottom → triggers lazy-load
-    await sleep(delay.nextMs(1500, 3000))
-  }
-  return acc.items().slice(0, target)
+// Thin DOM adapter over the tested scrollHarvest. `shouldAbort` defaults to
+// never-abort, so a STANDALONE harvest (manual "Generate ideas", no run active)
+// collects normally; the autopilot loop passes `() => !autopilotRunning` so a STOP
+// aborts its scroll mid-run.
+function harvestByScrolling(
+  target: number,
+  shouldAbort: () => boolean = () => false
+): Promise<ReturnType<FeedReader['parse']>> {
+  return scrollHarvest(target, {
+    parse: () => feed.parse(document),
+    scrollToBottom: () => {
+      const scroller = feedScroller()
+      scroller.scrollTop = scroller.scrollHeight // to the bottom → triggers lazy-load
+    },
+    sleep: () => sleep(delay.nextMs(1500, 3000)),
+    shouldAbort
+  })
 }
 
 const IDEA_TARGET = 25 // unique posts buffered before the one-per-run mid-run extraction
@@ -202,7 +201,7 @@ async function runAutopilotLoop(modules: {
   try {
     while (autopilotRunning) {
       setActivityLabel(idleLabel)
-      const posts = await harvestByScrolling(25)
+      const posts = await harvestByScrolling(25, () => !autopilotRunning)
       // Stop feeding the buffer once we've extracted — nothing reads it after.
       if (wantIdeas && !extractedThisRun) runBuffer.add(posts)
 
