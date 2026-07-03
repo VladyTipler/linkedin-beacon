@@ -1,6 +1,7 @@
 import type { HttpClient } from '@lib/llm/contracts'
 import type { JsonHttpGet } from '@lib/ssi-api/contracts'
 import type { HttpPostText } from '@lib/profileViews/contracts'
+import { HttpError, parseRetryAfterMs } from '@lib/http/HttpError'
 
 /**
  * Thin edge adapter: the only place we touch the global `fetch`. No unit tests
@@ -23,10 +24,7 @@ export class FetchHttpClient implements HttpClient, JsonHttpGet, HttpPostText {
       headers,
       body: JSON.stringify(body)
     })
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '')
-      throw new Error(`HTTP ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`)
-    }
+    if (!res.ok) await this.fail(res)
     return (await res.json()) as TResponse
   }
 
@@ -39,10 +37,7 @@ export class FetchHttpClient implements HttpClient, JsonHttpGet, HttpPostText {
       headers,
       credentials: 'include'
     })
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '')
-      throw new Error(`HTTP ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`)
-    }
+    if (!res.ok) await this.fail(res)
     return (await res.json()) as TResponse
   }
 
@@ -62,10 +57,21 @@ export class FetchHttpClient implements HttpClient, JsonHttpGet, HttpPostText {
       body,
       credentials: 'include'
     })
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '')
-      throw new Error(`HTTP ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`)
-    }
+    if (!res.ok) await this.fail(res)
     return res.text()
+  }
+
+  /**
+   * Throw a typed HttpError carrying the status + any server-advised retry delay
+   * (Retry-After header or a "retry in Xs" hint in the body). Reads the FULL body
+   * for the delay, but keeps the human message short.
+   */
+  private async fail(res: Response): Promise<never> {
+    const detail = await res.text().catch(() => '')
+    throw new HttpError(
+      res.status,
+      `HTTP ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`,
+      parseRetryAfterMs(res.headers.get('retry-after'), detail)
+    )
   }
 }

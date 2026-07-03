@@ -1,6 +1,7 @@
 import type { HttpClient, HttpGet, LlmProvider, LlmProviderConfig, LlmProviderId } from './contracts'
 import { OpenRouterProvider } from './OpenRouterProvider'
 import { GeminiProvider } from './GeminiProvider'
+import { RetryingLlmProvider } from './RetryingLlmProvider'
 
 /**
  * Composition root for the LLM layer. A registry keyed by provider id keeps
@@ -20,5 +21,7 @@ export function createLlmProvider(config: LlmProviderConfig, http: HttpClient & 
   if (!factory) {
     throw new Error(`Unsupported LLM provider: ${config.provider}`)
   }
-  return factory(config, http)
+  // Wrap every provider in transient-failure retry. Direct Gemini's free tier
+  // (5 req/min) returns 429/503 mid-run; a single-shot call fails silently otherwise.
+  return new RetryingLlmProvider(factory(config, http))
 }
