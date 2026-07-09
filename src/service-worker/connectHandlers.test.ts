@@ -79,11 +79,15 @@ describe('runConnectStep', () => {
     expect(d.harvest).not.toHaveBeenCalled()
   })
 
+  // A run reads persisted storage ONLY: no keywords saved → safe no-op + honest report signal.
+  // (The Modules card persists its prefill on open, so a seen-in-the-card value is always saved;
+  // this path is the "card never opened / keywords wiped" case — must not connect on a guess.)
   it('returns early when there are no search keywords', async () => {
     const d = deps()
     d._m.set('connect:settings', { searchKeywords: '' })
     const res = await runConnectStep(d)
     expect(res.reason).toBe('no_keywords')
+    expect(d.navigate).not.toHaveBeenCalled()
   })
 
   it('reports nav_failed when the search page never confirmed loaded', async () => {

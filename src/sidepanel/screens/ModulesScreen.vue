@@ -5,9 +5,8 @@ import ModuleCard from '../components/ModuleCard.vue'
 import EngagementSettingsForm from '../components/EngagementSettingsForm.vue'
 import { useEngagementStats } from '../composables/useEngagementStats'
 import { ChromeStorageStore } from '@/adapters/ChromeStorageStore'
-import { loadConnectSettings, saveConnectSettings, defaultConnectKeywords, DEFAULT_TARGET_REGIONS } from '@lib/connect/settings'
+import { loadConnectSettings, saveConnectSettings, ensureSearchKeywords, DEFAULT_TARGET_REGIONS } from '@lib/connect/settings'
 import { REGION_KEYS } from '@lib/connect/regions'
-import { loadSettings } from '@lib/engagement/settings'
 import { panelBus } from '../lib/panelBus'
 
 defineProps<{ modules: ModuleState[] }>()
@@ -32,9 +31,9 @@ onMounted(async () => {
   if (!panelBus.available()) return
   const s = await loadConnectSettings(store)
   connectRegions.value = s.targetRegions
-  if (s.searchKeywords.trim()) { connectKeywords.value = s.searchKeywords; return }
-  const { expertise } = await loadSettings(store)
-  connectKeywords.value = defaultConnectKeywords(expertise)
+  // Persist the prefill on open so the field never shows keywords a run won't use: ensureSearchKeywords
+  // saves the expertise default when nothing is stored, so what the card displays == what a run reads.
+  connectKeywords.value = await ensureSearchKeywords(store)
 })
 const connectSaved = ref(false)
 function saveConnect() {
