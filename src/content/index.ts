@@ -28,7 +28,7 @@ import {
   pauseLabel,
   breakCountdownLabel
 } from '@lib/autopilot/statusLabels'
-import { assertNever, type BeaconMessage, type FeedItem } from '@lib/types'
+import { assertNever, type BeaconMessage, type FeedItem, type StopReason } from '@lib/types'
 
 const parser = createSsiParser(new SystemClock())
 const source = new DomSsiSource()
@@ -166,7 +166,7 @@ async function ask<T>(message: BeaconMessage): Promise<T | undefined> {
 }
 
 /** Tell the SW to finalize the run (single report; SW guards against double). */
-async function endRun(reason: import('@lib/types').StopReason): Promise<void> {
+async function endRun(reason: StopReason): Promise<void> {
   autopilotRunning = false
   await ask({ type: 'AUTOPILOT_ENDED', reason })
 }
@@ -182,6 +182,12 @@ async function runAutopilotLoop(modules: {
   actionsSinceBreak = 0
   let emptyHarvests = 0
   let extractedThisRun = false
+  // Run the end-of-run idea catch-up ONLY on a natural end (feed exhausted / budget / risk),
+  // never after a user STOP (an extra EXTRACT_RUN_IDEAS re-lights the "Генерирую идеи" overlay
+  // via the SW's withPageActivity — the "still scanning after Stop" bug). Set ONLY by synchronous
+  // loop code at the natural-end points, so the async STOP_AUTOPILOT echo can't stomp it. Gating
+  // the catch-up on `autopilotRunning` (c4981e5) was dead code: endRun() zeroes it before finally.
+  let extractAtEnd = false
   const runBuffer = new FeedAccumulator()
   // Flags are captured per-run (locals, not ambient module state) so a second
   // RUN_LOOP message can't mutate a running loop's behaviour. wantLike never
@@ -217,6 +223,7 @@ async function runAutopilotLoop(modules: {
         const fresh = likeable.filter((p) => !actedUrns.has(p.urn))
         if (fresh.length === 0) {
           if (++emptyHarvests >= 2) {
+            extractAtEnd = true
             await endRun('feed_exhausted')
             break
           }
@@ -229,7 +236,7 @@ async function runAutopilotLoop(modules: {
           const risk = detectRisk()
           if (risk) await ask({ type: 'AUTOPILOT_RISK', marker: risk })
 
-          const decision = await ask<{ action: string; waitMs?: number }>({
+          const decision = await ask<{ action: string; waitMs?: number; reason?: StopReason }>({
             type: 'AUTOPILOT_MAY_ACT',
             actionType: 'like'
           })
@@ -238,6 +245,9 @@ async function runAutopilotLoop(modules: {
             break
           }
           if (decision.action === 'stop') {
+            // budget/risk are natural ends → still worth banking the buffered ideas; only a
+            // user 'manual' stop skips the catch-up (no overlay re-light after Stop).
+            if (decision.reason !== 'manual') extractAtEnd = true
             autopilotRunning = false
             break
           }
@@ -278,6 +288,7 @@ async function runAutopilotLoop(modules: {
           break
         }
         if (++emptyHarvests >= 3) {
+          extractAtEnd = true
           await endRun('feed_exhausted')
           break
         }
@@ -286,10 +297,10 @@ async function runAutopilotLoop(modules: {
   } finally {
     // Catch-up: attempt one extraction at run end if we never did mid-run — even a small
     // buffer is worth banking, and it guarantees ideas:lastRun is written every content-enabled
-    // run (so a 0-result run is visible on the Content tab, not silent). BUT skip it after a
-    // STOP: the user halted, an extra LLM call would keep the loop alive (and the overlay up)
-    // for seconds after they pressed stop — exactly the "still scanning after Stop" bug.
-    if (autopilotRunning && wantIdeas && !extractedThisRun) {
+    // run (so a 0-result run is visible on the Content tab, not silent). `extractAtEnd` is true
+    // only on a NATURAL end (feed exhausted / budget / risk); a user STOP leaves it false so we
+    // don't re-light the overlay with a post-stop LLM call ("still scanning after Stop" bug).
+    if (extractAtEnd && wantIdeas && !extractedThisRun) {
       await ask({ type: 'EXTRACT_RUN_IDEAS', posts: runBuffer.items() })
     }
     autopilotRunning = false
