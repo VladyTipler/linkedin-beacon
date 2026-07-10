@@ -167,4 +167,38 @@ describe('findSubmit', () => {
     expect(submit!.getAttribute('aria-label')).toBeNull() // the submit, not the opener
     expect(block.contains(submit!)).toBe(true)
   })
+
+  // Two open comment boxes under one feed container: post A's submit is ENABLED (its editor
+  // lingered open), post B's is still DISABLED (ProseMirror commit pending). The bug: walking up
+  // from editor B skips B's disabled submit, reaches the shared feed ancestor, and grabs A's
+  // ENABLED submit — so B's comment posts under A. Over a run this piles many DIFFERENT comments
+  // onto ONE post. findSubmit must stay in B's own box: return null (wait for B) — never A's submit.
+  const twoBoxes = () => {
+    const feed = document.createElement('div')
+    feed.innerHTML = `
+      <div class="comment-box">
+        <div class="tiptap ProseMirror" contenteditable="true" data-editor="A">a</div>
+        <div class="actions"><button data-box="A">Comment</button></div>
+      </div>
+      <div class="comment-box">
+        <div class="tiptap ProseMirror" contenteditable="true" data-editor="B">b</div>
+        <div class="actions"><button disabled data-box="B">Comment</button></div>
+      </div>`
+    return feed
+  }
+
+  it('never escapes to a SIBLING post submit while THIS submit is disabled (no comment-pile-on)', () => {
+    const feed = twoBoxes()
+    const editorB = feed.querySelector<HTMLElement>('[data-editor="B"]')!
+    const submit = findSubmit(editorB)
+    expect(submit?.getAttribute('data-box')).not.toBe('A') // must NOT grab post A's submit
+    expect(submit).toBeNull() // stays in B's box → waits for B's own submit to enable
+  })
+
+  it('returns THIS box submit once it enables, ignoring a sibling box', () => {
+    const feed = twoBoxes()
+    feed.querySelector<HTMLButtonElement>('[data-box="B"]')!.disabled = false
+    const editorB = feed.querySelector<HTMLElement>('[data-editor="B"]')!
+    expect(findSubmit(editorB)?.getAttribute('data-box')).toBe('B')
+  })
 })

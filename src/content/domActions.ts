@@ -98,12 +98,19 @@ export async function executeComment(
 export function findSubmit(editor: Element): HTMLElement | null {
   let node: Element | null = editor
   for (let i = 0; i < 8 && node; i++) {
-    const matched = Array.from(node.querySelectorAll<HTMLButtonElement>('button')).filter(
-      (b) => !b.disabled && /^(comment|post|reply)$/i.test((b.textContent ?? '').trim())
+    // ALL submit-text buttons in this ancestor (enabled OR disabled). The FIRST ancestor that
+    // holds one is THIS editor's own comment-box — STOP there. Don't keep walking up past a
+    // disabled submit, or on a shared feed ancestor we'd grab a SIBLING post's still-open enabled
+    // submit and post this comment under the wrong post (the "N comments piled on one post" bug).
+    const submits = Array.from(node.querySelectorAll<HTMLButtonElement>('button')).filter((b) =>
+      /^(comment|post|reply)$/i.test((b.textContent ?? '').trim())
     )
-    if (matched.length) {
-      // submit has no aria-label; the opener does — prefer the unlabeled one.
-      return matched.find((b) => !b.getAttribute('aria-label')) ?? matched[0]
+    if (submits.length) {
+      // While THIS box's submit is still disabled (ProseMirror commit pending), return null so the
+      // caller polls THIS box until it enables — never a sibling's. Submit has no aria-label; the
+      // opener does — prefer the unlabeled one.
+      const enabled = submits.filter((b) => !b.disabled)
+      return enabled.find((b) => !b.getAttribute('aria-label')) ?? enabled[0] ?? null
     }
     node = node.parentElement
   }
