@@ -3,7 +3,7 @@
 > Safety-first браузерное расширение (Chrome MV3) для роста **LinkedIn SSI** по принципу *pull > push*:
 > прокачиваем профиль так, чтобы рекрутёры и клиенты писали сами — а не мы спамим outbound.
 
-**Статус:** v0.8.3 — MVP, live-verified на реальном аккаунте. 536 тестов, билд чистый.
+**Статус:** v0.8.4 — MVP, live-verified на реальном аккаунте. 538 тестов, билд чистый.
 **Демо UI:** https://artifacts.kanev.space/beacon-linkedin-ssi/
 **Дизайн-спека:** https://artifacts.kanev.space/beacon-design-spec/
 
