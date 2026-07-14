@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { runConnectStep } from './connectHandlers'
+import { runConnectStep, runConnectWithFallback } from './connectHandlers'
 import { CONNECT_WEEK_BUDGET_KEY, CONNECT_DAY_BUDGET_KEY } from '@lib/connect/ConnectWeekBudget'
 import { CONNECT_HISTORY_KEY, type ConnectRecord } from '@lib/connect/ConnectHistory'
 import { CONNECT_SENT_KEY } from './connectHandlers'
@@ -214,5 +214,42 @@ describe('runConnectStep', () => {
     const res = await runConnectStep(d) // default source 'search'
     expect(res.reason).toBe('no_keywords')
     expect(d.navigate).not.toHaveBeenCalled()
+  })
+})
+
+describe('runConnectWithFallback', () => {
+  const noHarvest = async () => ({ candidates: [] as PersonCandidate[], outcome: 'empty' as const })
+
+  it('runs PYMK fallback when search yields 0 connects', async () => {
+    const d = deps({ harvest: vi.fn(noHarvest) }) // search пуст
+    const pymkHarvest = vi.fn(async () => ({ candidates: [cand('7'), cand('8')], outcome: 'ok' as const }))
+    const res = await runConnectWithFallback({ ...d, pymkHarvest, nextPage: vi.fn(async () => false) })
+    expect(pymkHarvest).toHaveBeenCalled()
+    expect(d.navigate).toHaveBeenCalledWith('https://www.linkedin.com/mynetwork/grow/')
+    expect(res).toMatchObject({ executed: 2, reason: 'done' })
+  })
+
+  it('does NOT run PYMK when search already connected someone', async () => {
+    const d = deps() // harvest дефолтно 2 connectable
+    const pymkHarvest = vi.fn(noHarvest)
+    const res = await runConnectWithFallback({ ...d, pymkHarvest })
+    expect(pymkHarvest).not.toHaveBeenCalled()
+    expect(res.executed).toBe(2)
+  })
+
+  it('does NOT run PYMK when the module is disabled or budget is 0', async () => {
+    const d = deps({ harvest: vi.fn(noHarvest) })
+    d._m.set('modules:state', [{ id: 'smart_connect', enabled: false, available: true, automationLevel: 'manual', dailyLimit: 100 }])
+    const pymkHarvest = vi.fn(noHarvest)
+    const res = await runConnectWithFallback({ ...d, pymkHarvest })
+    expect(pymkHarvest).not.toHaveBeenCalled()
+    expect(res.reason).toBe('disabled')
+  })
+
+  it('reports pymk_dry when both search and PYMK yield 0', async () => {
+    const d = deps({ harvest: vi.fn(noHarvest) })
+    const pymkHarvest = vi.fn(noHarvest)
+    const res = await runConnectWithFallback({ ...d, pymkHarvest, nextPage: vi.fn(async () => false) })
+    expect(res).toMatchObject({ executed: 0, reason: 'pymk_dry' })
   })
 })

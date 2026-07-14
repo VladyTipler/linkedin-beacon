@@ -155,3 +155,27 @@ export async function runConnectStep(
           : lastFailReason ?? (sawUndefined ? 'unreachable' : 'none_fresh')
   return { executed: sentRecords.length, skipped: 0, reason }
 }
+
+export interface FallbackDeps extends ConnectDeps {
+  /** Scroll-harvest PYMK connectable people (the fallback source). */
+  pymkHarvest: () => Promise<HarvestResult>
+}
+
+/**
+ * Smart Connect with PYMK fallback: run the people-search pass; if it connected NOBODY
+ * (any reason except module-off / no-budget), top up the remaining connect budget from
+ * PYMK (/mynetwork/). Budget/sent-set/history are shared — the PYMK pass re-reads the
+ * (unchanged) budget, so the daily/weekly cap bounds search+PYMK together.
+ */
+export async function runConnectWithFallback(deps: FallbackDeps): Promise<ConnectStepResult> {
+  const search = await runConnectStep(deps)
+  if (search.executed > 0 || search.reason === 'disabled' || search.reason === 'budget') {
+    return search
+  }
+  const pymk = await runConnectStep(
+    { ...deps, harvest: deps.pymkHarvest, nextPage: async () => false },
+    { source: 'pymk' }
+  )
+  if (pymk.executed > 0) return { ...pymk, reason: 'done' }
+  return { executed: 0, skipped: 0, reason: 'pymk_dry' }
+}

@@ -23,7 +23,7 @@ import { DailyCeiling } from '@lib/autopilot/DailyCeiling'
 import { engagementLimit } from '@lib/autopilot/engagementLimit'
 import { decideAutopilotStart, enabledModules, runLoopModules } from '@lib/autopilot/startGate'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
-import { runConnectStep } from './connectHandlers'
+import { runConnectWithFallback } from './connectHandlers'
 import { runViewStep } from './viewHandlers'
 import { loadConnectSettings } from '@lib/connect/settings'
 import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
@@ -564,11 +564,8 @@ async function harvestProfilesPageFrom(tabId: number): Promise<HarvestResult> {
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
 
-// Exported (unlike its harvest*From siblings) because nothing in THIS task calls it yet —
-// wiring the PYMK-fallback decision into runConnectsThen is a follow-up task. `export` keeps
-// `noUnusedLocals` from flagging it dead code in the meantime; drop it once a local caller lands.
 /** Scroll-harvest connectable PYMK people from /mynetwork/ (fallback source). */
-export async function harvestPymkFrom(tabId: number, target: number): Promise<HarvestResult> {
+async function harvestPymkFrom(tabId: number, target: number): Promise<HarvestResult> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PYMK', target }).catch(() => null)
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
@@ -584,7 +581,7 @@ async function runConnectsThen(tabId: number, afterUrl: string, cancelled: () =>
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
   const setActivity = (label: string) => setStage(tabId, label)
-  const res = await runConnectStep({
+  const res = await runConnectWithFallback({
     store, clock, rng,
     navigate: async (url) => {
       const ok = await navigateLinkedInTab(tabId, url)
@@ -595,6 +592,7 @@ async function runConnectsThen(tabId: number, afterUrl: string, cancelled: () =>
     },
     harvest: () => harvestPeoplePageFrom(tabId),
     nextPage: () => nextPeoplePageFrom(tabId),
+    pymkHarvest: () => harvestPymkFrom(tabId, 30),
     connect: async (c) => {
       await setActivity(CONNECTING)
       return chrome.tabs

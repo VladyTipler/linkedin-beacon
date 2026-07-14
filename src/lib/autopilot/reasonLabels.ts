@@ -18,6 +18,7 @@ const REASON_LABEL: Record<string, string> = {
   not_ready: 'страница не успела загрузиться',
   none_fresh: 'все уже обработаны',
   pool_pending: 'все в этом поиске уже приглашены — расширь ключи',
+  pymk_dry: 'и поиск, и рекомендации LinkedIn исчерпаны — попробуй позже',
   pool_dry: 'свежих профилей меньше лимита',
   not_publish_day: 'сегодня не день публикации',
   no_approved_draft: 'нет одобренного черновика',
