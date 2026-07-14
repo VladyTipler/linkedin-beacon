@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { harvestPeople, harvestProfiles, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
 import { PEOPLE_SEARCH_HTML } from './__fixtures__/people-search-card'
+import { PYMK_CARD_HTML } from './__fixtures__/pymk-card'
 import type { PersonCandidate } from '@lib/types'
 
 describe('harvestPeople (real card HTML boundary)', () => {
@@ -22,6 +23,18 @@ describe('harvestPeople (real card HTML boundary)', () => {
   // Connect must NOT try to invite an already-pending person (you can't re-invite).
   it('excludes already-Pending people (no Invite anchor)', () => {
     expect(harvestPeople(document).some((p) => p.name === 'Yulia O.')).toBe(false)
+  })
+})
+
+describe('harvestPeople — PYMK card (button connect control, not anchor)', () => {
+  beforeEach(() => { document.body.innerHTML = PYMK_CARD_HTML })
+
+  it('parses a PYMK card whose Connect control is a <button>', () => {
+    expect(harvestPeople(document)).toEqual([
+      { memberId: '87274562', name: 'Jane Doe',
+        headline: 'Talent Acquisition Specialist | Tech Recruiter',
+        profileUrl: 'https://www.linkedin.com/in/jane-doe-123/' }
+    ])
   })
 })
 

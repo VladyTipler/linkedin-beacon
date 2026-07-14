@@ -1,19 +1,21 @@
 import type { PersonCandidate, HarvestResult } from '@lib/types'
 
-const CONNECT_ANCHOR = 'a[aria-label^="Invite "][aria-label$=" to connect"]'
+// Connect control is an <a> on people-search but a <button> on PYMK (/mynetwork/) — match
+// BOTH by the aria-label + componentkey, which are identical across the two surfaces.
+const CONNECT_CONTROL = '[aria-label^="Invite "][aria-label$=" to connect"]'
 
 /**
- * Parse connectable people from a LinkedIn people-search results DOM.
- * Anchors off the Connect `<a>` (NOT a button), reads memberId from its componentkey,
+ * Parse connectable people from a LinkedIn people-search or PYMK results DOM.
+ * Anchors off the Connect control (`<a>` or `<button>`), reads memberId from its componentkey,
  * walks up to the card to read the headline (the 2nd <p>). Structural, jsdom-safe.
  */
 export function harvestPeople(root: ParentNode): PersonCandidate[] {
   const out: PersonCandidate[] = []
   const seen = new Set<string>()
-  for (const a of root.querySelectorAll<HTMLAnchorElement>(CONNECT_ANCHOR)) {
-    const member = (a.getAttribute('componentkey') ?? '').match(/urn:li:member:(\d+)/)?.[1]
+  for (const el of root.querySelectorAll<HTMLElement>(CONNECT_CONTROL)) {
+    const member = (el.getAttribute('componentkey') ?? '').match(/urn:li:member:(\d+)/)?.[1]
     if (!member || seen.has(member)) continue
-    let card: Element | null = a.parentElement
+    let card: Element | null = el.parentElement
     while (card && !card.querySelector('a[href*="/in/"]')) card = card.parentElement
     if (!card) continue
     const profile = card.querySelector<HTMLAnchorElement>('a[href*="/in/"]')
@@ -21,7 +23,7 @@ export function harvestPeople(root: ParentNode): PersonCandidate[] {
     seen.add(member)
     out.push({
       memberId: member,
-      name: (a.getAttribute('aria-label') ?? '').replace(/^Invite /, '').replace(/ to connect$/, ''),
+      name: (el.getAttribute('aria-label') ?? '').replace(/^Invite /, '').replace(/ to connect$/, ''),
       headline: (ps[1]?.textContent ?? '').trim(),
       profileUrl: (profile?.getAttribute('href') ?? '').split('?')[0]
     })

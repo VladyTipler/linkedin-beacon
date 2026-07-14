@@ -65,7 +65,7 @@ few stable, semantic hooks below. Validated read-only against a live authorised 
 | What | Selector / rule |
 |------|-----------------|
 | Search URL | `https://www.linkedin.com/search/results/people/?keywords=<urlencoded query>` (people vertical) |
-| Connect control | **an `<a>`, NOT a `<button>`**: `a[aria-label^="Invite "][aria-label$=" to connect"]` (text `Connect`). A plain `button[aria-label]` query MISSES it — that's the trap. |
+| Connect control | tag varies by surface — **an `<a>` on people-search, a `<button>` on PYMK** (`/mynetwork/`); harvest with a tag-agnostic `[aria-label^="Invite "][aria-label$=" to connect"]` (text `Connect`). A hardcoded `a[...]` or `button[...]` query MISSES the other surface — that's the trap. |
 | Person id (dedup key) | the connect anchor's `componentkey` = `ConnectButtonstate:invitation:urn:li:member:<numericId>_connect` → use `urn:li:member:<numericId>` |
 | Name | strip `^Invite ` / ` to connect$` from the connect anchor's aria-label |
 | Card root | walk up ~5 ancestors from the connect anchor to the first ancestor that contains an `a[href*="/in/"]` |
