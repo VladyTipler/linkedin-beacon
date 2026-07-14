@@ -17,6 +17,7 @@ import {
 import { CONNECT_HISTORY_KEY, appendConnectHistory, type ConnectRecord } from '@lib/connect/ConnectHistory'
 
 export const CONNECT_SENT_KEY = 'connects:sent'
+export const PYMK_URL = 'https://www.linkedin.com/mynetwork/grow/'
 
 export interface ConnectDeps {
   store: KeyValueStore
@@ -57,7 +58,10 @@ const CONNECT_MAX_PAGES = 5
  * is loaded, so harvesting across pagination then connecting later misses every anchor that
  * isn't on the current page (the connect_anchor_not_found bug). Persist week + day + sent-set.
  */
-export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResult> {
+export async function runConnectStep(
+  deps: ConnectDeps,
+  opts: { source?: 'search' | 'pymk' } = {}
+): Promise<ConnectStepResult> {
   const modulesState = await deps.store.get('modules:state')
   if (!enabledModules(modulesState).some((m) => m.id === 'smart_connect')) {
     return { executed: 0, skipped: 0, reason: 'disabled' }
@@ -77,10 +81,16 @@ export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResu
   const cap = connectRunCap(weeklyRemaining, dailyRemaining, perWeek, deps.rng)
   if (cap <= 0) return { executed: 0, skipped: 0, reason: 'budget' }
 
-  const { searchKeywords, targetRegions } = await loadConnectSettings(deps.store)
-  if (!searchKeywords.trim()) return { executed: 0, skipped: 0, reason: 'no_keywords' }
-
-  const navOk = await deps.navigate(peopleSearchUrl(searchKeywords, geoUrnsForRegions(targetRegions)))
+  const source = opts.source ?? 'search'
+  let url: string
+  if (source === 'pymk') {
+    url = PYMK_URL // PYMK is keyword-free — LinkedIn curates the list
+  } else {
+    const { searchKeywords, targetRegions } = await loadConnectSettings(deps.store)
+    if (!searchKeywords.trim()) return { executed: 0, skipped: 0, reason: 'no_keywords' }
+    url = peopleSearchUrl(searchKeywords, geoUrnsForRegions(targetRegions))
+  }
+  const navOk = await deps.navigate(url)
   if (!navOk) return { executed: 0, skipped: 0, reason: 'nav_failed' }
   const sent = new Set(asArray<string>(await deps.store.get<string[]>(CONNECT_SENT_KEY)))
 

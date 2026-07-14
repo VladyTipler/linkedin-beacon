@@ -198,4 +198,21 @@ describe('runConnectStep', () => {
     expect(d.connect).toHaveBeenCalledTimes(1)
     expect(res.reason).toBe('cancelled')
   })
+
+  it('pymk source navigates to /mynetwork/ and skips the keyword gate', async () => {
+    const d = deps()
+    d._m.set('connect:settings', { searchKeywords: '' }) // нет ключей — не важно для PYMK
+    const res = await runConnectStep(d, { source: 'pymk' })
+    expect(d.navigate).toHaveBeenCalledWith('https://www.linkedin.com/mynetwork/grow/')
+    expect(res.reason).not.toBe('no_keywords')
+    expect(d.connect).toHaveBeenCalledTimes(2) // harvest дефолтно даёт 2
+  })
+
+  it('search source still gates on keywords (unchanged)', async () => {
+    const d = deps()
+    d._m.set('connect:settings', { searchKeywords: '' })
+    const res = await runConnectStep(d) // default source 'search'
+    expect(res.reason).toBe('no_keywords')
+    expect(d.navigate).not.toHaveBeenCalled()
+  })
 })
