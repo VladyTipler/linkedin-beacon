@@ -252,9 +252,14 @@ function findSendNoNote(root: ParentNode): HTMLButtonElement | null {
 }
 
 /**
- * Send a bare connection request to a harvested candidate: click the Connect control
- * (an `<a>` on people-search, a `<button>` on PYMK — located by member id), wait for the
- * shadow invite modal, click "Send without a note", confirm it closed. On failure → Dismiss.
+ * Send a bare connection request to a harvested candidate by clicking the Connect control
+ * (an `<a>` on people-search, a `<button>` on PYMK — located by member id). TWO flows exist
+ * (both verified live):
+ *  - people-search: the click opens the "Send without a note" shadow invite modal → we click
+ *    it and confirm the modal closed.
+ *  - PYMK (/mynetwork/): the click sends the invite DIRECTLY (no modal) and flips the control
+ *    to Pending — we detect that flip and treat it as sent, so the send IS recorded (else the
+ *    ban-safety cap silently leaks, re-invites, misreports).
  * Edge — the real send is exercised live, not in jsdom.
  */
 export async function executeConnect(
@@ -266,17 +271,27 @@ export async function executeConnect(
     `[componentkey*="member:${candidate.memberId}_connect"]`
   )
   if (!anchor) return { ok: false, reason: 'connect_anchor_not_found' }
+  const pendingSelector = `[componentkey*="member:${candidate.memberId}_pending"]`
   anchor.click()
 
-  const send = await waitForValue(() => findSendNoNote(root), 6000)
-  if (!send) {
+  // Race the two flows: whichever appears first wins. The modal (people-search) needs a
+  // second click to send; a Pending flip (PYMK direct-send) means the invite already went out.
+  const outcome = await waitForValue(() => {
+    const send = findSendNoNote(root)
+    if (send) return { kind: 'modal' as const, send }
+    if (root.querySelector(pendingSelector)) return { kind: 'sent' as const }
+    return null
+  }, 6000)
+  if (!outcome) {
     ;(root.querySelector(SHADOW_HOST) as HTMLElement | null)?.shadowRoot
       ?.querySelector<HTMLElement>(INVITE_DISMISS)
       ?.click()
     return { ok: false, reason: 'send_button_not_found' }
   }
+  if (outcome.kind === 'sent') return { ok: true } // PYMK direct-send: invite already sent
+
   await sleep(delay.nextMs(300, 900)) // brief human pause before sending
-  send.click()
+  outcome.send.click()
 
   const closed = await waitForCond(() => findSendNoNote(root) === null, 6000)
   if (!closed) return { ok: false, reason: 'modal_did_not_close' }

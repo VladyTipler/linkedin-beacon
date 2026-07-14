@@ -96,6 +96,15 @@ resource** on free; **bare "Send without a note" is the unlimited default** (onl
 overall weekly invite cap applies). V1 sends bare; notes (if ever) need a separate tiny
 *monthly* budget for top targets.
 
+**⚠️ PYMK (`/mynetwork/grow/`) connect flow — DIRECT-SEND, no modal (verified live 2026-07-14):**
+Unlike people-search, clicking a PYMK Connect `<button>` **sends the bare invite IMMEDIATELY** —
+NO "Send without a note" shadow modal renders. The control flips `…_connect` → `…_pending` on
+the card in place. So `executeConnect` must race BOTH outcomes: the modal (people-search) OR a
+Pending flip (`[componentkey*="member:<id>_pending"]`, PYMK). Treat the flip as "sent" and record
+it — otherwise the invite goes out but the ban-safety cap never decrements. Withdraw path (for
+reference): `/mynetwork/invitation-manager/sent/` → per-row `Withdraw` → confirm dialog
+`button[aria-label^="Withdraw invitation sent to "]`.
+
 > Same shadow-DOM gotchas as the composer apply: pierce strictly via `#interop-outlet.shadowRoot`,
 > the modal renders async (poll the Send button's `disabled`), re-query nodes (held refs can
 > go stale on re-render). Capture: read-only `agent-browser --cdp 9222` eval; nothing was sent.

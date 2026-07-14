@@ -77,3 +77,34 @@ describe('executeConnect (PYMK button control)', () => {
     expect(wasSendClicked()).toBe(true)
   })
 })
+
+/**
+ * PYMK (/mynetwork/) DIRECT-SEND flow (verified live 2026-07-14): clicking the Connect button
+ * sends the invite immediately with NO "Send without a note" modal, and the control flips to
+ * `…_pending`. executeConnect must detect that flip and report ok — else the send is real but
+ * never recorded (ban-cap leak, re-invites, misreport).
+ */
+function setupDirectSend() {
+  document.body.innerHTML = ''
+  const button = document.createElement('button')
+  button.setAttribute('componentkey', 'ConnectButtonstate:invitation:urn:li:member:55_connect')
+  button.setAttribute('aria-label', 'Invite Test User to connect')
+  document.body.appendChild(button)
+  const host = document.createElement('div')
+  host.id = 'interop-outlet'
+  host.attachShadow({ mode: 'open' }) // present, but NO invite modal ever renders
+  document.body.appendChild(host)
+  // The click sends directly: the connect control is replaced by a Pending one, no modal.
+  button.addEventListener('click', () => {
+    button.setAttribute('componentkey', 'ConnectButtonstate:invitation:urn:li:member:55_pending')
+    button.setAttribute('aria-label', 'Pending, click to withdraw invitation sent to Test User')
+  })
+}
+
+describe('executeConnect (PYMK direct-send, no modal)', () => {
+  it('reports ok when the click flips the control to Pending with no modal', async () => {
+    setupDirectSend()
+    const res = await executeConnect(document, { memberId: '55', name: 'Test User' }, delay)
+    expect(res).toEqual({ ok: true })
+  })
+})
