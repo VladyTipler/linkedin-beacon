@@ -263,15 +263,15 @@ describe('runConnectWithFallback', () => {
     expect(res.reason).toBe('cancelled')
   })
 
-  // Safe-no-op stays a no-op: enabled Smart Connect with NO keywords must not auto-send PYMK
-  // invites to people the user never targeted (safety-first, ban-sensitive module).
-  it('does NOT run PYMK when keywords are unset (enabled-but-unconfigured is a safe no-op)', async () => {
+  // Deliberate (Vlad 2026-07-14): an enabled Smart Connect with NO keywords still tops up from
+  // PYMK (which is keyword-free) rather than doing nothing — search's no_keywords falls through.
+  it('DOES run PYMK when keywords are unset (PYMK is keyword-free)', async () => {
     const d = deps()
     d._m.set('connect:settings', { searchKeywords: '' })
-    const pymkHarvest = vi.fn(noHarvest)
-    const res = await runConnectWithFallback({ ...d, pymkHarvest })
-    expect(pymkHarvest).not.toHaveBeenCalled()
-    expect(res.reason).toBe('no_keywords')
+    const pymkHarvest = vi.fn(async () => ({ candidates: [cand('7'), cand('8')], outcome: 'ok' as const }))
+    const res = await runConnectWithFallback({ ...d, pymkHarvest, nextPage: vi.fn(async () => false) })
+    expect(pymkHarvest).toHaveBeenCalled()
+    expect(res).toMatchObject({ executed: 2, reason: 'done' })
   })
 
   // A PYMK nav/DOM failure must surface honestly — not be masked as pymk_dry ("try later").

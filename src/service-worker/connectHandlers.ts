@@ -170,9 +170,9 @@ export interface FallbackDeps extends ConnectDeps {
 // Search-pass reasons that must NOT fall back to PYMK:
 // - disabled/budget: nothing to top up (module off / cap spent).
 // - cancelled: STOP means stop — never navigate to /mynetwork/ and act after the user stopped.
-// - no_keywords: enabled-but-unconfigured is a DELIBERATE safe no-op; auto-sending PYMK invites
-//   the user never targeted would silently flip safe→auto-act in a ban-sensitive module.
-const NO_PYMK_FALLBACK = new Set(['disabled', 'budget', 'cancelled', 'no_keywords'])
+// `no_keywords` DOES fall through to PYMK (deliberate — Vlad, 2026-07-14): an enabled Smart
+// Connect with no keywords still tops up from LinkedIn's own suggestions (PYMK is keyword-free).
+const NO_PYMK_FALLBACK = new Set(['disabled', 'budget', 'cancelled'])
 
 export async function runConnectWithFallback(deps: FallbackDeps): Promise<ConnectStepResult> {
   const search = await runConnectStep(deps)
