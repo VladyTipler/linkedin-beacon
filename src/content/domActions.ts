@@ -252,10 +252,10 @@ function findSendNoNote(root: ParentNode): HTMLButtonElement | null {
 }
 
 /**
- * Send a bare connection request to a harvested candidate: click the Connect `<a>`
- * (located by member id), wait for the shadow invite modal, click "Send without a
- * note", confirm it closed. On failure → Dismiss. Edge — the real send is exercised
- * live, not in jsdom.
+ * Send a bare connection request to a harvested candidate: click the Connect control
+ * (an `<a>` on people-search, a `<button>` on PYMK — located by member id), wait for the
+ * shadow invite modal, click "Send without a note", confirm it closed. On failure → Dismiss.
+ * Edge — the real send is exercised live, not in jsdom.
  */
 export async function executeConnect(
   root: Document,

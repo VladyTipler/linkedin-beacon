@@ -167,15 +167,26 @@ export interface FallbackDeps extends ConnectDeps {
  * PYMK (/mynetwork/). Budget/sent-set/history are shared — the PYMK pass re-reads the
  * (unchanged) budget, so the daily/weekly cap bounds search+PYMK together.
  */
+// Search-pass reasons that must NOT fall back to PYMK:
+// - disabled/budget: nothing to top up (module off / cap spent).
+// - cancelled: STOP means stop — never navigate to /mynetwork/ and act after the user stopped.
+// - no_keywords: enabled-but-unconfigured is a DELIBERATE safe no-op; auto-sending PYMK invites
+//   the user never targeted would silently flip safe→auto-act in a ban-sensitive module.
+const NO_PYMK_FALLBACK = new Set(['disabled', 'budget', 'cancelled', 'no_keywords'])
+
 export async function runConnectWithFallback(deps: FallbackDeps): Promise<ConnectStepResult> {
   const search = await runConnectStep(deps)
-  if (search.executed > 0 || search.reason === 'disabled' || search.reason === 'budget') {
-    return search
-  }
+  if (search.executed > 0 || NO_PYMK_FALLBACK.has(search.reason)) return search
+
   const pymk = await runConnectStep(
     { ...deps, harvest: deps.pymkHarvest, nextPage: async () => false },
     { source: 'pymk' }
   )
   if (pymk.executed > 0) return { ...pymk, reason: 'done' }
-  return { executed: 0, skipped: 0, reason: 'pymk_dry' }
+  // PYMK sent nobody. A genuine PYMK FAILURE (nav_failed / unreachable / a named executeConnect
+  // failure) must surface honestly — NOT be masked as pymk_dry ("try later"), which would hide a
+  // real break (e.g. a PYMK Connect that direct-sends with no modal → send_button_not_found).
+  // Only a genuinely-empty PYMK (empty_search / none_fresh) is pymk_dry.
+  const pymkGenuinelyDry = pymk.reason === 'empty_search' || pymk.reason === 'none_fresh'
+  return { executed: 0, skipped: 0, reason: pymkGenuinelyDry ? 'pymk_dry' : pymk.reason }
 }

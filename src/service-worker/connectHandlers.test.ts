@@ -252,4 +252,37 @@ describe('runConnectWithFallback', () => {
     const res = await runConnectWithFallback({ ...d, pymkHarvest, nextPage: vi.fn(async () => false) })
     expect(res).toMatchObject({ executed: 0, reason: 'pymk_dry' })
   })
+
+  // STOP means stop: a run cancelled during the search pass must NOT then navigate to
+  // /mynetwork/ and act — it reports cancelled, PYMK never runs.
+  it('does NOT run PYMK when the search pass was cancelled (STOP means stop)', async () => {
+    const d = deps({ harvest: vi.fn(noHarvest), cancelled: vi.fn(async () => true) })
+    const pymkHarvest = vi.fn(noHarvest)
+    const res = await runConnectWithFallback({ ...d, pymkHarvest })
+    expect(pymkHarvest).not.toHaveBeenCalled()
+    expect(res.reason).toBe('cancelled')
+  })
+
+  // Safe-no-op stays a no-op: enabled Smart Connect with NO keywords must not auto-send PYMK
+  // invites to people the user never targeted (safety-first, ban-sensitive module).
+  it('does NOT run PYMK when keywords are unset (enabled-but-unconfigured is a safe no-op)', async () => {
+    const d = deps()
+    d._m.set('connect:settings', { searchKeywords: '' })
+    const pymkHarvest = vi.fn(noHarvest)
+    const res = await runConnectWithFallback({ ...d, pymkHarvest })
+    expect(pymkHarvest).not.toHaveBeenCalled()
+    expect(res.reason).toBe('no_keywords')
+  })
+
+  // A PYMK nav/DOM failure must surface honestly — not be masked as pymk_dry ("try later").
+  // (This is what would otherwise hide a PYMK Connect that direct-sends with no modal.)
+  it('surfaces a PYMK connect failure honestly instead of pymk_dry', async () => {
+    const d = deps({ harvest: vi.fn(noHarvest) })
+    const pymkHarvest = vi.fn(async () => ({ candidates: [cand('7')], outcome: 'ok' as const }))
+    const res = await runConnectWithFallback({
+      ...d, pymkHarvest,
+      connect: vi.fn(async () => ({ ok: false, reason: 'send_button_not_found' }))
+    })
+    expect(res.reason).toBe('send_button_not_found')
+  })
 })
