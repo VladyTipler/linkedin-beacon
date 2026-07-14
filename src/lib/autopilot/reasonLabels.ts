@@ -17,6 +17,7 @@ const REASON_LABEL: Record<string, string> = {
   empty_search: 'поиск без результатов',
   not_ready: 'страница не успела загрузиться',
   none_fresh: 'все уже обработаны',
+  pool_pending: 'все в этом поиске уже приглашены — расширь ключи',
   pool_dry: 'свежих профилей меньше лимита',
   not_publish_day: 'сегодня не день публикации',
   no_approved_draft: 'нет одобренного черновика',

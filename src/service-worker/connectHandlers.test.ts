@@ -111,6 +111,37 @@ describe('runConnectStep', () => {
     expect(res).toMatchObject({ executed: 0, reason: 'not_ready' })
   })
 
+  // The saturated-pool bug: over weeks Vlad invited everyone on page 1, so its cards are all
+  // "Pending" → harvest returns none_connectable. The step must NOT bail (that's what left
+  // "connects 0 every run") — it pages deeper to the sparse still-connectable recruiters.
+  it('pages PAST an all-Pending page (none_connectable) to reach connectable people deeper', async () => {
+    let page = 0
+    const outcomes = [
+      { candidates: [] as PersonCandidate[], outcome: 'none_connectable' as const }, // page 1: all Pending
+      { candidates: [cand('3'), cand('4')], outcome: 'ok' as const }                 // page 2: connectable
+    ]
+    const d = deps({
+      harvest: vi.fn(async () => outcomes[page] ?? { candidates: [], outcome: 'empty' as const }),
+      nextPage: vi.fn(async () => { page++; return page < outcomes.length })
+    })
+    const res = await runConnectStep(d)
+    expect(d.connect).toHaveBeenCalledTimes(2)
+    expect(res).toMatchObject({ executed: 2, reason: 'done' })
+  })
+
+  // Whole search saturated: every page all-Pending. Honest reason (not the lying not_ready)
+  // so the report tells Vlad to broaden/rotate keywords instead of "page didn't load".
+  it('reports pool_pending when EVERY walked page is all-Pending (nobody connectable anywhere)', async () => {
+    const d = deps({
+      harvest: vi.fn(async () => ({ candidates: [] as PersonCandidate[], outcome: 'none_connectable' as const })),
+      nextPage: vi.fn(async () => true) // always another page; bounded by CONNECT_MAX_PAGES
+    })
+    const res = await runConnectStep(d)
+    expect(res).toMatchObject({ executed: 0, reason: 'pool_pending' })
+    expect(d.connect).not.toHaveBeenCalled()
+    expect(d.harvest.mock.calls.length).toBeGreaterThan(1) // walked past page 1, up to the cap
+  })
+
   it('reports none_fresh when everyone harvested was already invited', async () => {
     const d = deps()
     d._m.set(CONNECT_SENT_KEY, ['1', '2'])

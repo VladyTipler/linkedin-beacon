@@ -347,8 +347,16 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
     case 'HARVEST_PEOPLE_PAGE':
       // ONE page only (no pagination) — Smart Connect connects per-page, so it harvests the
       // current page, connects its candidates, then asks PEOPLE_NEXT_PAGE to advance.
-      void harvestPeoplePage(() => harvestPeople(document), (ms) => sleep(ms), isPeopleSearchEmpty)
-        .then(sendResponse)
+      // peopleCount = ALL member cards (incl. Pending) → tells "rendered but everyone already
+      // invited" (none_connectable, page deeper) from "not rendered" (not_ready, bail).
+      void harvestPeoplePage(
+        () => harvestPeople(document),
+        (ms) => sleep(ms),
+        isPeopleSearchEmpty,
+        40,
+        500,
+        () => harvestProfiles(document).length
+      ).then(sendResponse)
       return true // async sendResponse
 
     case 'HARVEST_PROFILES_PAGE':

@@ -83,6 +83,45 @@ describe('harvestPeoplePage (wait for the page to render before reading)', () =>
   })
 })
 
+// The Smart Connect harvest keys off the "Invite … to connect" anchor, so a page whose
+// people are ALL already-Pending (invited earlier) parses to zero candidates — but it DID
+// render. Reporting that as not_ready ("page never loaded") is a lie that hides a saturated
+// pool AND makes runConnectStep bail instead of paging deeper. `peopleCount` (count of ALL
+// member cards, incl. Pending — hydrated together with the action buttons) lets the poll tell
+// "rendered but nobody connectable" (none_connectable) from "not rendered yet" (not_ready).
+describe('harvestPeoplePage — none_connectable (rendered, but everyone is already Pending)', () => {
+  const never = () => false
+
+  it('reports none_connectable once people are present AND the count has settled', async () => {
+    // 0 connectable ever; peopleCount holds steady at 10 → hydrated + saturated, not "not_ready"
+    const res = await harvestPeoplePage(() => [], async () => {}, never, 40, 10, () => 10)
+    expect(res).toEqual({ candidates: [], outcome: 'none_connectable' })
+  })
+
+  it('does NOT declare none_connectable mid-hydration — ok wins when a connect anchor hydrates', async () => {
+    // cards render first (count 10 @poll1), a connect anchor hydrates a beat later (@poll2).
+    // Concluding none_connectable the instant cards appear would false-skip this page.
+    let poll = 0
+    const res = await harvestPeoplePage(
+      () => (poll >= 2 ? [c('9')] : []),
+      async () => { poll++ },
+      never, 40, 10,
+      () => (poll >= 1 ? 10 : 0)
+    )
+    expect(res.outcome).toBe('ok')
+  })
+
+  it('still reports not_ready when NO people ever render (peopleCount stays 0)', async () => {
+    const res = await harvestPeoplePage(() => [], async () => {}, never, 3, 10, () => 0)
+    expect(res).toEqual({ candidates: [], outcome: 'not_ready' })
+  })
+
+  it('is backward-compatible: without peopleCount, an unrendered page is still not_ready', async () => {
+    const res = await harvestPeoplePage(() => [], async () => {}, never, 3, 10)
+    expect(res.outcome).toBe('not_ready')
+  })
+})
+
 describe('harvestPeoplePaginated (accumulate across pagination)', () => {
   it('harvests each page, dedups by memberId, advances until there is no next page', async () => {
     const pages = [ok([c('1'), c('2')]), ok([c('2'), c('3')]), ok([c('4')])]

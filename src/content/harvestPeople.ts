@@ -67,23 +67,47 @@ export function harvestProfiles(root: ParentNode): PersonCandidate[] {
  * early-exit so a genuinely-empty search stays fast). If neither shows within the budget,
  * report `not_ready` — the page never rendered (slow/failed nav), which is a DIFFERENT bug
  * from an empty search and must be reported as such. Injectable for unit tests.
+ *
+ * `peopleCount` (optional): count of ALL member cards on the page, connectable or not (i.e.
+ * `harvestProfiles(...).length`). The action buttons hydrate a few seconds after the cards,
+ * and the member componentkey lives ON the button, so `peopleCount > 0` means "buttons
+ * hydrated". When the connectable `harvest()` stays empty but people ARE present, the page is
+ * rendered-but-saturated (everyone already Pending) → `none_connectable`, NOT `not_ready`.
+ * To avoid a false skip while cards hydrate progressively, we only conclude that once the
+ * count has SETTLED (non-zero and unchanged across two polls). Smart Connect passes it;
+ * Profile Views omits it (its harvest already counts all people, so `ok` fires instead).
  */
 export async function harvestPeoplePage(
   harvest: () => PersonCandidate[],
   sleepMs: (ms: number) => Promise<void>,
   isEmptyState: () => boolean,
   attempts = 40,
-  intervalMs = 500
+  intervalMs = 500,
+  peopleCount?: () => number
 ): Promise<HarvestResult> {
+  let prev = -1
+  let stablePolls = 0
+  // People present and the count no longer growing → hydration finished; if harvest() is
+  // still empty here, nobody on the page is connectable (all Pending/already-connected).
+  const settledWithoutConnectable = (): boolean => {
+    if (!peopleCount) return false
+    const n = peopleCount()
+    stablePolls = n > 0 && n === prev ? stablePolls + 1 : 0
+    prev = n
+    return n > 0 && stablePolls >= 2
+  }
   for (let i = 0; i < attempts; i++) {
     const people = harvest()
     if (people.length > 0) return { candidates: people, outcome: 'ok' }
     if (isEmptyState()) return { candidates: [], outcome: 'empty' }
+    if (settledWithoutConnectable()) return { candidates: [], outcome: 'none_connectable' }
     await sleepMs(intervalMs)
   }
   const people = harvest()
   if (people.length > 0) return { candidates: people, outcome: 'ok' }
-  return { candidates: [], outcome: isEmptyState() ? 'empty' : 'not_ready' }
+  if (isEmptyState()) return { candidates: [], outcome: 'empty' }
+  if (peopleCount && peopleCount() > 0) return { candidates: [], outcome: 'none_connectable' }
+  return { candidates: [], outcome: 'not_ready' }
 }
 
 /**

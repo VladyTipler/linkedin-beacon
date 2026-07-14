@@ -22,6 +22,7 @@ describe('reasonHint', () => {
     expect(reasonHint('not_publish_day')).toBe('сегодня не день публикации')
     expect(reasonHint('not_ready')).toBe('страница не успела загрузиться')
     expect(reasonHint('pool_dry')).toBe('свежих профилей меньше лимита')
+    expect(reasonHint('pool_pending')).toBe('все в этом поиске уже приглашены — расширь ключи')
   })
 
   it('falls back to the raw code for an unknown reason (visible, not swallowed)', () => {

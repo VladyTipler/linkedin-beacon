@@ -101,7 +101,10 @@ export interface PersonCandidate {
  * (`not_ready`). Without this the SW only sees an empty array and can't tell a
  * dead search from a slow/failed navigation (see run-report reasons).
  */
-export type HarvestOutcome = 'ok' | 'empty' | 'not_ready'
+// `none_connectable`: the page rendered people, but every one is already Pending/connected —
+// zero "Invite to connect" anchors. Distinct from `not_ready` (page never rendered) so a
+// saturated pool is reported honestly and Smart Connect pages deeper instead of bailing.
+export type HarvestOutcome = 'ok' | 'empty' | 'not_ready' | 'none_connectable'
 
 export interface HarvestResult {
   candidates: PersonCandidate[]

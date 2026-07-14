@@ -41,7 +41,8 @@ export interface ConnectStepResult {
   /**
    * Machine code for WHY the step did what it did — surfaced in the run report so a
    * zero-connect run is never silent. One of: disabled | budget | no_keywords |
-   * nav_failed | empty_search | not_ready | none_fresh | done.
+   * nav_failed | empty_search | not_ready | pool_pending | none_fresh | cancelled |
+   * unreachable | <executeConnect failure> | done.
    */
   reason: string
 }
@@ -88,11 +89,20 @@ export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResu
   let sawUndefined = false
   let cancelled = false
   let sawAnyCandidate = false
+  let sawNoneConnectable = false
   for (let page = 0; page < CONNECT_MAX_PAGES; page++) {
     if (await deps.cancelled()) { cancelled = true; break }
     const { candidates, outcome } = await deps.harvest()
-    if (outcome === 'empty') return { executed: 0, skipped: 0, reason: 'empty_search' }
-    if (outcome === 'not_ready') return { executed: 0, skipped: 0, reason: 'not_ready' }
+    // A dead page ends the walk. On page 0 it's the whole run's reason (empty / never
+    // rendered); deeper, just stop paging and keep whatever earlier pages already connected.
+    if (outcome === 'empty' || outcome === 'not_ready') {
+      if (page === 0) return { executed: 0, skipped: 0, reason: outcome === 'empty' ? 'empty_search' : 'not_ready' }
+      break
+    }
+    // Page rendered but everyone is already Pending/connected — page DEEPER for the sparse
+    // still-connectable recruiters instead of bailing (the saturated-pool bug: page 1 is all
+    // Pending, so returning here left "connects 0" every run). Views already page like this.
+    if (outcome === 'none_connectable') sawNoneConnectable = true
     sawAnyCandidate = sawAnyCandidate || candidates.length > 0
     const fresh = selectCandidates(candidates, sent, cap - sentRecords.length)
     for (const c of fresh) {
@@ -121,14 +131,17 @@ export async function runConnectStep(deps: ConnectDeps): Promise<ConnectStepResu
     await deps.store.set(CONNECT_DAY_BUDGET_KEY, recordConnectDay(dayBudget, sentRecords.length))
     await deps.store.set(CONNECT_HISTORY_KEY, appendConnectHistory(await deps.store.get(CONNECT_HISTORY_KEY), sentRecords))
   }
-  // Reason precedence: cancelled → done (≥1 sent) → none_fresh (page had people, all already sent)
-  // → a named executeConnect failure → unreachable (no response from content) → done fallback.
+  // Reason precedence: cancelled → done (≥1 sent) → pool_pending (walked pages, everyone on
+  // them already invited/Pending) → empty (never saw a candidate) → a named executeConnect
+  // failure → unreachable (no response from content) → none_fresh (all already in the sent-set).
   const reason = cancelled
     ? 'cancelled'
     : sentRecords.length > 0
       ? 'done'
-      : !sawAnyCandidate
-        ? 'empty_search'
-        : lastFailReason ?? (sawUndefined ? 'unreachable' : 'none_fresh')
+      : sawNoneConnectable
+        ? 'pool_pending'
+        : !sawAnyCandidate
+          ? 'empty_search'
+          : lastFailReason ?? (sawUndefined ? 'unreachable' : 'none_fresh')
   return { executed: sentRecords.length, skipped: 0, reason }
 }
