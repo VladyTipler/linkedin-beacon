@@ -145,3 +145,31 @@ export async function harvestPeoplePaginated(
   }
   return { candidates: [...acc.values()], outcome: 'ok' }
 }
+
+/**
+ * Scroll-harvest connectable people from an infinite-scroll surface (PYMK /mynetwork/).
+ * Unlike people-search there is NO pagination — cards lazy-load on scroll. Poll harvest(),
+ * dedup by memberId, scroll, repeat until `target` unique OR `maxStale` empty rounds. Pure.
+ */
+export async function pymkScrollHarvest(
+  harvest: () => PersonCandidate[],
+  scroll: () => Promise<void>,
+  sleepMs: () => Promise<void>,
+  target: number,
+  opts: { maxStale?: number; maxRounds?: number } = {}
+): Promise<HarvestResult> {
+  const { maxStale = 3, maxRounds = 20 } = opts
+  const acc = new Map<string, PersonCandidate>()
+  let stale = 0
+  for (let round = 0; round < maxRounds; round++) {
+    const before = acc.size
+    for (const p of harvest()) if (!acc.has(p.memberId)) acc.set(p.memberId, p)
+    stale = acc.size > before ? 0 : stale + 1
+    if (acc.size >= target || stale >= maxStale) break
+    await scroll()
+    await sleepMs()
+  }
+  return acc.size > 0
+    ? { candidates: [...acc.values()].slice(0, target), outcome: 'ok' }
+    : { candidates: [], outcome: 'empty' }
+}

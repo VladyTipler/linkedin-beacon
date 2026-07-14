@@ -17,7 +17,7 @@ import { MathRandomRng } from '@/adapters/MathRandomRng'
 import { executeComment, executeLike, executeComposerPost, executeConnect } from './domActions'
 import { executeProfileView } from './profileView'
 import { readOwnerName } from './readOwner'
-import { harvestPeople, harvestProfiles, harvestPeoplePage } from './harvestPeople'
+import { harvestPeople, harvestProfiles, harvestPeoplePage, pymkScrollHarvest } from './harvestPeople'
 import { showActivity, hideActivity, setActivityLabel, countdownActivity } from './activityOverlay'
 import {
   SCANNING,
@@ -368,6 +368,17 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
 
     case 'PEOPLE_NEXT_PAGE':
       void goToNextPeoplePage().then(sendResponse)
+      return true // async sendResponse
+
+    case 'HARVEST_PYMK':
+      // PYMK (/mynetwork/) is infinite-scroll — no pagination — so scroll the WHOLE page
+      // (document.scrollingElement), not an inner "main" container like people-search.
+      void pymkScrollHarvest(
+        () => harvestPeople(document),
+        async () => { (document.scrollingElement ?? document.documentElement).scrollTop = (document.scrollingElement ?? document.documentElement).scrollHeight },
+        () => sleep(1200),
+        message.target
+      ).then(sendResponse)
       return true // async sendResponse
 
     case 'EXECUTE_ACTION':

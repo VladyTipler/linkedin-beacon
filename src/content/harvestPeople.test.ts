@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest'
-import { harvestPeople, harvestProfiles, harvestPeoplePage, harvestPeoplePaginated } from './harvestPeople'
+import { harvestPeople, harvestProfiles, harvestPeoplePage, harvestPeoplePaginated, pymkScrollHarvest } from './harvestPeople'
 import { PEOPLE_SEARCH_HTML } from './__fixtures__/people-search-card'
 import { PYMK_CARD_HTML } from './__fixtures__/pymk-card'
 import type { PersonCandidate } from '@lib/types'
@@ -206,5 +206,20 @@ describe('harvestPeoplePaginated (accumulate across pagination)', () => {
     )
     expect(res.candidates).toHaveLength(3)
     expect(nexts).toBe(0) // 3 fresh on page0 already ≥ target 2
+  })
+})
+
+describe('pymkScrollHarvest (scroll-load connectable people)', () => {
+  it('scrolls until target unique candidates collected', async () => {
+    const rounds = [[c('1')], [c('1'), c('2')], [c('2'), c('3')]]
+    let r = 0
+    const res = await pymkScrollHarvest(() => rounds[Math.min(r, rounds.length - 1)], async () => { r++ }, async () => {}, 3, { maxStale: 3, maxRounds: 10 })
+    expect(res.candidates.map(x => x.memberId).sort()).toEqual(['1', '2', '3'])
+    expect(res.outcome).toBe('ok')
+  })
+
+  it('reports empty when no cards ever appear', async () => {
+    const res = await pymkScrollHarvest(() => [], async () => {}, async () => {}, 5, { maxStale: 2, maxRounds: 5 })
+    expect(res.outcome).toBe('empty')
   })
 })

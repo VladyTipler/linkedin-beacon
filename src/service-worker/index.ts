@@ -564,6 +564,15 @@ async function harvestProfilesPageFrom(tabId: number): Promise<HarvestResult> {
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
 
+// Exported (unlike its harvest*From siblings) because nothing in THIS task calls it yet —
+// wiring the PYMK-fallback decision into runConnectsThen is a follow-up task. `export` keeps
+// `noUnusedLocals` from flagging it dead code in the meantime; drop it once a local caller lands.
+/** Scroll-harvest connectable PYMK people from /mynetwork/ (fallback source). */
+export async function harvestPymkFrom(tabId: number, target: number): Promise<HarvestResult> {
+  const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PYMK', target }).catch(() => null)
+  return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
+}
+
 /** Advance the people-search one page; false if there is no next page (or content unreachable). */
 async function nextPeoplePageFrom(tabId: number): Promise<boolean> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'PEOPLE_NEXT_PAGE' }).catch(() => false)
