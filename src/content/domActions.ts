@@ -263,7 +263,7 @@ export async function executeConnect(
   delay: HumanDelay
 ): Promise<ActionResult> {
   const anchor = root.querySelector<HTMLElement>(
-    `a[componentkey*="member:${candidate.memberId}_connect"]`
+    `[componentkey*="member:${candidate.memberId}_connect"]`
   )
   if (!anchor) return { ok: false, reason: 'connect_anchor_not_found' }
   anchor.click()
