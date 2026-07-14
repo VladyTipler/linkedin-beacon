@@ -129,7 +129,10 @@ export async function runConnectStep(
       } else if (res?.reason) {
         lastFailReason = res.reason
       }
-      await deps.pace()
+      // Pace ONLY after a real send — the human-like 8-30s wait is anti-ban for actual actions.
+      // Pacing after a failed/no-op connect (anchor gone, no flip) just stalls the run (the
+      // "infinite pauses" symptom) without any action to space out.
+      if (res?.ok) await deps.pace()
     }
     if (cancelled) break
     if (sentRecords.length >= cap) break

@@ -158,6 +158,20 @@ describe('runConnectStep', () => {
     expect(d._m.get(CONNECT_SENT_KEY)).toBeUndefined() // nothing persisted
   })
 
+  // The 8-30s human pace is anti-ban for REAL sends. Pacing after a failed/no-op connect just
+  // stalls the run (the live "infinite pauses" bug) with nothing to space out.
+  it('does NOT pace after a failed connect (only real sends get the anti-ban wait)', async () => {
+    const d = deps({ connect: vi.fn(async () => ({ ok: false, reason: 'send_button_not_found' })) })
+    await runConnectStep(d)
+    expect(d.pace).not.toHaveBeenCalled()
+  })
+
+  it('paces after each successful connect', async () => {
+    const d = deps() // 2 connectable, both ok
+    await runConnectStep(d)
+    expect(d.pace).toHaveBeenCalledTimes(2)
+  })
+
   it('reports unreachable when the connect action gets no response', async () => {
     const d = deps({ connect: vi.fn(async () => undefined) })
     const res = await runConnectStep(d)
