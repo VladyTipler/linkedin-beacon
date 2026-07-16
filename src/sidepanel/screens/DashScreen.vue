@@ -31,6 +31,7 @@ const { stats } = useDayStats()
 const tally = computed(() => [
   { label: 'Просмотрено', value: stats.value.views },
   { label: 'Коннектов', value: stats.value.connects },
+  { label: 'Отозвано', value: stats.value.withdrawn },
   { label: 'Лайков', value: stats.value.likes },
   { label: 'Комментариев', value: stats.value.comments },
   { label: 'Идей', value: stats.value.ideas },

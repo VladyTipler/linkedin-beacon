@@ -86,4 +86,19 @@ describe('useDayStats', () => {
     const stats = JSON.parse(wrapper.text())
     expect(stats.posts).toBe(2) // only today's report
   })
+
+  it('reads today withdrawn from withdraw:daily, ignores a stale yesterday entry', async () => {
+    const today = withTodayKey()
+    mem.set('withdraw:daily', { day: today, used: 8 })
+    const { wrapper, reload } = harness()
+    await reload()
+    await wrapper.vm.$nextTick()
+    expect(JSON.parse(wrapper.text()).withdrawn).toBe(8)
+
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+    mem.set('withdraw:daily', { day: yesterday, used: 5 })
+    await reload()
+    await wrapper.vm.$nextTick()
+    expect(JSON.parse(wrapper.text()).withdrawn).toBe(0) // stale day → 0
+  })
 })

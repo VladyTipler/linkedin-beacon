@@ -28,6 +28,7 @@ import { runViewWithFallback } from './viewHandlers'
 import { loadConnectSettings } from '@lib/connect/settings'
 import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
 import { geoUrnsForRegions } from '@lib/connect/regions'
+import { rolloverConnectDay, recordConnectDay, type ConnectDay } from '@lib/connect/ConnectWeekBudget'
 import { loadContentSettings } from '@lib/content/settings'
 import { BurstGuard } from '@lib/autopilot/BurstGuard'
 import { RiskAssessor, type RiskMarker } from '@lib/autopilot/RiskAssessor'
@@ -589,12 +590,18 @@ async function withdrawStaleFrom(tabId: number, maxAgeDays: number, cap: number)
 }
 
 const SENT_URL = 'https://www.linkedin.com/mynetwork/invitation-manager/sent/'
+const WITHDRAW_DAY_KEY = 'withdraw:daily' // day-keyed {day, used} — the Dash "Отозвано" tally reads this
 
-/** Cleanup step: withdraw stale (>=14d) Sent invites. Returns the count. Gated by caller on smart_connect. */
+/** Cleanup step: withdraw stale (>=14d) Sent invites. Returns the count + records today's tally. */
 async function runWithdrawThen(tabId: number): Promise<number> {
   if (!(await navigateLinkedInTab(tabId, SENT_URL))) return 0
   await setStage(tabId, CONNECTING) // reuse label; no dedicated WITHDRAWING label
-  return withdrawStaleFrom(tabId, 14, 15)
+  const n = await withdrawStaleFrom(tabId, 14, 15)
+  if (n > 0) {
+    const prev = await store.get<ConnectDay>(WITHDRAW_DAY_KEY)
+    await store.set(WITHDRAW_DAY_KEY, recordConnectDay(rolloverConnectDay(prev, dayKey()), n))
+  }
+  return n
 }
 
 /** Advance the people-search one page; false if there is no next page (or content unreachable). */

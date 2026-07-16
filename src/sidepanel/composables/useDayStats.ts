@@ -20,6 +20,7 @@ export interface DayStats {
   likes: number
   comments: number
   posts: number
+  withdrawn: number
 }
 
 // Likes are bumped live in autopilot:state.used (service-worker s.used += 1 per like).
@@ -42,17 +43,18 @@ function dayUsed(d: unknown): number {
 }
 
 export function useDayStats() {
-  const stats = ref<DayStats>({ views: 0, connects: 0, ideas: 0, likes: 0, comments: 0, posts: 0 })
+  const stats = ref<DayStats>({ views: 0, connects: 0, ideas: 0, likes: 0, comments: 0, posts: 0, withdrawn: 0 })
 
   const reload = async () => {
     if (!panelBus.available()) return
     const store = new ChromeStorageStore()
-    const [views, connects, ideas, likes, comments, rawReports] = await Promise.all([
+    const [views, connects, ideas, likes, comments, withdrawn, rawReports] = await Promise.all([
       store.get<{ day: string; used: number }>('views:daily'),
       store.get<{ day: string; used: number }>('connects:daily'),
       store.get<{ day: string; used: number }>('ideas:budget'),
       store.get<{ day: string; used: number }>(LIKE_KEY),
       store.get<{ day: string; used: number }>(COMMENT_BUDGET_KEY),
+      store.get<{ day: string; used: number }>('withdraw:daily'),
       store.get<RunReport[]>(REPORTS_KEY)
     ])
     const today = todayKey()
@@ -67,7 +69,8 @@ export function useDayStats() {
       ideas: dayUsed(ideas),
       likes: dayUsed(likes),
       comments: dayUsed(comments),
-      posts
+      posts,
+      withdrawn: dayUsed(withdrawn)
     }
   }
 
