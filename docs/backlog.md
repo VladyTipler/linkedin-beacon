@@ -62,3 +62,21 @@ The content pipeline (design-spec §4.3, §4.3.1), increments 2–3.
 - **Must be disclosed + opt-out** (a "send anonymous stats" toggle + a README /
   privacy line). Minimal data only.
 - Requires a small endpoint on the control backend.
+
+## SSI-guide roadmap (mentor guide, 2026-07-16)
+
+Gap analysis of a community mentor's LinkedIn-SSI guide vs Beacon → prioritized
+SSI-boosting features. **Full analysis: memory-bank `ssi-guide-roadmap.md`.**
+
+Top-3 to build (SSI-impact × fit × safety):
+1. **Auto-withdraw stale Sent invites (>2 weeks)** — dead Pending hurts ranking (guide §4.3).
+   DOM already scouted: `/mynetwork/invitation-manager/sent/` → `Withdraw` → confirm.
+2. **Auto-accept incoming invites** — grows the network pillar (50 of 100), safe (guide §4.4).
+3. **Real Profile Audit against the guide's checklist** — one-time +25 Brand; already the
+   next task; honest unknown-state (naive reader gave false negatives).
+
+More: weekly tracker 1 post+1 comment+1 reaction, post-format compliance (900-1200 chars,
+media, hashtags, link-in-comment), Interests auto-follow, 3/mo personalized notes, repost.
+
+Out (deliberate): the guide's "legend"/fake certs/false demographics/interview cheating —
+they do NOT move SSI (guide §9.3) and conflict with the honesty bar.
