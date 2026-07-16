@@ -578,6 +578,16 @@ async function harvestPymkProfilesFrom(tabId: number, target: number): Promise<H
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
 
+/**
+ * Withdraw stale Sent invites via the invitation manager; returns how many were withdrawn.
+ * Exported (no in-file caller yet) so noUnusedLocals passes — the connect run-loop wires this
+ * in a follow-up task; drop `export` once that call site lands.
+ */
+export async function withdrawStaleFrom(tabId: number, maxAgeDays: number, cap: number): Promise<number> {
+  const r = await chrome.tabs.sendMessage(tabId, { type: 'WITHDRAW_STALE_SENT', maxAgeDays, cap }).catch(() => null)
+  return (r as { withdrawn: number } | null)?.withdrawn ?? 0
+}
+
 /** Advance the people-search one page; false if there is no next page (or content unreachable). */
 async function nextPeoplePageFrom(tabId: number): Promise<boolean> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'PEOPLE_NEXT_PAGE' }).catch(() => false)

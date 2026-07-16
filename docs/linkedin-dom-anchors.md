@@ -122,3 +122,19 @@ no-op there (this was the root cause of the "only ever harvests the inline 8" bu
 connect control (`[aria-label^="Invite "][aria-label$=" to connect"]`) to the nearest ancestor
 with `scrollHeight > clientHeight` and `overflow-y: auto|scroll`. Driving `scrollTop = scrollHeight`
 on THAT container lazy-loads further cards, ~44 → 92+.
+
+## Sent-invites manager (`/mynetwork/invitation-manager/sent/`, captured live 2026-07-16)
+
+Where stale outgoing invites live and get withdrawn (companion to the PYMK direct-send flow
+above — withdrawing frees up the weekly invite cap for a fresh, more-likely-to-accept target).
+
+| What | Selector / rule |
+|------|-----------------|
+| URL | `https://www.linkedin.com/mynetwork/invitation-manager/sent/` |
+| Row withdraw control | `a[aria-label^="Withdraw invitation sent to "]` (text `Withdraw`) — one per row |
+| Row age text | row's textContent contains `Sent X ago` (e.g. "Sent 3 weeks ago") — same bucket vocabulary as `parseInviteAgeDays` (minute/hour/day/week/month/year) |
+| Confirm dialog | click the row withdraw `<a>` → `[role="dialog"] button[aria-label^="Withdraw invitation sent to "]` (same aria-label prefix as the row control, now scoped to the dialog) — click to confirm, no-op/dismiss otherwise |
+| Ordering | **newest-first** — stale (old) invites sit at the bottom. Scroll (`document.scrollingElement`/`documentElement`, window-level — unlike the PYMK inner-scroller case) to lazy-load older rows before giving up on a page with no stale match |
+
+> Capture method: `agent-browser --cdp 9222` against real Windows Chrome (debug profile),
+> read-only. No withdraw was ever confirmed during capture.

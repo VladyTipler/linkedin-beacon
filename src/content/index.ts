@@ -18,6 +18,7 @@ import { executeComment, executeLike, executeComposerPost, executeConnect } from
 import { executeProfileView } from './profileView'
 import { readOwnerName } from './readOwner'
 import { harvestPeople, harvestProfiles, harvestPeoplePage, pymkScrollHarvest } from './harvestPeople'
+import { isStaleInvite } from '@lib/connect/inviteAge'
 import { showActivity, hideActivity, setActivityLabel, countdownActivity } from './activityOverlay'
 import {
   SCANNING,
@@ -148,6 +149,45 @@ async function goToNextPeoplePage(): Promise<boolean> {
 // a genuinely-empty search from a page that simply hasn't rendered its cards yet.
 function isPeopleSearchEmpty(): boolean {
   return /no results found/i.test(document.body?.innerText ?? '')
+}
+
+// Sent-invites manager (/mynetwork/invitation-manager/sent/): each row has a withdraw <a>
+// (aria "Withdraw invitation sent to <name>", text "Withdraw"); the row text carries "Sent X
+// ago". List is newest-first, so stale invites are at the bottom — scroll to load them.
+function findStaleWithdraw(maxAgeDays: number): HTMLElement | null {
+  for (const a of document.querySelectorAll<HTMLElement>('a[aria-label^="Withdraw invitation sent to "]')) {
+    let row: Element | null = a
+    for (let i = 0; i < 8 && row && !row.querySelector('a[href*="/in/"]'); i++) row = row.parentElement
+    const sent = (row?.textContent?.match(/Sent[^]*?ago/i) ?? [''])[0]
+    if (isStaleInvite(sent.replace(/\s+/g, ' ').trim(), maxAgeDays)) return a
+  }
+  return null
+}
+
+async function withdrawStaleSent(maxAgeDays: number, cap: number): Promise<{ withdrawn: number }> {
+  let withdrawn = 0
+  for (let i = 0; i < cap; i++) {
+    if (!autopilotRunning) break
+    let target = findStaleWithdraw(maxAgeDays)
+    if (!target) {
+      const s = document.scrollingElement ?? document.documentElement
+      s.scrollTop = s.scrollHeight
+      await sleep(2000) // load older rows
+      target = findStaleWithdraw(maxAgeDays)
+      if (!target) break // no stale invites left
+    }
+    target.click() // opens the confirm dialog
+    let confirm: HTMLElement | null = null
+    for (let t = 0; t < 8 && !confirm; t++) {
+      confirm = document.querySelector<HTMLElement>('[role="dialog"] button[aria-label^="Withdraw invitation sent to "]')
+      if (!confirm) await sleep(500)
+    }
+    if (!confirm) continue
+    confirm.click()
+    withdrawn++
+    await sleep(delay.nextMs(3000, 8000)) // human pace + let the row detach
+  }
+  return { withdrawn }
 }
 
 // Thin DOM adapter over the tested scrollHarvest. `shouldAbort` defaults to
@@ -419,6 +459,10 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
         .then(sendResponse)
       return true // async sendResponse
     }
+
+    case 'WITHDRAW_STALE_SENT':
+      void withdrawStaleSent(message.maxAgeDays, message.cap).then(sendResponse)
+      return true // async sendResponse
 
     case 'EXECUTE_ACTION':
       void runAction(message).then(sendResponse)

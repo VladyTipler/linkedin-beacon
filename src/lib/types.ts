@@ -380,6 +380,8 @@ export type BeaconMessage =
   /** SW → content: scroll-harvest PYMK people (/mynetwork/); replies HarvestResult.
    *  profiles=true → ALL members (Views); else connectable only (Smart Connect). */
   | { type: 'HARVEST_PYMK'; target: number; profiles?: boolean }
+  /** SW → content: withdraw Pending invites older than maxAgeDays (paced, capped). Replies { withdrawn }. */
+  | { type: 'WITHDRAW_STALE_SENT'; maxAgeDays: number; cap: number }
   /** SW → content: human-dwell on the current (already-navigated) profile; replies ActionResult. */
   | { type: 'DWELL_PROFILE' }
   /**
