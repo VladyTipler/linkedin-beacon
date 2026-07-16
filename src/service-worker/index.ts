@@ -24,7 +24,7 @@ import { engagementLimit } from '@lib/autopilot/engagementLimit'
 import { decideAutopilotStart, enabledModules, runLoopModules } from '@lib/autopilot/startGate'
 import { HumanDelay } from '@lib/engagement/HumanDelay'
 import { runConnectWithFallback } from './connectHandlers'
-import { runViewStep } from './viewHandlers'
+import { runViewWithFallback } from './viewHandlers'
 import { loadConnectSettings } from '@lib/connect/settings'
 import { peopleSearchUrl } from '@lib/connect/peopleSearchUrl'
 import { geoUrnsForRegions } from '@lib/connect/regions'
@@ -528,25 +528,27 @@ async function runViewsThen(tabId: number, cancelled: () => Promise<boolean>): P
   const rng = new MathRandomRng()
   const pacer = new HumanDelay(rng)
   const settings = await loadConnectSettings(store)
-  if (!settings.searchKeywords.trim()) return { executed: 0, reason: 'no_keywords' }
-  const searchUrl = peopleSearchUrl(settings.searchKeywords, geoUrnsForRegions(settings.targetRegions))
+  const searchUrl = settings.searchKeywords.trim()
+    ? peopleSearchUrl(settings.searchKeywords, geoUrnsForRegions(settings.targetRegions))
+    : null
   const setActivity = (label: string) => setStage(tabId, label)
-  const res = await runViewStep({
-    store, clock, rng, searchUrl,
+  const res = await runViewWithFallback({
+    store, clock, rng, cancelled,
     navigate: async (url) => {
       const ok = await navigateLinkedInTab(tabId, url)
       await setActivity(VIEWING_PROFILES) // re-assert overlay (nav destroys the content script)
       return ok
     },
-    // Per-page harvest of ALL people (incl. already-invited Pending) — Views must visit anyone,
-    // not just connectable, or it goes blind once the search pool is mostly invited. runViewStep
-    // walks pages until it has `cap` FRESH profiles, driving pagination with the seen-set in hand.
-    harvestPage: () => harvestProfilesPageFrom(tabId),
-    nextPage: () => nextPeoplePageFrom(tabId),
     dwell: async () =>
       chrome.tabs.sendMessage(tabId, { type: 'DWELL_PROFILE' }).catch(() => undefined),
     pace: () => contentSleep(tabId, pacer.nextMs(8000, 30000)),
-    cancelled
+    searchUrl,
+    // Per-page harvest of ALL people (incl. already-invited Pending) — Views must visit anyone,
+    // not just connectable, or it goes blind once the search pool is mostly invited. runViewStep
+    // walks pages until it has `cap` FRESH profiles, driving pagination with the seen-set in hand.
+    searchHarvestPage: () => harvestProfilesPageFrom(tabId),
+    searchNextPage: () => nextPeoplePageFrom(tabId),
+    pymkHarvestPage: () => harvestPymkProfilesFrom(tabId, 40)
   })
   await navigateLinkedInTab(tabId, 'https://www.linkedin.com/feed/')
   return { executed: res.executed, reason: res.reason }
@@ -567,6 +569,12 @@ async function harvestProfilesPageFrom(tabId: number): Promise<HarvestResult> {
 /** Scroll-harvest connectable PYMK people from /mynetwork/ (fallback source). */
 async function harvestPymkFrom(tabId: number, target: number): Promise<HarvestResult> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PYMK', target }).catch(() => null)
+  return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
+}
+
+/** Scroll-harvest ALL PYMK members (incl. non-connectable) from /mynetwork/ — the Views source. */
+async function harvestPymkProfilesFrom(tabId: number, target: number): Promise<HarvestResult> {
+  const r = await chrome.tabs.sendMessage(tabId, { type: 'HARVEST_PYMK', target, profiles: true }).catch(() => null)
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
 
