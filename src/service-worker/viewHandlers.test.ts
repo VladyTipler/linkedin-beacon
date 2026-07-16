@@ -180,12 +180,22 @@ describe('runViewWithFallback', () => {
     expect(res.reason).toBe('done')
   })
 
-  it('does NOT run PYMK when disabled/budget/cancelled', async () => {
+  it('does NOT run PYMK when disabled', async () => {
     const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: false, dailyLimit: 40 }] })
     const pymkHarvestPage = vi.fn(dry)
     const res = await runViewWithFallback(fallback(store, { searchHarvestPage: dry, pymkHarvestPage }))
     expect(pymkHarvestPage).not.toHaveBeenCalled()
     expect(res.reason).toBe('disabled')
+  })
+
+  // STOP means stop: a run cancelled during the search pass must NOT then navigate to
+  // /mynetwork/ and act — it reports cancelled, PYMK never runs.
+  it('does NOT run PYMK when the search pass was cancelled (STOP means stop)', async () => {
+    const store = fakeStore(enabled)
+    const pymkHarvestPage = vi.fn(dry)
+    const res = await runViewWithFallback(fallback(store, { cancelled: async () => true, pymkHarvestPage }))
+    expect(pymkHarvestPage).not.toHaveBeenCalled()
+    expect(res.reason).toBe('cancelled')
   })
 
   it('runs PYMK-only when there are no keywords (searchUrl null)', async () => {
