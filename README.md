@@ -3,7 +3,7 @@
 > Safety-first браузерное расширение (Chrome MV3) для роста **LinkedIn SSI** по принципу *pull > push*:
 > прокачиваем профиль так, чтобы рекрутёры и клиенты писали сами — а не мы спамим outbound.
 
-**Статус:** v0.9.0 — MVP, live-verified на реальном аккаунте. 560 тестов, билд чистый.
+**Статус:** v0.10.0 — MVP, live-verified на реальном аккаунте. 568 тестов, билд чистый.
 **Демо UI:** https://artifacts.kanev.space/beacon-linkedin-ssi/
 **Дизайн-спека:** https://artifacts.kanev.space/beacon-design-spec/
 
@@ -129,6 +129,8 @@ Beacon не отправляет твои данные никуда, кроме 
 ---
 
 ## Статус и roadmap
+
+**v0.10.0** — **PYMK deep-pool + Views-fallback:** PYMK-харвест раскрывает recent-activity «Show all» и скроллит верный внутренний контейнер (8→92+ connectable), плюс Profile Views получили PYMK-fallback (добор из PYMK при недоборе до дневного лимита). Live-verified: **Коннекты 12, Просмотры 38** на залимиченном по поиску аккаунте.
 
 **v0.9.0** — **PYMK connect-fallback:** когда people-search даёт 0 коннектов (месячный commercial-use лимит поиска или пул, забитый прошлыми Pending), Smart Connect автоматически добирает остаток бюджета из «People you may know» (`/mynetwork/grow/`) — общий бюджет/sent-set/история, без ключей. Live-verified: 8 реальных PYMK-коннектов на залимиченном аккаунте. Плюс honest-reason фикс поиска (`none_connectable`/`pool_pending` вместо вранья `not_ready`, пагинация сквозь Pending-страницы).
 

@@ -10,6 +10,22 @@
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-07-16
+
+### Added
+- **PYMK deep-pool harvest.** Раньше PYMK-харвест брал только ~8 (инлайн): скроллил
+  `document.scrollingElement` — не тот элемент (PYMK-лист во внутреннем overflow-контейнере) →
+  scroll = no-op. Теперь харвест (a) жмёт recent-activity «Show all» (8→~44), (b) скроллит
+  ВЕРНЫЙ внутренний контейнер (~44→92+), (c) принимает флаг `profiles` (все члены для Views vs
+  connectable для Connect). Итог: коннектов на прогон 10-15 вместо ~2-8.
+- **Profile Views PYMK-fallback.** `runViewWithFallback` (зеркало connect-fallback): если
+  поиск-просмотры не добрали до дневного лимита (не disabled/budget/cancelled/done) — добираем
+  остаток из PYMK. Общий `views:seen`/бюджет. **Live-verified: Коннекты 12, Просмотры 38.**
+
+### Fixed
+- **Pace только после успешного просмотра** (view-loop) — как в connect; не паузим после
+  неудачного dwell.
+
 ## [0.9.0] — 2026-07-15
 
 ### Added
