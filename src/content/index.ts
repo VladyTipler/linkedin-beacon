@@ -105,7 +105,10 @@ async function expandPymkShowAll(): Promise<void> {
 // Скролл окна = no-op (это и был баг «берёт только инлайн 8»). Ищем scrollable-ancestor
 // connect-контрола, чтобы scroll-to-bottom догружал (44 → 92+).
 function pymkScroller(): Element {
-  const anchor = document.querySelector('[aria-label^="Invite "][aria-label$=" to connect"]')
+  // Anchor off ANY member card (componentkey), not the connect control only — the Views
+  // (profiles) harvest wants all members, and a fully-Pending cohort has no connect anchors
+  // but still scrolls; keying off connect-only there would fall back to the window no-op.
+  const anchor = document.querySelector('[componentkey*="urn:li:member:"]')
   let node: Element | null = anchor
   while (node && node !== document.body) {
     node = node.parentElement

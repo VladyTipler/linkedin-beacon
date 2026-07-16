@@ -38,6 +38,21 @@ describe('harvestPeople — PYMK card (button connect control, not anchor)', () 
   })
 })
 
+// Views' PYMK fallback harvests ALL members (harvestProfiles) off the PYMK page — a NEW
+// pairing (harvestProfiles × PYMK button-control card). Pins that it reads the member off
+// the componentkey the same way, so a PYMK DOM divergence can't silently no-op the top-up.
+describe('harvestProfiles — PYMK card (all-members, for Views fallback)', () => {
+  beforeEach(() => { document.body.innerHTML = PYMK_CARD_HTML })
+
+  it('captures the PYMK member via componentkey', () => {
+    expect(harvestProfiles(document)).toEqual([
+      { memberId: '87274562', name: 'Jane Doe',
+        headline: 'Talent Acquisition Specialist | Tech Recruiter',
+        profileUrl: 'https://www.linkedin.com/in/jane-doe-123/' }
+    ])
+  })
+})
+
 // Profile Views must visit ANY profile in the results — including people we've already
 // invited (now "Pending"). Those lost their Connect anchor but keep the member componentkey,
 // so harvestProfiles anchors on that instead. This is THE fix for "viewed 0 of 40": the
