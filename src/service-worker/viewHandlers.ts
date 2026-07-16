@@ -9,6 +9,7 @@ import {
   remainingDailyViews, viewRunCap, DEFAULT_VIEWS_PER_DAY
 } from '@lib/views/ViewDayBudget'
 import { VIEW_HISTORY_KEY, appendViewHistory, type ViewRecord } from '@lib/views/ViewHistory'
+import { PYMK_URL } from './connectHandlers'
 
 // Page deep enough to refill the cap with FRESH faces (a static search repeats people,
 // so the first pages saturate the seen-set fast), but bounded — LinkedIn's free search has
@@ -88,7 +89,8 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
       })
       seen.add(c.memberId)
     }
-    await deps.pace()
+    // Pace ONLY after a real view — не паузим 8-30с после неудачного dwell (иначе «бесконечные паузы»).
+    if (r?.ok) await deps.pace()
   }
 
   if (records.length) {
@@ -103,4 +105,35 @@ export async function runViewStep(deps: ViewDeps): Promise<ViewStepResult> {
   // honest "viewed 3, not 40" reason in the report, so an under-cap run is never silent.
   const reason = cancelled ? 'cancelled' : selected.length < cap ? 'pool_dry' : 'done'
   return { executed: records.length, skipped: selected.length - records.length, reason }
+}
+
+export interface ViewFallbackDeps extends Omit<ViewDeps, 'searchUrl' | 'harvestPage' | 'nextPage'> {
+  /** People-search URL, or null when there are no keywords (skip straight to PYMK). */
+  searchUrl: string | null
+  searchHarvestPage: () => Promise<HarvestResult>
+  searchNextPage: () => Promise<boolean>
+  /** Single-shot scroll-harvest of PYMK profiles (the fallback source; nextPage is false). */
+  pymkHarvestPage: () => Promise<HarvestResult>
+}
+
+/**
+ * Profile Views with PYMK top-up: run the people-search views pass; if it did NOT fill the daily
+ * view cap (any reason except disabled/budget/cancelled/done), top up the remaining budget from
+ * PYMK (/mynetwork/). Budget + views:seen are shared (the PYMK pass re-reads the budget). Mirrors
+ * runConnectWithFallback; runViewStep is already source-agnostic.
+ */
+export async function runViewWithFallback(deps: ViewFallbackDeps): Promise<ViewStepResult> {
+  const common = {
+    store: deps.store, clock: deps.clock, rng: deps.rng,
+    navigate: deps.navigate, dwell: deps.dwell, pace: deps.pace, cancelled: deps.cancelled
+  }
+  let search: ViewStepResult = { executed: 0, skipped: 0, reason: 'no_keywords' }
+  if (deps.searchUrl) {
+    search = await runViewStep({ ...common, searchUrl: deps.searchUrl, harvestPage: deps.searchHarvestPage, nextPage: deps.searchNextPage })
+    if (['disabled', 'budget', 'cancelled', 'done'].includes(search.reason)) return search
+  }
+  const pymk = await runViewStep({ ...common, searchUrl: PYMK_URL, harvestPage: deps.pymkHarvestPage, nextPage: async () => false })
+  const executed = search.executed + pymk.executed
+  const reason = pymk.executed > 0 ? 'done' : search.executed > 0 ? search.reason : pymk.reason
+  return { executed, skipped: search.skipped + pymk.skipped, reason }
 }

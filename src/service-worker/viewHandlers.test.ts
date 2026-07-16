@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { runViewStep } from './viewHandlers'
+import { describe, it, expect, vi } from 'vitest'
+import { runViewStep, runViewWithFallback } from './viewHandlers'
 import { VIEW_DAY_BUDGET_KEY, VIEW_SEEN_KEY } from '../lib/views/ViewDayBudget'
 import { VIEW_HISTORY_KEY } from '../lib/views/ViewHistory'
 import type { HarvestResult, PersonCandidate } from '../lib/types'
@@ -19,6 +19,7 @@ const people: PersonCandidate[] = [
   { memberId: 'b', name: 'B', headline: 'Eng', profileUrl: 'https://l/in/b' }
 ]
 const ok = (candidates: PersonCandidate[]): HarvestResult => ({ candidates, outcome: 'ok' })
+const enabled = { 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] }
 
 const baseDeps = (store: ReturnType<typeof fakeStore>) => ({
   store, clock, rng,
@@ -32,8 +33,6 @@ const baseDeps = (store: ReturnType<typeof fakeStore>) => ({
 })
 
 describe('runViewStep', () => {
-  const enabled = { 'modules:state': [{ id: 'profile_views', enabled: true, dailyLimit: 40 }] }
-
   it('skips when profile_views disabled', async () => {
     const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: false, dailyLimit: 40 }] })
     const res = await runViewStep(baseDeps(store))
@@ -130,5 +129,70 @@ describe('runViewStep', () => {
     })
     expect(res.executed).toBe(1) // viewed 'a', then aborted — did NOT view 'b'
     expect(res.reason).toBe('cancelled')
+  })
+
+  it('paces after a successful view', async () => {
+    const store = fakeStore(enabled)
+    const pace = vi.fn(async () => {})
+    const res = await runViewStep({ ...baseDeps(store), pace })
+    expect(res.executed).toBe(2)
+    expect(pace).toHaveBeenCalledTimes(2)
+  })
+
+  it('does NOT pace after a failed dwell (only real views get the anti-ban wait)', async () => {
+    const store = fakeStore(enabled)
+    const pace = vi.fn(async () => {})
+    await runViewStep({ ...baseDeps(store), dwell: async () => ({ ok: false }), pace })
+    expect(pace).not.toHaveBeenCalled()
+  })
+})
+
+describe('runViewWithFallback', () => {
+  const dry = async (): Promise<HarvestResult> => ({ candidates: [], outcome: 'empty' })
+  const cand = (id: string): PersonCandidate => ({ memberId: id, name: id, headline: '', profileUrl: `/in/${id}` })
+  // Enough fresh candidates in ONE page to fill the (unjittered) cap of 40 → reason 'done'.
+  const manyFresh: PersonCandidate[] = Array.from({ length: 45 }, (_, i) => cand(`m${i}`))
+
+  const fallback = (store: ReturnType<typeof fakeStore>, over: Record<string, unknown> = {}) => {
+    const b = baseDeps(store)
+    return {
+      store, clock, rng,
+      navigate: b.navigate, dwell: b.dwell, pace: b.pace, cancelled: b.cancelled,
+      searchUrl: b.searchUrl, searchHarvestPage: b.harvestPage, searchNextPage: b.nextPage,
+      pymkHarvestPage: dry,
+      ...over
+    }
+  }
+
+  it('tops up from PYMK when the search pass under-delivered (pool_dry)', async () => {
+    const store = fakeStore(enabled)
+    const pymkHarvestPage = vi.fn(async () => ok([cand('7'), cand('8')]))
+    const res = await runViewWithFallback(fallback(store, { pymkHarvestPage }))
+    expect(pymkHarvestPage).toHaveBeenCalled()
+    expect(res.executed).toBe(4) // 2 from search (pool_dry) + 2 from the PYMK top-up
+  })
+
+  it('does NOT run PYMK when the search pass filled the cap (reason done)', async () => {
+    const store = fakeStore(enabled)
+    const pymkHarvestPage = vi.fn(dry)
+    const res = await runViewWithFallback(fallback(store, { searchHarvestPage: async () => ok(manyFresh), pymkHarvestPage }))
+    expect(pymkHarvestPage).not.toHaveBeenCalled()
+    expect(res.reason).toBe('done')
+  })
+
+  it('does NOT run PYMK when disabled/budget/cancelled', async () => {
+    const store = fakeStore({ 'modules:state': [{ id: 'profile_views', enabled: false, dailyLimit: 40 }] })
+    const pymkHarvestPage = vi.fn(dry)
+    const res = await runViewWithFallback(fallback(store, { searchHarvestPage: dry, pymkHarvestPage }))
+    expect(pymkHarvestPage).not.toHaveBeenCalled()
+    expect(res.reason).toBe('disabled')
+  })
+
+  it('runs PYMK-only when there are no keywords (searchUrl null)', async () => {
+    const store = fakeStore(enabled)
+    const pymkHarvestPage = vi.fn(async () => ok([cand('9')]))
+    const res = await runViewWithFallback(fallback(store, { searchUrl: null, pymkHarvestPage }))
+    expect(pymkHarvestPage).toHaveBeenCalled()
+    expect(res.executed).toBe(1)
   })
 })
