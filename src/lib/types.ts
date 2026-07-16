@@ -377,8 +377,9 @@ export type BeaconMessage =
   | { type: 'HARVEST_PROFILES_PAGE' }
   /** SW → content: advance the people-search to the next page; replies boolean (false = none). */
   | { type: 'PEOPLE_NEXT_PAGE' }
-  /** SW → content: scroll-harvest connectable PYMK people (/mynetwork/); replies HarvestResult. */
-  | { type: 'HARVEST_PYMK'; target: number }
+  /** SW → content: scroll-harvest PYMK people (/mynetwork/); replies HarvestResult.
+   *  profiles=true → ALL members (Views); else connectable only (Smart Connect). */
+  | { type: 'HARVEST_PYMK'; target: number; profiles?: boolean }
   /** SW → content: human-dwell on the current (already-navigated) profile; replies ActionResult. */
   | { type: 'DWELL_PROFILE' }
   /**

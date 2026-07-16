@@ -108,3 +108,17 @@ reference): `/mynetwork/invitation-manager/sent/` → per-row `Withdraw` → con
 > Same shadow-DOM gotchas as the composer apply: pierce strictly via `#interop-outlet.shadowRoot`,
 > the modal renders async (poll the Send button's `disabled`), re-query nodes (held refs can
 > go stale on re-render). Capture: read-only `agent-browser --cdp 9222` eval; nothing was sent.
+
+**⚠️ PYMK deep-pool: recent-activity "Show all" + inner scroller (verified live 2026-07-16):**
+The `/mynetwork/grow/` "People you may know based on your recent activity" cohort renders only
+~8 cards inline. An `<a>`/`<button>` whose `aria-label` contains `you may know based on your
+recent activity` (case-insensitive) is that cohort's **"Show all"** control — clicking it expands
+the SAME cohort to ~44 cards **on the same URL** (no navigation). Absent selector → graceful
+no-op, harvest just falls back to the inline 8.
+
+Once expanded, the list is **NOT** scrolled by the window — `document.scrollingElement` is a
+no-op there (this was the root cause of the "only ever harvests the inline 8" bug). It scrolls an
+**inner overflow container**, found the same way as the feed's (`feedScroller`): walk up from a
+connect control (`[aria-label^="Invite "][aria-label$=" to connect"]`) to the nearest ancestor
+with `scrollHeight > clientHeight` and `overflow-y: auto|scroll`. Driving `scrollTop = scrollHeight`
+on THAT container lazy-loads further cards, ~44 → 92+.

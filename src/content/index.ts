@@ -90,6 +90,33 @@ function feedScroller(): Element {
   return document.scrollingElement ?? document.documentElement
 }
 
+// PYMK «People you may know based on your recent activity»: инлайн ~8; её «Show all»
+// раскрывает полный список (~44) НА ТОМ ЖЕ URL. Graceful: нет кнопки → харвест инлайна.
+async function expandPymkShowAll(): Promise<void> {
+  const showAll = [...document.querySelectorAll<HTMLElement>('a,button')].find((e) =>
+    /you may know based on your recent activity/i.test(e.getAttribute('aria-label') ?? '')
+  )
+  if (!showAll) return
+  showAll.click()
+  await sleep(2000) // дать раскрытому списку отрисоваться до харвеста
+}
+
+// Раскрытый PYMK-список скроллит ВНУТРЕННИЙ overflow-контейнер (как лента), НЕ окно.
+// Скролл окна = no-op (это и был баг «берёт только инлайн 8»). Ищем scrollable-ancestor
+// connect-контрола, чтобы scroll-to-bottom догружал (44 → 92+).
+function pymkScroller(): Element {
+  const anchor = document.querySelector('[aria-label^="Invite "][aria-label$=" to connect"]')
+  let node: Element | null = anchor
+  while (node && node !== document.body) {
+    node = node.parentElement
+    if (node && node.scrollHeight > node.clientHeight + 100) {
+      const ov = getComputedStyle(node).overflowY
+      if (ov === 'auto' || ov === 'scroll') return node
+    }
+  }
+  return document.scrollingElement ?? document.documentElement
+}
+
 // Advance the people-search pagination (no infinite scroll — you switch pages). The
 // current page button has aria-current="true"; click the next-numbered one and wait for
 // the indicator to switch (its results then render; the harvest poll waits for them).
@@ -370,16 +397,25 @@ chrome.runtime.onMessage.addListener((message: BeaconMessage, _sender, sendRespo
       void goToNextPeoplePage().then(sendResponse)
       return true // async sendResponse
 
-    case 'HARVEST_PYMK':
-      // PYMK (/mynetwork/) is infinite-scroll — no pagination — so scroll the WHOLE page
-      // (document.scrollingElement), not an inner "main" container like people-search.
-      void pymkScrollHarvest(
-        () => harvestPeople(document),
-        async () => { (document.scrollingElement ?? document.documentElement).scrollTop = (document.scrollingElement ?? document.documentElement).scrollHeight },
-        () => sleep(1200),
-        message.target
-      ).then(sendResponse)
+    case 'HARVEST_PYMK': {
+      // Expand the recent-activity cohort's "Show all" (8 → ~44), then scroll-harvest its INNER
+      // container (~44 → 92+). `profiles`: all members (Views) vs connectable (Smart Connect).
+      // Verified live 2026-07-16 (memory-bank: pymk-deep-pool).
+      const harvestFn = message.profiles
+        ? () => harvestProfiles(document)
+        : () => harvestPeople(document)
+      void expandPymkShowAll()
+        .then(() =>
+          pymkScrollHarvest(
+            harvestFn,
+            async () => { const s = pymkScroller(); s.scrollTop = s.scrollHeight },
+            () => sleep(1200),
+            message.target
+          )
+        )
+        .then(sendResponse)
       return true // async sendResponse
+    }
 
     case 'EXECUTE_ACTION':
       void runAction(message).then(sendResponse)
