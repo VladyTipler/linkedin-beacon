@@ -164,17 +164,36 @@ function findStaleWithdraw(maxAgeDays: number): HTMLElement | null {
   return null
 }
 
+// NB: this runs as a PRE-LOOP step, so it does NOT gate on `autopilotRunning` (that flag is
+// only true inside the engagement loop, which starts later — gating on it here would break at
+// i=0 and withdraw nothing). STOP is honored BETWEEN steps by launch()'s isRunning() gate;
+// mid-step interruption is acceptable for a bounded, low-risk cleanup (it REMOVES invites).
+const WITHDRAW_MAX_SCROLL = 30
+
 async function withdrawStaleSent(maxAgeDays: number, cap: number): Promise<{ withdrawn: number }> {
+  const rowCount = () => document.querySelectorAll('a[aria-label^="Withdraw invitation sent to "]').length
   let withdrawn = 0
-  for (let i = 0; i < cap; i++) {
-    if (!autopilotRunning) break
+  let scrollRounds = 0
+  // Overall guard: a stale row whose click never produces a confirm dialog would be re-found
+  // forever (no withdraw, no scroll). Bound the total iterations so a stuck target can't loop.
+  let attempts = 0
+  while (withdrawn < cap && attempts < cap * 3) {
+    attempts++
     let target = findStaleWithdraw(maxAgeDays)
     if (!target) {
+      // Newest-first list → stale invites are DEEP. Keep scrolling until a stale row appears OR
+      // the list stops growing (fully loaded, none stale). A single scroll under-loads.
+      if (scrollRounds >= WITHDRAW_MAX_SCROLL) break
+      scrollRounds++
+      const before = rowCount()
       const s = document.scrollingElement ?? document.documentElement
       s.scrollTop = s.scrollHeight
-      await sleep(2000) // load older rows
+      await sleep(2000)
       target = findStaleWithdraw(maxAgeDays)
-      if (!target) break // no stale invites left
+      if (!target) {
+        if (rowCount() <= before) break // didn't grow → nothing more to load, none stale
+        continue // grew; keep scrolling for deeper stale rows
+      }
     }
     target.click() // opens the confirm dialog
     let confirm: HTMLElement | null = null
@@ -182,7 +201,12 @@ async function withdrawStaleSent(maxAgeDays: number, cap: number): Promise<{ wit
       confirm = document.querySelector<HTMLElement>('[role="dialog"] button[aria-label^="Withdraw invitation sent to "]')
       if (!confirm) await sleep(500)
     }
-    if (!confirm) continue
+    if (!confirm) {
+      // Dismiss a stuck/half-open dialog so the next iteration can't match a lingering (wrong) one.
+      document.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Dismiss"], [role="dialog"] button[aria-label="Cancel"]')?.click()
+      await sleep(1000)
+      continue
+    }
     confirm.click()
     withdrawn++
     await sleep(delay.nextMs(3000, 8000)) // human pace + let the row detach

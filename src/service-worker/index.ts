@@ -204,11 +204,12 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
         await recordOutcome('profile_views', { executed: 0, reason: 'disabled' })
       }
       if (tabId && connectEnabled && await isRunning()) {
+        let withdrawn = 0
         try {
-          const withdrawn = await runWithdrawThen(tabId)
+          withdrawn = await runWithdrawThen(tabId)
           const c = await runConnectsThen(tabId, 'https://www.linkedin.com/feed/', isCancelled)
           await recordOutcome('smart_connect', { ...c, withdrawn })
-        } catch { await recordOutcome('smart_connect', { executed: 0, reason: 'error' }) }
+        } catch { await recordOutcome('smart_connect', { executed: 0, reason: 'error', withdrawn }) }
       } else {
         await recordOutcome('smart_connect', { executed: 0, reason: 'disabled' })
       }
