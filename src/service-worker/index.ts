@@ -204,8 +204,11 @@ async function startAutopilot(host: AutopilotHost): Promise<StartAutopilotResult
         await recordOutcome('profile_views', { executed: 0, reason: 'disabled' })
       }
       if (tabId && connectEnabled && await isRunning()) {
-        try { await recordOutcome('smart_connect', await runConnectsThen(tabId, 'https://www.linkedin.com/feed/', isCancelled)) }
-        catch { await recordOutcome('smart_connect', { executed: 0, reason: 'error' }) }
+        try {
+          const withdrawn = await runWithdrawThen(tabId)
+          const c = await runConnectsThen(tabId, 'https://www.linkedin.com/feed/', isCancelled)
+          await recordOutcome('smart_connect', { ...c, withdrawn })
+        } catch { await recordOutcome('smart_connect', { executed: 0, reason: 'error' }) }
       } else {
         await recordOutcome('smart_connect', { executed: 0, reason: 'disabled' })
       }
@@ -578,14 +581,19 @@ async function harvestPymkProfilesFrom(tabId: number, target: number): Promise<H
   return (r as HarvestResult | null) ?? { candidates: [], outcome: 'not_ready' }
 }
 
-/**
- * Withdraw stale Sent invites via the invitation manager; returns how many were withdrawn.
- * Exported (no in-file caller yet) so noUnusedLocals passes — the connect run-loop wires this
- * in a follow-up task; drop `export` once that call site lands.
- */
-export async function withdrawStaleFrom(tabId: number, maxAgeDays: number, cap: number): Promise<number> {
+/** Withdraw stale Sent invites via the invitation manager; returns how many were withdrawn. */
+async function withdrawStaleFrom(tabId: number, maxAgeDays: number, cap: number): Promise<number> {
   const r = await chrome.tabs.sendMessage(tabId, { type: 'WITHDRAW_STALE_SENT', maxAgeDays, cap }).catch(() => null)
   return (r as { withdrawn: number } | null)?.withdrawn ?? 0
+}
+
+const SENT_URL = 'https://www.linkedin.com/mynetwork/invitation-manager/sent/'
+
+/** Cleanup step: withdraw stale (>=14d) Sent invites. Returns the count. Gated by caller on smart_connect. */
+async function runWithdrawThen(tabId: number): Promise<number> {
+  if (!(await navigateLinkedInTab(tabId, SENT_URL))) return 0
+  await setStage(tabId, CONNECTING) // reuse label; no dedicated WITHDRAWING label
+  return withdrawStaleFrom(tabId, 14, 15)
 }
 
 /** Advance the people-search one page; false if there is no next page (or content unreachable). */

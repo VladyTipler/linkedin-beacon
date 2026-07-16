@@ -16,7 +16,7 @@ export function buildReportModules(
   for (const id of MODULE_ORDER) {
     const o = outcomes[id]
     if (!o) continue
-    rows.push({ id, executed: o.executed, skipped: 0, failed: 0, reason: o.reason })
+    rows.push({ id, executed: o.executed, skipped: 0, failed: 0, reason: o.reason, withdrawn: o.withdrawn })
   }
   return rows
 }

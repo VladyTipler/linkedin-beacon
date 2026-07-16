@@ -141,6 +141,8 @@ export interface ModuleOutcome {
   executed: number
   /** Machine reason code (done | disabled | no_keywords | empty_search | not_ready | …). */
   reason: string
+  /** Smart Connect only: how many stale Sent invites were withdrawn this run (cleanup step). */
+  withdrawn?: number
 }
 
 /** A persisted record of one autopilot run (design-spec §2.3 reports). */
@@ -151,7 +153,7 @@ export interface RunReport {
   host: AutopilotHost
   stopReason: StopReason
   /** `reason` is the per-module outcome code (older reports may lack it). */
-  modules: { id: ModuleId; executed: number; skipped: number; failed: number; reason?: string }[]
+  modules: { id: ModuleId; executed: number; skipped: number; failed: number; reason?: string; withdrawn?: number }[]
 }
 
 /** SW-owned persisted autopilot state. */

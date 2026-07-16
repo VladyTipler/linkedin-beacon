@@ -43,6 +43,7 @@ onMounted(async () => {
       <div v-for="m in r.modules" :key="m.id" class="mrow">
         {{ moduleLabel(m.id) }}: <b>{{ m.executed }}</b>
         <span v-if="reasonHint(m.reason)" class="why">— {{ reasonHint(m.reason) }}</span>
+        <span v-if="m.withdrawn" class="why">· отозвано {{ m.withdrawn }}</span>
       </div>
     </div>
 

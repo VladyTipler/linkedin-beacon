@@ -30,4 +30,9 @@ describe('buildReportModules', () => {
   it('returns [] when nothing ran', () => {
     expect(buildReportModules({})).toEqual([])
   })
+
+  it('passes withdrawn through for smart_connect (stale-Sent cleanup count)', () => {
+    const rows = buildReportModules({ smart_connect: { executed: 3, reason: 'done', withdrawn: 5 } })
+    expect(rows).toEqual([{ id: 'smart_connect', executed: 3, skipped: 0, failed: 0, reason: 'done', withdrawn: 5 }])
+  })
 })
