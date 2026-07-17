@@ -10,6 +10,24 @@
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-07-17
+
+### Added
+- **Авто-отзыв протухших Sent-инвайтов (≥2 недель).** Новый шаг «Очистка Sent» в «Запустить»
+  (gated на `smart_connect`): на `/mynetwork/invitation-manager/sent/` отзывает непринятые
+  инвайты старше 14 дней (paced 3-8с, cap 15/прогон) — мёртвые Pending портят ранжирование
+  профиля (гайд §4.3). Счётчик — в отчёте прогона («Коннекты N · отозвано M») и в дневном
+  tally дашборда («Отозвано»). **Live-verified: Отозвано 15.**
+  Два DOM-бага, вскрытых на live-verify: список Sent лениво-грузится через ВНУТРЕННИЙ
+  overflow-контейнер (не window) → `sentScroller`; confirm-модалка в light DOM БЕЗ
+  `role="dialog"` → матч confirm-`<button>` по точному aria-label.
+
+### Fixed
+- **Risk kill-switch ложно срабатывал.** `detectRisk` сканировал весь текст ленты на
+  «verify»/«security check»/«unusual activity» → ловил обычные посты + безобидный промпт
+  «Verify your identity» → рвал чистые прогоны риск-стопом (17.07: прогон оборвался,
+  Коннектов 1). Теперь детект реального challenge по `/checkpoint/`-URL (+ captcha-iframe).
+
 ## [0.10.0] — 2026-07-16
 
 ### Added

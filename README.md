@@ -3,7 +3,7 @@
 > Safety-first браузерное расширение (Chrome MV3) для роста **LinkedIn SSI** по принципу *pull > push*:
 > прокачиваем профиль так, чтобы рекрутёры и клиенты писали сами — а не мы спамим outbound.
 
-**Статус:** v0.10.0 — MVP, live-verified на реальном аккаунте. 568 тестов, билд чистый.
+**Статус:** v0.11.0 — MVP, live-verified на реальном аккаунте. 573 теста, билд чистый.
 **Демо UI:** https://artifacts.kanev.space/beacon-linkedin-ssi/
 **Дизайн-спека:** https://artifacts.kanev.space/beacon-design-spec/
 
@@ -129,6 +129,8 @@ Beacon не отправляет твои данные никуда, кроме 
 ---
 
 ## Статус и roadmap
+
+**v0.11.0** — **Авто-очистка Sent + detectRisk-фикс:** новый шаг в «Запустить» отзывает непринятые инвайты ≥2 недель (`/mynetwork/invitation-manager/sent/`, paced, cap 15/прогон) — мёртвые Pending портят ранжирование; счётчик «Отозвано» в отчёте + дневном tally дашборда. Плюс risk-kill-switch больше не ложно-срабатывает на тексте ленты (детект по `/checkpoint/`-URL). Live-verified: **Отозвано 15, Коннектов 14, без риск-стопа**.
 
 **v0.10.0** — **PYMK deep-pool + Views-fallback:** PYMK-харвест раскрывает recent-activity «Show all» и скроллит верный внутренний контейнер (8→92+ connectable), плюс Profile Views получили PYMK-fallback (добор из PYMK при недоборе до дневного лимита). Live-verified: **Коннекты 12, Просмотры 38** на залимиченном по поиску аккаунте.
 
