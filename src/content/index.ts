@@ -266,10 +266,11 @@ const actedUrns = new Set<string>()
 /** Cheap per-action risk probe (design-spec §5.4). Detection only — SW judges. */
 function detectRisk(): RiskMarker | null {
   if (document.querySelector('iframe[src*="captcha" i], [id*="captcha" i]')) return 'captcha'
-  const body = document.body?.innerText ?? ''
-  if (/unusual activity|verify it'?s you|security check|are you a human/i.test(body)) {
-    return 'challenge'
-  }
+  // A REAL LinkedIn security challenge is a full-page checkpoint interstitial (its own URL),
+  // NOT text inside a feed post or a benign "Verify your identity" profile prompt. The old check
+  // scanned the whole feed body for "verify"/"security check"/"unusual activity" and false-
+  // positived on ordinary posts → spuriously risk-stopped clean runs (2026-07-17, connects=1).
+  if (location.pathname.includes('/checkpoint')) return 'challenge'
   return null
 }
 
