@@ -80,3 +80,15 @@ media, hashtags, link-in-comment), Interests auto-follow, 3/mo personalized note
 
 Out (deliberate): the guide's "legend"/fake certs/false demographics/interview cheating —
 they do NOT move SSI (guide §9.3) and conflict with the honesty bar.
+
+## Next-session queue (2026-07-17)
+
+Three tasks queued to start in a fresh session (Влад):
+
+1. **India-exclusion filter** — design APPROVED, ready to implement. Full design +
+   the load-bearing DOM finding (PYMK cards carry no location → keyword filter on
+   headline is the workhorse) in memory-bank `india-exclusion-design.md`.
+2. **Auto-accept incoming invites** (SSI-roadmap #2) — grows the network pillar; safe.
+   See memory-bank `ssi-guide-roadmap.md`.
+3. **Real Profile Audit against the guide's checklist** (SSI-roadmap #3) — one-time +25
+   Brand; honest unknown-state. See `ssi-guide-roadmap.md`.
