@@ -7,7 +7,7 @@
 
 ## Топ-возможности (SSI-отдача × вписываемость)
 
-### 1. Авто-отзыв протухших Sent-инвайтов >2 нед — QUICK WIN, top pick
+### 1. Авто-отзыв протухших Sent-инвайтов >2 нед — ✅ SHIPPED v0.11.0 (Отозвано 15 live-verified)
 - Гайд §4.3: мёртвые Pending **портят ранжирование**, отзывать всё >14 дней.
 - Beacon: шлёт + ConnectHistory, НЕ отзывает. У Влада 110+ висящих Pending.
 - Расширение: шаг в «Запустить» — `My Network → Manage → Sent` → withdraw >14д. **DOM разведан 2026-07-16:** `/mynetwork/invitation-manager/sent/` → per-row `Withdraw` → confirm `button[aria-label^="Withdraw invitation sent to "]`. Дёшево, безопасно, +People/Relationships. Порт: расширить ConnectHistory/новый WithdrawStep.
