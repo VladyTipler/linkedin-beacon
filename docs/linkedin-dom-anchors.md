@@ -133,8 +133,8 @@ above — withdrawing frees up the weekly invite cap for a fresh, more-likely-to
 | URL | `https://www.linkedin.com/mynetwork/invitation-manager/sent/` |
 | Row withdraw control | `a[aria-label^="Withdraw invitation sent to "]` (text `Withdraw`) — one per row |
 | Row age text | row's textContent contains `Sent X ago` (e.g. "Sent 3 weeks ago") — same bucket vocabulary as `parseInviteAgeDays` (minute/hour/day/week/month/year) |
-| Confirm dialog | click the row withdraw `<a>` → `[role="dialog"] button[aria-label^="Withdraw invitation sent to "]` (same aria-label prefix as the row control, now scoped to the dialog) — click to confirm, no-op/dismiss otherwise |
-| Ordering | **newest-first** — stale (old) invites sit at the bottom. Scroll (`document.scrollingElement`/`documentElement`, window-level — unlike the PYMK inner-scroller case) to lazy-load older rows before giving up on a page with no stale match |
+| Confirm dialog | click the row withdraw `<a>` → a confirm modal renders in the **LIGHT DOM but with NO `role="dialog"` wrapper** (plain divs; heading `Withdraw invitation`). Its confirm is a **`<button aria-label="Withdraw invitation sent to <name>">`** — since the row control is an `<a>`, a `button[…]` query hits ONLY the confirm. Match the EXACT target name (a lingering modal must not confirm the wrong person). `[role="dialog"]`-scoped queries find NOTHING here (verified live 2026-07-17 — that's why the first build withdrew 0). Cancel button: `button[aria-label="Cancel"]` |
+| Ordering + scroll | **newest-first** — stale (old) invites sit at the bottom. The list lazy-loads on scrolling an **INNER overflow container** (like the feed / PYMK), NOT the window — `document.scrollingElement.scrollTop` is a no-op (that also capped the harvest at the top ~20 rows). Find the scrollable ancestor of a row (`sentScroller`, verified live 2026-07-17) |
 
 > Capture method: `agent-browser --cdp 9222` against real Windows Chrome (debug profile),
 > read-only. No withdraw was ever confirmed during capture.

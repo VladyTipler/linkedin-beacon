@@ -154,6 +154,22 @@ function isPeopleSearchEmpty(): boolean {
 // Sent-invites manager (/mynetwork/invitation-manager/sent/): each row has a withdraw <a>
 // (aria "Withdraw invitation sent to <name>", text "Withdraw"); the row text carries "Sent X
 // ago". List is newest-first, so stale invites are at the bottom — scroll to load them.
+// The Sent-invites list scrolls an INNER overflow container (like the feed / PYMK), NOT the
+// window — `document.scrollingElement.scrollTop` is a no-op here, so only the top ~20 rows ever
+// loaded and stale (deep) invites were never reached. Find the scrollable ancestor of a row.
+function sentScroller(): Element {
+  const anchor = document.querySelector('a[aria-label^="Withdraw invitation sent to "]')
+  let node: Element | null = anchor
+  while (node && node !== document.body) {
+    node = node.parentElement
+    if (node && node.scrollHeight > node.clientHeight + 100) {
+      const ov = getComputedStyle(node).overflowY
+      if (ov === 'auto' || ov === 'scroll') return node
+    }
+  }
+  return document.scrollingElement ?? document.documentElement
+}
+
 function findStaleWithdraw(maxAgeDays: number): HTMLElement | null {
   for (const a of document.querySelectorAll<HTMLElement>('a[aria-label^="Withdraw invitation sent to "]')) {
     let row: Element | null = a
@@ -186,7 +202,7 @@ async function withdrawStaleSent(maxAgeDays: number, cap: number): Promise<{ wit
       if (scrollRounds >= WITHDRAW_MAX_SCROLL) break
       scrollRounds++
       const before = rowCount()
-      const s = document.scrollingElement ?? document.documentElement
+      const s = sentScroller()
       s.scrollTop = s.scrollHeight
       await sleep(2000)
       target = findStaleWithdraw(maxAgeDays)
@@ -195,15 +211,21 @@ async function withdrawStaleSent(maxAgeDays: number, cap: number): Promise<{ wit
         continue // grew; keep scrolling for deeper stale rows
       }
     }
-    target.click() // opens the confirm dialog
+    // The confirm modal is LIGHT DOM but has NO role="dialog" wrapper — its confirm is a
+    // <button> with the SAME aria-label as the row's withdraw <a> (an <a>, so a `button[…]`
+    // query hits only the confirm). Match the EXACT target name so a lingering modal can't make
+    // us confirm the wrong person. (Requiring [role="dialog"] here found nothing → withdrew 0.)
+    const targetAria = target.getAttribute('aria-label')
+    target.click() // opens the confirm modal
     let confirm: HTMLElement | null = null
     for (let t = 0; t < 8 && !confirm; t++) {
-      confirm = document.querySelector<HTMLElement>('[role="dialog"] button[aria-label^="Withdraw invitation sent to "]')
+      confirm = [...document.querySelectorAll<HTMLElement>('button[aria-label^="Withdraw invitation sent to "]')]
+        .find((b) => b.getAttribute('aria-label') === targetAria) ?? null
       if (!confirm) await sleep(500)
     }
     if (!confirm) {
-      // Dismiss a stuck/half-open dialog so the next iteration can't match a lingering (wrong) one.
-      document.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Dismiss"], [role="dialog"] button[aria-label="Cancel"]')?.click()
+      // Modal didn't open; close any half-open one so the next iteration starts clean.
+      document.querySelector<HTMLElement>('button[aria-label="Cancel"]')?.click()
       await sleep(1000)
       continue
     }
