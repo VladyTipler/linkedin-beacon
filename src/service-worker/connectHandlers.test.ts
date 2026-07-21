@@ -243,12 +243,30 @@ describe('runConnectWithFallback', () => {
     expect(res).toMatchObject({ executed: 2, reason: 'done' })
   })
 
-  it('does NOT run PYMK when search already connected someone', async () => {
-    const d = deps() // harvest дефолтно 2 connectable
+  // The live bug (Vlad 2026-07-20): LinkedIn's search limit renders only 1-2 connectable people,
+  // so the search pass connected 2 and STOPPED — leaving the daily cap (~14) far short and forcing
+  // a SECOND manual run to top up from PYMK. Now the SAME run tops up the remaining budget from
+  // PYMK whenever search fell short of its run cap (not only when search connected zero).
+  it('tops up from PYMK when search connected FEWER than the run cap (search limit)', async () => {
+    const d = deps() // search harvest = 2 connectable; rng=1 → run cap 14
+    const pymkHarvest = vi.fn(async () => ({ candidates: [cand('7'), cand('8'), cand('9')], outcome: 'ok' as const }))
+    const res = await runConnectWithFallback({ ...d, pymkHarvest, nextPage: vi.fn(async () => false) })
+    expect(pymkHarvest).toHaveBeenCalled()
+    expect(d.navigate).toHaveBeenCalledWith('https://www.linkedin.com/mynetwork/grow/')
+    expect(res.executed).toBe(5) // 2 from search + 3 topped up from PYMK
+    expect(res.reason).toBe('done')
+  })
+
+  // The ONLY time a nonzero search skips PYMK: it already reached its run cap for the day. No
+  // remaining budget to top up → don't navigate to /mynetwork/ pointlessly.
+  it('does NOT run PYMK when search already reached its run cap', async () => {
+    const d = deps() // 2 connectable, rng=1
+    d._m.set(CONNECT_DAY_BUDGET_KEY, { day: '2026-06-26', used: 12 }) // dailyRem=2 → run cap 2
     const pymkHarvest = vi.fn(noHarvest)
     const res = await runConnectWithFallback({ ...d, pymkHarvest })
     expect(pymkHarvest).not.toHaveBeenCalled()
     expect(res.executed).toBe(2)
+    expect(res.reason).toBe('done')
   })
 
   it('does NOT run PYMK when the module is disabled or budget is 0', async () => {

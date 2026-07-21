@@ -46,6 +46,12 @@ export interface ConnectStepResult {
    * unreachable | <executeConnect failure> | done.
    */
   reason: string
+  /**
+   * True ONLY when the pass connected its full run cap. Absent/false on every partial or
+   * zero pass — the signal `runConnectWithFallback` uses to decide whether PYMK top-up is
+   * needed (a search that fell short of the cap still has budget to top up).
+   */
+  capReached?: boolean
 }
 
 /** Max search pages to walk in one connect pass (safety bound; cap usually stops us first). */
@@ -156,7 +162,7 @@ export async function runConnectStep(
         : !sawAnyCandidate
           ? 'empty_search'
           : lastFailReason ?? (sawUndefined ? 'unreachable' : 'none_fresh')
-  return { executed: sentRecords.length, skipped: 0, reason }
+  return { executed: sentRecords.length, skipped: 0, reason, capReached: sentRecords.length >= cap }
 }
 
 export interface FallbackDeps extends ConnectDeps {
@@ -165,10 +171,13 @@ export interface FallbackDeps extends ConnectDeps {
 }
 
 /**
- * Smart Connect with PYMK fallback: run the people-search pass; if it connected NOBODY
- * (any reason except module-off / no-budget), top up the remaining connect budget from
- * PYMK (/mynetwork/). Budget/sent-set/history are shared — the PYMK pass re-reads the
- * (unchanged) budget, so the daily/weekly cap bounds search+PYMK together.
+ * Smart Connect with PYMK fallback: run the people-search pass; if it did NOT fill its run cap
+ * (any reason except module-off / no-budget / cancelled), TOP UP the remaining connect budget
+ * from PYMK (/mynetwork/). This covers the search-limit bug: LinkedIn caps search so the pass
+ * connects only 1-2, well under the ~14 daily cap — the run must top up in the SAME pass, not
+ * force a second manual run. Budget/sent-set/history are shared — the PYMK pass re-reads the
+ * (now-decremented) budget, so search+PYMK together stay within the daily cap
+ * (search.executed + pymk ≤ search.executed + dailyRemaining = dailyCap).
  */
 // Search-pass reasons that must NOT fall back to PYMK:
 // - disabled/budget: nothing to top up (module off / cap spent).
@@ -179,17 +188,20 @@ const NO_PYMK_FALLBACK = new Set(['disabled', 'budget', 'cancelled'])
 
 export async function runConnectWithFallback(deps: FallbackDeps): Promise<ConnectStepResult> {
   const search = await runConnectStep(deps)
-  if (search.executed > 0 || NO_PYMK_FALLBACK.has(search.reason)) return search
+  // Hit the run cap on search alone, or a hard-stop reason → done, no PYMK needed.
+  if (search.capReached || NO_PYMK_FALLBACK.has(search.reason)) return search
 
   const pymk = await runConnectStep(
     { ...deps, harvest: deps.pymkHarvest, nextPage: async () => false },
     { source: 'pymk' }
   )
-  if (pymk.executed > 0) return { ...pymk, reason: 'done' }
-  // PYMK sent nobody. A genuine PYMK FAILURE (nav_failed / unreachable / a named executeConnect
-  // failure) must surface honestly — NOT be masked as pymk_dry ("try later"), which would hide a
-  // real break (e.g. a PYMK Connect that direct-sends with no modal → send_button_not_found).
-  // Only a genuinely-empty PYMK (empty_search / none_fresh) is pymk_dry.
+  // Combine: search may have connected 1-2 before falling short; PYMK tops up the rest.
+  const executed = search.executed + pymk.executed
+  if (executed > 0) return { executed, skipped: 0, reason: 'done' }
+  // Nobody from search OR PYMK. A genuine PYMK FAILURE (nav_failed / unreachable / a named
+  // executeConnect failure) must surface honestly — NOT be masked as pymk_dry ("try later"),
+  // which would hide a real break (e.g. a PYMK Connect that direct-sends with no modal →
+  // send_button_not_found). Only a genuinely-empty PYMK (empty_search / none_fresh) is pymk_dry.
   const pymkGenuinelyDry = pymk.reason === 'empty_search' || pymk.reason === 'none_fresh'
   return { executed: 0, skipped: 0, reason: pymkGenuinelyDry ? 'pymk_dry' : pymk.reason }
 }
